@@ -1,4 +1,4 @@
-import Link from "next/link"
+﻿import Link from "next/link"
 import { FolderKanban, Wallet, Layers, Presentation, CalendarClock, TriangleAlert } from "lucide-react"
 import { PageShell, Stat } from "@/components/page-shell"
 import { DbError } from "@/components/db-error"
@@ -9,6 +9,7 @@ import { ProjectsLedger } from "@/components/projects-ledger"
 import { getCurrentUser } from "@/lib/current-user"
 import { db, safeSelect } from "@/lib/db"
 import { getEvidenceGaps } from "@/lib/queries-evidence-gap"
+import { 다음정산일 } from "@/lib/settlement-day"
 import {
   단계판정,
   단계정의,
@@ -96,6 +97,9 @@ export async function ProjectsStageView({ 단계 }: { 단계: 보기범위 }) {
   const 빈집행건 = 증빙미비과제.reduce((s, r) => s + (증빙.gaps[r.id]?.빈집행건 ?? 0), 0)
   const 빈칸 = 증빙미비과제.reduce((s, r) => s + (증빙.gaps[r.id]?.빈칸 ?? 0), 0)
 
+  // 매월 정산 마감. 25일이 기준이고 주말·공휴일이면 앞 영업일로 당긴다(`lib/settlement-day.ts`).
+  const 정산 = 다음정산일()
+
   const 올해 = new Date().toISOString().slice(0, 4)
   const 심사중 = rows.filter((r) => (판정재료.get(r.id)?.선정결과 ?? "") === "발표심사").length
   const 올해끝 = rows.filter((r) => String(r.종료일 ?? "").slice(0, 4) === 올해).length
@@ -146,7 +150,7 @@ export async function ProjectsStageView({ 단계 }: { 단계: 보기범위 }) {
         })}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat icon={FolderKanban} label={`${단계} 과제 수`} value={rows.length} sub={정의.설명} />
         <Stat
           icon={Wallet}
@@ -187,6 +191,22 @@ export async function ProjectsStageView({ 단계 }: { 단계: 보기범위 }) {
             tone={밀린종료.length > 0 ? "warn" : "default"}
           />
         )}
+
+        {/* 매월 정산 마감까지 남은 날(2026-09-04 사용자 지시).
+            ⚠ 음력 공휴일(설·부처님오신날·추석)은 달력을 확인하고 넣은 값이 아니라
+               `lib/settlement-day.ts` 의 목록을 사람이 검산해야 한다.
+               그래서 **날짜를 그대로 적어** 눈으로 대조할 수 있게 하고, 확인이 필요하면 말한다. */}
+        <Stat
+          icon={CalendarClock}
+          label="이번 정산 마감"
+          value={정산.남은일 === 0 ? "오늘" : `D-${정산.남은일}`}
+          sub={
+            `${정산.날}(${정산.요일}) · 매월 25일` +
+            (정산.당겨짐 ? ` — 25일이 ${정산.이유}이라 앞 영업일로` : "") +
+            (정산.확인필요 ? " · 음력 공휴일 확인 필요" : "")
+          }
+          tone={정산.남은일 <= 7 ? "warn" : "default"}
+        />
       </div>
 
       <ProjectsLedger
@@ -202,14 +222,13 @@ export async function ProjectsStageView({ 단계 }: { 단계: 보기범위 }) {
       {단계 === "신청중" && (
         <>
           {/* 사업비 계상은 **신청서에 넣는 것**이라 선정 전에 하는 일이다.
-              선정된 뒤에 처음 계상하는 순서는 실제 일과 반대다(2026-09-04 사용자 지시로 열었다). */}
+              선정된 뒤에 처음 계상하는 순서는 실제 일과 반대다(2026-09-04 사용자 지시로 열었다).
+              예전엔 여기서 전용 대기열 화면(「과제 계상」)으로 보냈는데 그 화면을 없앴다 —
+              총사업비도 이제 줄 오른쪽 「계상」 링크를 눌러 들어간 연구비 계상 탭에서 바로 채운다. */}
           <p className="text-xs text-muted-foreground">
-            신청 단계에서도 <b>과제비를 계상할 수 있습니다</b> — 줄 오른쪽의 「계상」을 누르거나{" "}
-            <Link href="/project-budgeting" className="underline underline-offset-2">
-              과제 계상
-            </Link>
-            에서 「신청 단계만」으로 걸러 보세요. 한도 검산(연구수당 · 간접비)이 지금도 돌아
-            제출 전에 규정에 어긋난 계상을 잡아냅니다.
+            신청 단계에서도 <b>과제비를 계상할 수 있습니다</b> — 줄 오른쪽의 「계상」을 눌러 열면
+            재원 구성 카드에서 총사업비를 넣고 규정으로 나눌 수 있습니다. 한도 검산(연구수당 ·
+            간접비)이 지금도 돌아 제출 전에 규정에 어긋난 계상을 잡아냅니다.
           </p>
           <p className="text-xs text-muted-foreground">
             결과가 나오면 공고 상세의 「지원 · 선정 · 대장」에서 [선정]을 누르세요 — 그 줄이 바로{" "}

@@ -129,7 +129,7 @@ export function ProjectsLedger({
    * 과제 id → 사업비 증빙 구멍(집행 건별 필수 서류 기준, `lib/queries-evidence-gap.ts`).
    * 구멍이 없는 과제는 **키가 아예 없다** — 있는 것만 표시한다.
    */
-  증빙?: Record<number, { 집행건: number; 빈집행건: number; 빈칸: number }>
+  증빙?: Record<number, { 집행건: number; 빈집행건: number; 빈칸: number; 빈집행ids: number[] }>
   /**
    * 수행기간은 끝났는데 저장된 `상태` 가 아직 「수행중」인 과제 id.
    * 사업종료 화면에서만 넘어온다 — 화면이 짚어 주고 사람이 눌러 맞춘다.
@@ -502,8 +502,8 @@ export function ProjectsLedger({
                           (증빙 파일이 실제로 붙는 자리·2026-09-04 사용자 지시). */}
                       {증빙[r.id] && (
                         <Link
-                          href={`/projects/${r.id}/expenses`}
-                          title={`집행 ${증빙[r.id].빈집행건}건에 필수 서류 ${증빙[r.id].빈칸}칸이 비었다 — 눌러서 채우러 갑니다`}
+                          href={`/projects/${r.id}/expenses${증빙[r.id].빈집행ids[0] ? `?expense=${증빙[r.id].빈집행ids[0]}` : ""}`}
+                          title={`집행 ${증빙[r.id].빈집행건}건에 필수 서류 ${증빙[r.id].빈칸}칸이 비었다 — 눌러서 가장 오래된 건부터 채웁니다`}
                           className="ml-1.5 inline-block rounded bg-[var(--warning)] px-1 py-0.5 align-middle text-[10.5px] font-medium text-[var(--warning-fg)] underline-offset-2 hover:underline"
                         >
                           증빙 {증빙[r.id].빈칸}

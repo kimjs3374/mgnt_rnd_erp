@@ -11,7 +11,7 @@ import { db, safeSelect } from "@/lib/db"
  * ⚠ `lib/queries.ts` 에 넣지 않는다. 네 명이 동시에 여는 파일이라 저장 충돌이 두 번 났다.
  */
 
-type 집행Raw = { id: number; 과제_id: number | null; 비목_대분류: string | null }
+type 집행Raw = { id: number; 과제_id: number | null; 비목_대분류: string | null; 일자: string | null }
 type 요건Raw = { id: number; 비목_대분류: string; 집행단위: boolean; 필수여부: boolean }
 type 파일Raw = { 집행_id: number | null; 요건_id: number | null }
 
@@ -22,6 +22,11 @@ export type 증빙구멍 = {
   빈집행건: number
   /** 안 채운 필수 서류 칸 수(건 × 서류). 「얼마나 남았나」는 이 숫자가 말해 준다. */
   빈칸: number
+  /**
+   * 서류가 빈 집행 건 id — **일자가 이른 것부터.**
+   * 「어디가 비었는지」로 바로 보내려면 과제가 아니라 **그 집행 건**을 열어야 한다(사용자 지시).
+   */
+  빈집행ids: number[]
 }
 
 /**
@@ -73,11 +78,20 @@ export async function getEvidenceGaps(): Promise<{
     const 있는것 = 붙음.get(Number(e.id)) ?? new Set<number>()
     const 빈 = 칸.filter((id) => !있는것.has(id)).length
 
-    const cur = gaps[pid] ?? { 집행건: 0, 빈집행건: 0, 빈칸: 0 }
+    const cur = gaps[pid] ?? { 집행건: 0, 빈집행건: 0, 빈칸: 0, 빈집행ids: [] as number[] }
     cur.집행건 += 1
-    if (빈 > 0) cur.빈집행건 += 1
+    if (빈 > 0) {
+      cur.빈집행건 += 1
+      cur.빈집행ids.push(Number(e.id))
+    }
     cur.빈칸 += 빈
     gaps[pid] = cur
+  }
+
+  // 오래된 집행부터 처리하는 것이 자연스럽다 — 정산 마감이 먼저 닿는 쪽이다.
+  const 일자 = new Map(집행.rows.map((e) => [Number(e.id), String(e.일자 ?? "")]))
+  for (const k of Object.keys(gaps)) {
+    gaps[Number(k)].빈집행ids.sort((a, b) => (일자.get(a) ?? "").localeCompare(일자.get(b) ?? ""))
   }
 
   // 다 채운 과제는 목록에서 뺀다 — 「구멍이 있는 곳」만 남겨야 화면이 조용하다.

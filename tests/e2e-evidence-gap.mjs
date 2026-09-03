@@ -61,8 +61,10 @@ try {
 
   // ③ 바로 가기 — 그 과제의 집행 탭
   확인(
-    배지.every((b) => /^\/projects\/\d+\/expenses$/.test(b.href)),
-    `배지가 그 과제의 집행 탭으로 간다 (${배지[0]?.href})`,
+    // 정확한 딥링크(`?expense=<id>`)는 tests/e2e-evidence-deeplink.mjs 가 본다.
+    // 여기서는 **집행 화면으로 간다**까지만 — 두 테스트가 같은 것을 두 번 박으면 같이 썩는다.
+    배지.every((b) => /^\/projects\/\d+\/expenses(\?|$)/.test(b.href)),
+    `배지가 그 과제의 집행 화면으로 간다 (${배지[0]?.href})`,
   )
   const 첫 = 배지[0]
   await page.goto(`${BASE}${첫.href}`, { waitUntil: "networkidle0", timeout: 60000 })

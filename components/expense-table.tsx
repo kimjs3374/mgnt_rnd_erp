@@ -116,7 +116,13 @@ export function ExpenseTable({
   증빙요건?: EvidenceRequirement[]
   증빙파일?: EvidenceFile[]
 }) {
-  const [openId, setOpenId] = React.useState<number | null>(null)
+  // 대장의 「증빙 N」 배지가 `?expense=<id>` 로 보낸다 — **어디가 비었는지로 바로** 가야 하므로
+  // 목록만 열지 않고 그 집행 건의 상세(증빙 칸)까지 펼친 채로 시작한다(2026-09-04 사용자 지시).
+  const [openId, setOpenId] = React.useState<number | null>(() => {
+    if (typeof window === "undefined") return null
+    const v = Number(new URLSearchParams(window.location.search).get("expense"))
+    return Number.isInteger(v) && v > 0 ? v : null
+  })
 
   // ── 필터 — 항목(비목) · 세부항목 · 재원 · 상태 · 기간 ─────────────────────
   // RCMS 확인은 「어느 비목의, 어느 기간 집행인가」로 한다. 목록을 눈으로 훑어 세지 않게 한다.

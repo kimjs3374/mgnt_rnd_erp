@@ -8,6 +8,7 @@
 // ⚠ **과제 13(종료 과제)에서만 쓴다.** P01(id 2)은 시연 주인공이라 안 건드린다.
 //   이 테스트는 과제 13 의 PERSONNEL 배정액을 **실제로 바꾼다.** 끝에 복구 SQL 을 찍는다.
 import puppeteer from "puppeteer-core"
+import { 로그인하고 } from "./lib/login.mjs"
 
 const BASE = "http://127.0.0.1:3610"
 const 과제 = 13
@@ -49,6 +50,10 @@ const 인건비줄 = () =>
         입력칸: !!tr.children[2]?.querySelector("input"),
       })),
   )
+
+// 로그인 게이트(2026-09-04) 뒤로 화면이 전부 들어갔다. 아이디·비밀번호는
+// **환경변수로만** 받는다 — 저장소가 공개다(tests/lib/login.mjs).
+await 로그인하고(page, BASE)
 
 try {
   await page.goto(`${BASE}/projects/${과제}/budget`, { waitUntil: "networkidle0", timeout: 60000 })

@@ -4,6 +4,7 @@
 //   — 예전에 e2e 가 P01 예산을 조용히 덮어 원인을 못 찾은 적이 있다.
 // 끝나면 「홍길동」으로 되돌린다. 되돌리는 것까지가 테스트다.
 import puppeteer from "puppeteer-core"
+import { 로그인하고 } from "./lib/login.mjs"
 
 const BASE = "http://127.0.0.1:3610"
 const 과제코드 = "RS-2022-00284460" // 과제 13
@@ -73,6 +74,10 @@ async function 바꾸기(이름) {
     if ((await 읽기()) === 이름) break
   }
 }
+
+// 로그인 게이트(2026-09-04) 뒤로 화면이 전부 들어갔다. 아이디·비밀번호는
+// **환경변수로만** 받는다 — 저장소가 공개다(tests/lib/login.mjs).
+await 로그인하고(page, BASE)
 
 try {
   // ⚠ 과제 13 은 **종료된 과제**라 「수행중」(`/projects`)이 아니라 「사업종료」에 있다.

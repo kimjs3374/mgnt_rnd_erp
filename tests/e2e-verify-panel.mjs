@@ -12,6 +12,7 @@
 //
 // **아무것도 바꾸지 않는다.** 읽기만 한다.
 import puppeteer from "puppeteer-core"
+import { 로그인하고 } from "./lib/login.mjs"
 
 const BASE = "http://127.0.0.1:3610"
 const 과제 = Number(process.argv[2] ?? 12) // 출연금이 모자란 시드
@@ -32,6 +33,10 @@ const page = await browser.newPage()
 const errors = []
 page.on("pageerror", (e) => errors.push(String(e)))
 page.on("console", (m) => m.type() === "error" && errors.push(m.text()))
+
+// 로그인 게이트(2026-09-04) 뒤로 화면이 전부 들어갔다. 아이디·비밀번호는
+// **환경변수로만** 받는다 — 저장소가 공개다(tests/lib/login.mjs).
+await 로그인하고(page, BASE)
 
 try {
   await page.goto(`${BASE}/projects/${과제}/budget`, { waitUntil: "networkidle0", timeout: 60000 })

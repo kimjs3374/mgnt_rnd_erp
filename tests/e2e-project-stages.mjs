@@ -8,6 +8,7 @@
 // ④ 는 종료일이 지난 「상태=수행중」 행이 있어야 돈다. 없으면 그 항목만 건너뛴다
 //    (셋업은 셸에서: `./db/psql.sh -c "update ..."`).
 import puppeteer from "puppeteer-core"
+import { 로그인하고 } from "./lib/login.mjs"
 
 const BASE = "http://127.0.0.1:3610"
 const 공고 = Number(process.argv[2] ?? 1)
@@ -52,6 +53,10 @@ const 눌러 = (label) =>
     b?.click()
     return !!b
   }, label)
+
+// 로그인 게이트(2026-09-04) 뒤로 화면이 전부 들어갔다. 아이디·비밀번호는
+// **환경변수로만** 받는다 — 저장소가 공개다(tests/lib/login.mjs).
+await 로그인하고(page, BASE)
 
 try {
   // ⓪ 사이드바 — 셋이 「과제 관리」 한 그룹 아래 모여 있는가(2026-09-04 사용자 지시).

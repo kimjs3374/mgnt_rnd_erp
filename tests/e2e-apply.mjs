@@ -3,6 +3,7 @@
 // ⚠ 시드 과제 12건을 건드리지 않는다. 테스트가 만든 행은 끝에서 지운다 —
 //   과제 수가 늘면 대시보드 카드와 데모 대본의 숫자가 어긋난다.
 import puppeteer from "puppeteer-core"
+import { 로그인하고 } from "./lib/login.mjs"
 
 const BASE = "http://127.0.0.1:3610"
 const 공고 = Number(process.argv[2] ?? 0)
@@ -29,6 +30,10 @@ const 눌러 = (label) =>
     b?.click()
     return !!b
   }, label)
+
+// 로그인 게이트(2026-09-04) 뒤로 화면이 전부 들어갔다. 아이디·비밀번호는
+// **환경변수로만** 받는다 — 저장소가 공개다(tests/lib/login.mjs).
+await 로그인하고(page, BASE)
 
 try {
   await page.goto(`${BASE}/announcements/${공고}`, { waitUntil: "networkidle0", timeout: 60000 })

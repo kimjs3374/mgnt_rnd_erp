@@ -8,6 +8,7 @@
 //
 // 만든 연구원은 끝에 지운다. **과제 데이터는 건드리지 않는다**(계상은 저장하지 않는다).
 import puppeteer from "puppeteer-core"
+import { 로그인하고 } from "./lib/login.mjs"
 
 const BASE = "http://127.0.0.1:3610"
 const 과제 = 11 // 신청중. 계상 화면이 열려 있다
@@ -54,6 +55,10 @@ const 누르기 = (글) =>
     b?.click()
     return !!b
   }, 글)
+
+// 로그인 게이트(2026-09-04) 뒤로 화면이 전부 들어갔다. 아이디·비밀번호는
+// **환경변수로만** 받는다 — 저장소가 공개다(tests/lib/login.mjs).
+await 로그인하고(page, BASE)
 
 try {
   // ① 등록

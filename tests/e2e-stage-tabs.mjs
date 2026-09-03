@@ -13,6 +13,7 @@
 //
 // 읽기만 한다. 아무것도 안 바꾼다.
 import puppeteer from "puppeteer-core"
+import { 로그인하고 } from "./lib/login.mjs"
 
 const BASE = "http://127.0.0.1:3610"
 const log = (...a) => console.log("  ", ...a)
@@ -57,6 +58,10 @@ const 첫과제 = () =>
     )
     return a?.getAttribute("href") ?? null
   })
+
+// 로그인 게이트(2026-09-04) 뒤로 화면이 전부 들어갔다. 아이디·비밀번호는
+// **환경변수로만** 받는다 — 저장소가 공개다(tests/lib/login.mjs).
+await 로그인하고(page, BASE)
 
 try {
   const 기대 = {

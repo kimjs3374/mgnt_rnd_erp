@@ -9,6 +9,7 @@
 //   ④ 「신청 단계만」으로 거르면 선정 전 건만 남는다
 //   ⑤ 한도 검산은 신청 단계에서도 돈다 — 제출 전에 잡아야 값어치가 있다
 import puppeteer from "puppeteer-core"
+import { 로그인하고 } from "./lib/login.mjs"
 
 const BASE = "http://127.0.0.1:3610"
 const log = (...a) => console.log("  ", ...a)
@@ -36,6 +37,10 @@ const 가기 = async (p) => {
   await page.goto(`${BASE}${p}`, { waitUntil: "networkidle0", timeout: 60000 })
   await 잠깐(400)
 }
+
+// 로그인 게이트(2026-09-04) 뒤로 화면이 전부 들어갔다. 아이디·비밀번호는
+// **환경변수로만** 받는다 — 저장소가 공개다(tests/lib/login.mjs).
+await 로그인하고(page, BASE)
 
 try {
   // ① 신청중 목록 → 계상 진입

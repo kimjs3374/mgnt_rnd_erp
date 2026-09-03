@@ -9,6 +9,7 @@
 //
 // 시드 숫자를 박지 않는다. 화면에서 읽은 값끼리 비교한다.
 import puppeteer from "puppeteer-core"
+import { 로그인하고 } from "./lib/login.mjs"
 
 const BASE = "http://127.0.0.1:3610"
 const log = (...a) => console.log("  ", ...a)
@@ -62,6 +63,10 @@ async function 고르기(aria, 라벨) {
   await 잠깐(500)
   return 골랐다
 }
+
+// 로그인 게이트(2026-09-04) 뒤로 화면이 전부 들어갔다. 아이디·비밀번호는
+// **환경변수로만** 받는다 — 저장소가 공개다(tests/lib/login.mjs).
+await 로그인하고(page, BASE)
 
 try {
   // ① 합이 맞는가

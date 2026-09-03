@@ -6,6 +6,7 @@
 //   ③ 한 쪽 개수: 10 을 고르면 한 쪽에 10줄을 넘지 않는다
 //   ④ 초기화가 셋을 한 번에 되돌린다
 import puppeteer from "puppeteer-core"
+import { 로그인하고 } from "./lib/login.mjs"
 
 const BASE = "http://127.0.0.1:3610"
 const log = (...a) => console.log("  ", ...a)
@@ -48,6 +49,10 @@ const 누르기 = (label) =>
     b?.click()
     return !!b
   }, label)
+
+// 로그인 게이트(2026-09-04) 뒤로 화면이 전부 들어갔다. 아이디·비밀번호는
+// **환경변수로만** 받는다 — 저장소가 공개다(tests/lib/login.mjs).
+await 로그인하고(page, BASE)
 
 try {
   await page.goto(`${BASE}/projects`, { waitUntil: "networkidle0", timeout: 60000 })

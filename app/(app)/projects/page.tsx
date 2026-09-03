@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table"
 import { getProjects, won } from "@/lib/queries"
 import { 연차수, 현재연차, 기간표기 } from "@/lib/fiscal-year"
+import { ProjectCreateButton } from "@/components/project-create-button"
 import { db, safeSelect } from "@/lib/db"
 
 export const dynamic = "force-dynamic"
@@ -69,6 +70,8 @@ export default async function ProjectsPage() {
       description="선정된 과제만 여기 있다. 과제를 누르면 그 안에 개요 · 연구비 계상 · 집행 · 정산이 있다. 돈은 과제 단위로만 관리한다."
       actions={
         <>
+          {/* 공고 없이 과거 사업을 대장에 담는 길. 공고에서 시작하는 건은 [지원 등록] 쪽이다. */}
+          <ProjectCreateButton />
           <Button type="button" variant="outline" className="h-7 text-[12.8px]">
             ⤓ Excel
           </Button>

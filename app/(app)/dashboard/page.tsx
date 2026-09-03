@@ -115,10 +115,12 @@ export default async function DashboardPage() {
           <TodoCard
             갈래들={[
               {
+                // ⚠ 미리보기로 자르지 않는다(slice 없음) — todo-card.tsx 가 갈래별로
+                //   자체 페이지 넘김을 하므로 전체 목록이 있어야 두 번째 페이지가 채워진다.
                 라벨: "비목 확정",
                 링크: "/expenses",
                 건수: 확정대기.length,
-                항목: 확정대기.slice(0, 4).map((e) => ({
+                항목: 확정대기.map((e) => ({
                   키: `e${e.id}`,
                   이름: e.거래처 ?? "거래처 미상",
                   꼬리: e.비목_대분류
@@ -130,7 +132,7 @@ export default async function DashboardPage() {
                 라벨: "챙길 서류",
                 링크: "/documents",
                 건수: 미확보서류.length,
-                항목: 미확보서류.slice(0, 4).map((d) => ({
+                항목: 미확보서류.map((d) => ({
                   키: `d${d.코드}`,
                   이름: d.이름,
                   꼬리: d.상태,
@@ -141,7 +143,7 @@ export default async function DashboardPage() {
                 라벨: "제출 전 점검",
                 링크: "/programs",
                 건수: 점검.length,
-                항목: 점검.slice(0, 4).map((r) => ({
+                항목: 점검.map((r) => ({
                   키: `p${r.id}`,
                   이름: r.사업명,
                   꼬리: `${r.미처리점검}건`,

@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useRouter } from "next/navigation"
 import { Sparkles, Search, PenLine, History } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -26,6 +27,12 @@ import {
  *   확인할수 있어야지?" — 저장은 되는데 화면에 다시 보여주는 데가 없었다. 그래서
  *   이건 마운트 시 자동으로 부른다(judgment/history, announcement_id 정확 필터 —
  *   비슷한 사례처럼 유사도 문턱을 못 넘어 누락되는 일이 없다).
+ *
+ * ⚠ 판정을 저장하면 공고 상단의 확정 판정(EligibilityConfirm 배지)도 같이 바뀐다
+ *   (app/actions/judgment.ts 의 확정판정동기화, 2026-09-04). 사용자 지적: "판정근거
+ *   남기면 그대로 판정되서 상태변경되는게 맞지않을까?" — 맞는 말이라 연결했다.
+ *   "해당없음"만 예외다(행사·교육 등 애초에 지원사업이 아닌 공고라 "확정 판정" 개념이
+ *   성립하지 않는다) — 그 값을 고르면 저장 메시지에서 그렇게 안내한다.
  */
 const 판정_선택지: { v: 판정값; label: string }[] = [
   { v: "가능", label: "가능" },
@@ -51,6 +58,16 @@ function 판정색(v: string): string {
   return "text-foreground"
 }
 
+function 저장결과메시지(판정: 판정값, synced?: boolean, warning?: string): string {
+  if (판정 === "해당없음") {
+    return "저장됐다 — 의미 학습에만 쌓인다. 이 공고 자체가 지원사업이 아니라 확정 판정 상태엔 반영되지 않는다."
+  }
+  if (synced) {
+    return `저장됐다 — 공고 상단의 확정 판정도 "${판정}"(으)로 반영됐다.`
+  }
+  return `의미 학습엔 저장됐지만 확정 판정 반영은 실패했다${warning ? `: ${warning}` : ""} — 위에서 직접 확인해달라.`
+}
+
 export function JudgmentNote({
   announcementId,
   검색기본질의,
@@ -59,6 +76,7 @@ export function JudgmentNote({
   /** "비슷한 사례" 버튼을 처음 누를 때 검색어로 쓸 기본값(보통 사업명+요약 앞부분). */
   검색기본질의?: string
 }) {
+  const router = useRouter()
   const [open, setOpen] = React.useState(false)
   const [텍스트, set텍스트] = React.useState("")
   const [판정, set판정] = React.useState<판정값>("불가")
@@ -115,12 +133,13 @@ export function JudgmentNote({
         사유: 사유 || undefined,
       })
       if (r.ok) {
-        setMsg({ ok: true, text: "저장됐다 — 다음부터 뜻이 비슷한 공고에서 참고 사례로 보인다." })
+        setMsg({ ok: true, text: 저장결과메시지(판정, r.decisionSynced, r.decisionWarning) })
         setOpen(false)
         set텍스트("")
         set특징키("")
         set사유("")
         이력불러오기()
+        if (r.decisionSynced) router.refresh() // 위 확정 판정 배지도 새로 읽어온다
       } else {
         setMsg({ ok: false, text: r.error ?? "저장 실패" })
       }

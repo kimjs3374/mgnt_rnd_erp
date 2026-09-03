@@ -82,7 +82,7 @@ export function BudgetingBoard({
   const router = useRouter()
   const [대상, set대상] = React.useState<BudgetingRow | null>(null)
   const [검색, set검색] = React.useState("")
-  const [단계필터, set단계필터] = React.useState<계상단계 | "전체" | "미완료">("전체")
+  const [단계필터, set단계필터] = React.useState<계상단계 | "전체" | "미완료" | "신청단계">("전체")
 
   /**
    * 검색은 **화면에서** 거른다. 선정 과제는 많아야 수십 건이라 서버를 다시 다녀올 이유가 없고,
@@ -93,10 +93,13 @@ export function BudgetingBoard({
     const q = 검색.trim().toLowerCase()
     return rows.filter((r) => {
       // 「손이 필요한 것만」에서는 완료와 **확정**을 뺀다. 확정은 관리 위치가 대장으로 넘어간 건이다.
+      // 「신청 단계만」은 단계가 아니라 **선정 전인가**로 거른다 — 축이 다르므로 따로 본다.
       if (
         단계필터 === "미완료"
           ? r.단계 === "완료" || r.단계 === "확정"
-          : 단계필터 !== "전체" && r.단계 !== 단계필터
+          : 단계필터 === "신청단계"
+            ? !r.신청단계
+            : 단계필터 !== "전체" && r.단계 !== 단계필터
       ) {
         return false
       }
@@ -105,9 +108,10 @@ export function BudgetingBoard({
     })
   }, [rows, 검색, 단계필터])
 
-  const 단계옵션: (계상단계 | "전체" | "미완료")[] = [
+  const 단계옵션: (계상단계 | "전체" | "미완료" | "신청단계")[] = [
     "전체",
     "미완료",
+    "신청단계",
     "사업비_미확정",
     "미계상",
     "진행중",
@@ -129,11 +133,17 @@ export function BudgetingBoard({
         <select
           className="h-7 rounded-md border bg-background px-2 text-[12.5px]"
           value={단계필터}
-          onChange={(e) => set단계필터(e.target.value as 계상단계 | "전체" | "미완료")}
+          onChange={(e) => set단계필터(e.target.value as 계상단계 | "전체" | "미완료" | "신청단계")}
         >
           {단계옵션.map((v) => (
             <option key={v} value={v}>
-              {v === "전체" ? "전체" : v === "미완료" ? "손이 필요한 것만" : 단계이름[v]}
+              {v === "전체"
+                ? "전체"
+                : v === "미완료"
+                  ? "손이 필요한 것만"
+                  : v === "신청단계"
+                    ? "신청 단계만 (선정 전)"
+                    : 단계이름[v]}
             </option>
           ))}
         </select>
@@ -179,6 +189,15 @@ export function BudgetingBoard({
                 <Link href={`/projects/${r.id}`} className="underline-offset-2 hover:underline">
                   {r.과제명}
                 </Link>
+                {/* 선정 전 건임을 줄에서 바로 알아야 한다 — 같은 표에 협약 계상과 섞여 있다. */}
+                {r.신청단계 && (
+                  <span
+                    className="ml-1.5 rounded bg-[var(--warning)] px-1 py-0.5 text-[10.5px] text-[var(--warning-fg)]"
+                    title="아직 선정 전입니다. 여기 잡는 금액은 신청서에 넣는 계획이고, 선정 뒤 협약 금액으로 다시 맞춥니다."
+                  >
+                    신청
+                  </span>
+                )}
                 <div className="text-[11px] text-muted-foreground">{r.과제코드 ?? "—"}</div>
               </TableCell>
 
@@ -228,7 +247,8 @@ export function BudgetingBoard({
                     className="h-7 text-[12.5px]"
                     onClick={() => set대상(r)}
                   >
-                    협약금액 확정
+                    {/* 선정 전에는 확정할 협약이 없다. 내가 써낼 금액을 넣는 일이다. */}
+                    {r.신청단계 ? "신청 금액 입력" : "협약금액 확정"}
                   </Button>
                 ) : r.단계 === "확정" ? (
                   // 확정된 건의 관리 위치는 대장이다. 계상 탭이 아니라 그쪽으로 보낸다.

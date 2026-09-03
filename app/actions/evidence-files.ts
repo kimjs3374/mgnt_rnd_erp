@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
 import { getCurrentUser } from "@/lib/current-user"
+import { 증빙_확장자, 증빙파일_점검 } from "@/lib/evidence-types"
 
 /**
  * 비목별 RCMS 증빙 파일 — 업로드 · 다운로드 · 삭제.
@@ -19,21 +20,8 @@ import { getCurrentUser } from "@/lib/current-user"
 
 export type ActionResult = { ok: boolean; error?: string; url?: string }
 
-/** 25MB. 공고문·검수조서 스캔이 보통 1~5MB 다. 더 큰 건 RCMS 에 직접 올리는 편이 빠르다. */
-const 최대크기 = 25 * 1024 * 1024
-
-/** 증빙으로 받는 확장자. 실행 파일을 받지 않는 것이 목적이다. */
-const 허용확장자 = new Set([
-  "pdf", "hwp", "hwpx", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
-  "jpg", "jpeg", "png", "gif", "webp", "heic", "zip", "csv", "txt",
-])
-
-const 원 = (n: number) => Math.round(n).toLocaleString("ko-KR")
-
-function 확장자(name: string) {
-  const i = name.lastIndexOf(".")
-  return i < 0 ? "" : name.slice(i + 1).toLowerCase()
-}
+// 크기·확장자 제한은 `lib/evidence-types.ts` 한 곳에 있다. 화면도 같은 것을 보고 미리 거르지만
+// **최종 판정은 여기서 한다** — 화면 검사는 우회할 수 있다.
 
 export async function uploadEvidenceFile(formData: FormData): Promise<ActionResult> {
   try {
@@ -49,13 +37,9 @@ export async function uploadEvidenceFile(formData: FormData): Promise<ActionResu
     if (!Number.isInteger(과제_id) || 과제_id <= 0) return { ok: false, error: "과제를 찾을 수 없다." }
     if (!비목_대분류) return { ok: false, error: "비목이 없다." }
     if (!(file instanceof File) || file.size === 0) return { ok: false, error: "파일을 고르세요." }
-    if (file.size > 최대크기) {
-      return { ok: false, error: `파일이 ${원(file.size / 1024 / 1024)}MB 입니다. 25MB 까지만 올릴 수 있습니다.` }
-    }
-    const ext = 확장자(file.name)
-    if (!허용확장자.has(ext)) {
-      return { ok: false, error: `.${ext || "확장자 없음"} 은 받지 않습니다. 증빙은 pdf·hwp·xlsx·이미지·zip 으로 올리세요.` }
-    }
+    const 문제 = 증빙파일_점검(file)
+    if (문제) return { ok: false, error: 문제 }
+    const ext = 증빙_확장자(file.name)
 
     // 요건이 지정됐으면 개인정보 여부를 DB 에서 확인한다. 화면 값을 믿지 않는다.
     let 요건명: string | null = null

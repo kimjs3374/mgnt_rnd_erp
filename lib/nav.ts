@@ -19,6 +19,11 @@ export type NavGroup = {
  *
  * 그래서 과제사업 → 사업 대장 → 과제를 열면 그 안에 개요 · 연구비 계상 · 집행 · 정산이 있다.
  * 돈은 과제 단위로 계상하고, 과제 단위로 쓰고, 과제 단위로 정산한다.
+ *
+ * ⚠ **과제사업은 「공고 탐색」이 먼저고 「사업 대장」이 그 아래다.** 일이 공고에서 시작하기
+ *   때문이다 — 공고를 보고 → 자격을 판정하고 → 신청해서 선정되면 → 그때 대장에 과제가 생긴다
+ *   (CLAUDE.md §0.5 의 흐름: 공고 → 자격판정 → 신청 → 선정 → 협약 → 집행 → 보고).
+ *   메뉴 순서가 그 순서와 반대면, 화면이 「이미 하고 있는 과제 관리」로만 읽힌다.
  */
 export const NAV: NavGroup[] = [
   { title: "대시보드", url: "/dashboard", icon: "LayoutDashboard" },
@@ -33,11 +38,12 @@ export const NAV: NavGroup[] = [
   },
   {
     title: "과제사업",
-    url: "/projects",
+    // 그룹 이름을 누르면 첫 항목(공고 탐색)으로 간다. 순서와 어긋나면 사용자가 헷갈린다.
+    url: "/project-announcements",
     icon: "Briefcase",
     items: [
-      { title: "사업 대장", url: "/projects" },
       { title: "공고 탐색", url: "/project-announcements" },
+      { title: "사업 대장", url: "/projects" },
     ],
   },
   {

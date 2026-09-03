@@ -11,6 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { getProjects, won } from "@/lib/queries"
+import { db, safeSelect } from "@/lib/db"
 
 export const dynamic = "force-dynamic"
 
@@ -26,7 +27,14 @@ const 사업유형_라벨: Record<string, string> = {
  * 협약을 맺고 실제로 돈을 쓰고 있(었)는 과제 자체의 마스터 정보다.
  */
 export default async function ProjectsPage() {
-  const { rows, error } = await getProjects()
+  const [{ rows, error }, 미배정] = await Promise.all([
+    getProjects(),
+    // 과제가 아직 정해지지 않은 집행. 사이드바에서 「집행」을 뺐으므로 여기서 알려주지 않으면
+    // Slack 으로 막 들어온 건이 아무 화면에도 안 뜬다.
+    safeSelect<{ id: number }>("expenses", () =>
+      db.from("expenses").select("id").is("과제_id", null),
+    ),
+  ])
 
   const 총사업비 = rows.reduce((s, r) => s + (r.총사업비 ?? 0), 0)
   const 정부지원금 = rows.reduce((s, r) => s + (r.정부지원금 ?? 0), 0)
@@ -36,7 +44,7 @@ export default async function ProjectsPage() {
   return (
     <PageShell
       title="과제사업"
-      description="협약 이후 실제로 수행된(수행 중인) 과제의 마스터 정보. 집행·예산·정산이 여기서 갈라져 나간다."
+      description="과제를 누르면 그 안에 개요 · 연구비 계상 · 집행 · 정산이 있다. 돈은 과제 단위로만 관리한다."
     >
       {error && <DbError what="과제사업" error={error} />}
 
@@ -131,6 +139,16 @@ export default async function ProjectsPage() {
           </Table>
         )}
       </Card>
+
+      {미배정.rows.length > 0 && (
+        <p className="text-xs text-[var(--warning-fg)]">
+          과제가 아직 정해지지 않은 집행이 {미배정.rows.length}건 있습니다 —{" "}
+          <Link href="/expenses" className="underline underline-offset-2">
+            전체 집행에서 과제를 지정하세요
+          </Link>
+          . Slack 으로 막 들어온 건은 과제가 비어 있을 수 있습니다.
+        </p>
+      )}
     </PageShell>
   )
 }

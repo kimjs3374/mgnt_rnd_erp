@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
+import { PROJECT_TABS } from "@/lib/nav"
 
 /**
  * 과제 상세 탭. 사이드바가 아니라 **과제 안에서** 화면을 가른다.
@@ -14,11 +15,11 @@ import { cn } from "@/lib/utils"
 export function ProjectTabs({ id }: { id: number }) {
   const pathname = usePathname()
   const base = `/projects/${id}`
-  const tabs = [
-    { title: "개요", href: base },
-    { title: "연구비 계상", href: `${base}/budget` },
-    { title: "정산", href: `${base}/settlement` },
-  ]
+  // 탭 목록은 lib/nav.ts 가 갖는다 — 브레드크럼과 같은 표를 봐야 이름이 어긋나지 않는다.
+  const tabs = PROJECT_TABS.map((t) => ({
+    title: t.title,
+    href: t.seg ? `${base}/${t.seg}` : base,
+  }))
 
   return (
     <div className="flex gap-1 border-b">

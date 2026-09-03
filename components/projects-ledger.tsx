@@ -482,14 +482,20 @@ export function ProjectsLedger({
                         ? `${현재연차(r.시작일, r.종료일)} / ${연차수(r.시작일, r.종료일)}`
                         : (r.연차 ?? "—")}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">{won(r.총사업비)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{won(r.정부지원금)}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      <div>{won(r.총사업비)}</div>
+                      <div className="text-[11.5px] text-muted-foreground">
+                        {r.정부지원금 == null ? "정부 확인 필요" : `정부 ${won(r.정부지원금)}`}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <StatusBadge value={r.상태} />
                     </TableCell>
                     <TableCell className="text-right">
-                      {/* 종료된 과제에는 「계상」을 걸지 않는다 — 계상은 협약·수행 중에 하는 일이다.
-                          지난 계상은 정산 탭의 과제비 원장에서 그대로 본다. */}
+                      {/* 단계마다 할 수 있는 일이 다르다. 못 하는 일의 링크를 걸어 두면
+                          「여기서 뭘 해야 하나」를 잘못 알려 준다(`components/project-tabs.tsx` 와 같은 표).
+                            · 종료 → 계상 없음(계상은 협약·수행 중에 하는 일)
+                            · 신청중 → 정산 없음(선정도 안 됐는데 정산할 것이 없다) */}
                       {!끝남 && (
                         <>
                           <Link
@@ -501,12 +507,14 @@ export function ProjectsLedger({
                           <span className="px-1.5 text-xs text-muted-foreground">·</span>
                         </>
                       )}
-                      <Link
-                        href={`/projects/${r.id}/settlement`}
-                        className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                      >
-                        정산
-                      </Link>
+                      {r.상태 !== "신청중" && (
+                        <Link
+                          href={`/projects/${r.id}/settlement`}
+                          className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                        >
+                          정산
+                        </Link>
+                      )}
                     </TableCell>
                   </TableRow>
                 )

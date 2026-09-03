@@ -1,10 +1,11 @@
-import Link from "next/link"
+﻿import Link from "next/link"
 import { Card, Stat } from "@/components/page-shell"
 import { DbError } from "@/components/db-error"
 import { ExpenseTable, type Row } from "@/components/expense-table"
 import { db, safeSelect } from "@/lib/db"
 import { getLabels } from "@/lib/labels"
 import {
+  getProject,
   getProjectBudget,
   getCategories,
   getEvidenceRequirements,
@@ -51,7 +52,7 @@ export default async function ProjectExpensesPage({
   const { id: raw } = await params
   const id = Number(raw)
 
-  const [all, dec, labels, cats, subRes, budget, reqs, files] = await Promise.all([
+  const [all, dec, labels, cats, subRes, budget, reqs, files, proj] = await Promise.all([
     safeSelect<ExpenseRaw>("expenses", () =>
       db.from("expenses").select("*").order("일자", { ascending: false }).limit(500),
     ),
@@ -66,7 +67,26 @@ export default async function ProjectExpensesPage({
     getProjectBudget(id),
     getEvidenceRequirements(),
     getProjectEvidenceFiles(id),
+    getProject(id),
   ])
+
+  // ⚠ 선정 전 과제에는 집행이 있을 수 없다 — 받은 돈이 없다(2026-09-04 사용자 지적).
+  //   탭·대장 링크에서 뺐지만 주소로는 들어올 수 있다. 빈 표 대신 왜 없는지 말한다.
+  if (proj.rows[0]?.상태 === "신청중") {
+    return (
+      <div className="rounded-lg border bg-card p-4">
+        <p className="text-sm font-medium">아직 집행할 것이 없습니다 — 선정 전입니다</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          집행은 <b>협약을 맺고 사업비를 받은 뒤</b>에 생깁니다. 이 과제는 아직 신청 단계입니다.
+          지금 할 수 있는 것은{" "}
+          <Link href={`/projects/${id}/budget`} className="underline underline-offset-2">
+            연구비 계상
+          </Link>
+          (신청서에 넣을 사업비 계획)이고, 선정을 기록하면 집행·정산 탭이 열립니다.
+        </p>
+      </div>
+    )
+  }
 
   const 결정 = new Map<number, DecisionRaw[]>()
   for (const d of dec.rows) {

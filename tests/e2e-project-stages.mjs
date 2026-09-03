@@ -104,6 +104,18 @@ try {
 
   // ③ 지원 등록 → 신청중 → 선정 → 수행중
   await 가기(`/announcements/${공고}`)
+
+  // ⚠ 지원 패널이 공고 상세에 **붙어 있어야** 이 단계를 볼 수 있다.
+  //   패널이 없으면 아래가 네 줄 연속으로 실패하는데, 그러면 「단계 전환이 깨졌다」로 읽힌다.
+  //   실제로 2026-09-04 에 공고 상세를 개편하면서 패널이 통째로 빠진 적이 있다.
+  //   원인을 여기서 한 줄로 말한다 — 엉뚱한 데를 파지 않게.
+  if (!(await 본문()).includes("지원 · 선정 · 대장")) {
+    확인(false, "공고 상세에 「지원 · 선정 · 대장」 패널이 없다 — 공고→지원 경로가 끊겼다")
+    log("  ↳ components/apply-panel.tsx 를 공고 상세에 다시 붙여야 ③ 을 볼 수 있다")
+    console.log(실패 ? `\n✗ ${실패}건 실패` : "")
+    await browser.close()
+    process.exit(1)
+  }
   const 과제명 = `E2E 단계테스트 ${Date.now().toString().slice(-6)}`
   await page.evaluate((v) => {
     const set = (el, val) => {

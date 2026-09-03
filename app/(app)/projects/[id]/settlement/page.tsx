@@ -10,7 +10,9 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { won } from "@/lib/queries"
+import Link from "next/link"
 import {
+  getProject,
   getProjectBudget,
   getProjectExpenses,
   getCategories,
@@ -66,11 +68,35 @@ export default async function ProjectSettlementPage({
   const { id: raw } = await params
   const id = Number(raw)
 
-  const [budget, exp, cats] = await Promise.all([
+  const [budget, exp, cats, proj] = await Promise.all([
     getProjectBudget(id),
     getProjectExpenses(id),
     getCategories(),
+    getProject(id),
   ])
+
+  // ⚠ 아직 선정도 안 된 과제에는 정산할 것이 없다(2026-09-04 사용자 지적).
+  //   탭·대장 링크에서 이미 뺐지만 **주소로는 들어올 수 있다.** 그때 빈 표를 보여주면
+  //   「정산이 비어 있네」로 읽힌다 — 없는 게 아니라 아직 할 수 없는 일이라고 말한다.
+  if (proj.rows[0]?.상태 === "신청중") {
+    return (
+      <div className="rounded-lg border bg-card p-4">
+        <p className="text-sm font-medium">아직 정산할 것이 없습니다 — 선정 전입니다</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          정산은 <b>받은 돈을 쓴 뒤</b>에 하는 일입니다. 이 과제는 아직 신청 단계라 집행도 정산도
+          시작할 수 없습니다. 지금 할 수 있는 것은{" "}
+          <Link href={`/projects/${id}/budget`} className="underline underline-offset-2">
+            연구비 계상
+          </Link>
+          (신청서에 넣을 사업비 계획)이고, 선정을 기록하면 집행·정산 탭이 열립니다 —{" "}
+          <Link href="/projects/applying" className="underline underline-offset-2">
+            신청중 목록
+          </Link>
+          .
+        </p>
+      </div>
+    )
+  }
 
   const 이름 = new Map(cats.rows.map((c) => [c.코드, c.이름]))
   const 정렬 = new Map(cats.rows.map((c) => [c.코드, c.정렬 ?? 999]))

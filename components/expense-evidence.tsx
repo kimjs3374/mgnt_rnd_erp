@@ -11,7 +11,25 @@ import { 문서파일_점검 } from "@/lib/upload-limits"
 import { useFileDrop, 드롭강조 } from "@/components/use-file-drop"
 
 /**
- * 집행 한 건의 증빙 — 요건 다섯(구매의뢰서 · 지출결의서 · 거래명세서 · 세금계산서 · 검수조서)과 첨부 파일.
+ * ACTIVITY(연구활동비) 안에서 이 집행 건이 「구분」 셋(물품·용역 · 출장 · 회의) 중 무엇인지.
+ *
+ * ⚠ 예전엔 요건을 `비목_대분류` 로만 걸러서, **출장 물품 하나를 사도 회의록·출장신청서까지
+ *   전부 같이 떴다**(구분을 안 봤다). 출장·회의 요건을 늘리면서(2026-09-04) 그 문제가
+ *   더 커진다 — 지금 4건(물품)이던 요건이 11건(물품+출장+회의 합)으로 보이게 된다.
+ *   `app.sub_categories`(TRAVEL·MEETING)와 요건의 `구분`이 같은 말을 쓰므로 그대로 잇는다.
+ *
+ * ACTIVITY 가 아닌 비목은 구분을 안 가른다(null) — 지금 이 화면에서 손대라고 한 자리가 아니고,
+ * FACILITY 의 「장비」 처럼 아직 안 건드린 구분이 남아 있어 잘못 건드리면 더 어긋난다.
+ */
+function 활동비_구분(비목_대분류: string | null, 비목_세부항목: string | null): string | null {
+  if (비목_대분류 !== "ACTIVITY") return null
+  if (비목_세부항목 === "TRAVEL") return "출장"
+  if (비목_세부항목 === "MEETING") return "회의"
+  return "물품·용역"
+}
+
+/**
+ * 집행 한 건의 증빙 — 요건과 첨부 파일.
  *
  * 실제 폴더가 `01. 연구재료비\(주)천보\2024.06.21\` 처럼 **거래처·날짜(=집행 건)** 아래에
  * 번호 붙은 서류를 두고 있었다. RCMS 도 건별로 묶어 제출하니 화면 단위도 건이어야 한다.
@@ -47,12 +65,15 @@ export function ExpenseEvidence({
   과제_id,
   집행_id,
   비목_대분류,
+  비목_세부항목 = null,
   요건,
   파일,
 }: {
   과제_id: number
   집행_id: number
   비목_대분류: string | null
+  /** ACTIVITY 안에서 물품·용역/출장/회의를 가르는 데 쓴다(TRAVEL·MEETING). */
+  비목_세부항목?: string | null
   /** 집행단위 = true 인 요건만 넘긴다. */
   요건: EvidenceRequirement[]
   /** 이 집행 건에 붙은 파일만 넘긴다. */
@@ -61,7 +82,11 @@ export function ExpenseEvidence({
   const [msg, setMsg] = React.useState<{ ok: boolean; text: string } | null>(null)
   const [pending, start] = React.useTransition()
 
-  const rs = 요건.filter((r) => r.비목_대분류 === 비목_대분류).sort((a, b) => a.순번 - b.순번)
+  const 구분목표 = 활동비_구분(비목_대분류, 비목_세부항목)
+  const rs = 요건
+    .filter((r) => r.비목_대분류 === 비목_대분류)
+    .filter((r) => 구분목표 == null || r.구분 === 구분목표)
+    .sort((a, b) => a.순번 - b.순번)
   const 확보 = rs.filter((r) => 파일.some((f) => f.요건_id === r.id)).length
   const 기타 = 파일.filter((f) => !rs.some((r) => r.id === f.요건_id))
 

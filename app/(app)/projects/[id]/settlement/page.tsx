@@ -11,11 +11,17 @@ import {
 } from "@/components/ui/table"
 import { won } from "@/lib/queries"
 import Link from "next/link"
+import { SettlementDocuments } from "@/components/settlement-documents"
+import { getSettlementDocuments } from "@/lib/queries-settlement"
+import { 기간끝났나, 오늘_KST } from "@/lib/settlement-types"
+import { 연차수 } from "@/lib/fiscal-year"
 import {
   getProject,
   getProjectBudget,
   getProjectExpenses,
   getCategories,
+  getEvidenceRequirements,
+  getProjectEvidenceFiles,
 } from "@/lib/queries-project"
 
 export const dynamic = "force-dynamic"
@@ -68,12 +74,19 @@ export default async function ProjectSettlementPage({
   const { id: raw } = await params
   const id = Number(raw)
 
-  const [budget, exp, cats, proj] = await Promise.all([
+  const [budget, exp, cats, proj, reqs, files, 정산서류] = await Promise.all([
     getProjectBudget(id),
     getProjectExpenses(id),
     getCategories(),
     getProject(id),
+    getEvidenceRequirements(),
+    getProjectEvidenceFiles(id),
+    // 최종 정산 서류 — 협약기간이 끝난 과제만 받는다(`db/110`).
+    getSettlementDocuments(id),
   ])
+
+  // 최종 정산 카드가 협약기간·상태를 본다. 한 번만 꺼내 둔다.
+  const 과제 = proj.rows[0]
 
   // ⚠ 아직 선정도 안 된 과제에는 정산할 것이 없다(2026-09-04 사용자 지적).
   //   탭·대장 링크에서 이미 뺐지만 **주소로는 들어올 수 있다.** 그때 빈 표를 보여주면
@@ -138,10 +151,41 @@ export default async function ProjectSettlementPage({
     // 제출 순서대로 — 사람이 위에서부터 그대로 옮겨 적는다.
     .sort((a, b) => (a.일자 ?? "").localeCompare(b.일자 ?? ""))
 
+  /**
+   * 출장·회의 증빙 확보 현황 (2026-09-04 사용자 지시).
+   *
+   * RCMS 는 건별로 서류를 묶어 받는다 — 원장·사용 건은 「얼마를 썼나」를 보여주지만
+   * 「제출할 서류가 다 모였나」는 안 보여줬다. 여기서 그 빈자리를 메운다.
+   *
+   * `비목_세부항목`(TRAVEL·MEETING)으로 대상을 고른다 — `components/expense-evidence.tsx` 의
+   * `활동비_구분()` 과 같은 매핑이다. 두 곳이 다른 규칙을 쓰면 「여기선 확보인데 저기선 미확보」가 생긴다.
+   */
+  const 출장회의건 = exp.rows.filter(
+    (e) => e.비목_세부항목 === "TRAVEL" || e.비목_세부항목 === "MEETING",
+  )
+  const 출장회의현황 = 출장회의건.map((e) => {
+    const 구분 = e.비목_세부항목 === "TRAVEL" ? "출장" : "회의"
+    const 요건들 = reqs.rows
+      .filter((r) => r.비목_대분류 === "ACTIVITY" && r.구분 === 구분 && r.필수여부 && !r.개인정보포함)
+      .sort((a, b) => a.순번 - b.순번)
+    const 파일들 = files.rows.filter((f) => f.집행_id === e.id)
+    const 확보 = 요건들.filter((r) => 파일들.some((f) => f.요건_id === r.id))
+    return {
+      집행: e,
+      구분,
+      필수: 요건들.length,
+      확보: 확보.length,
+      미확보서류: 요건들.filter((r) => !확보.some((c) => c.id === r.id)).map((r) => r.서류명),
+    }
+  })
+  const 미완료건 = 출장회의현황.filter((c) => c.확보 < c.필수)
+
   return (
     <>
       {budget.error && <DbError what="과제비 원장" error={budget.error} />}
       {exp.error && <DbError what="집행" error={exp.error} />}
+      {reqs.error && <DbError what="증빙 요건" error={reqs.error} />}
+      {files.error && <DbError what="증빙 파일" error={files.error} />}
 
       <div className="rounded-lg border bg-card p-4 text-[13px] text-muted-foreground">
         <span className="font-medium text-foreground">RCMS 는 외부 API 가 없습니다.</span>{" "}
@@ -309,6 +353,83 @@ export default async function ProjectSettlementPage({
         )}
       </Card>
 
+      {/* ── 출장·회의 증빙 확보 현황 */}
+      {출장회의건.length > 0 && (
+        <Card>
+          <div className="flex flex-wrap items-baseline gap-2 border-b p-3">
+            <span className="text-[13px] font-medium">출장·회의 증빙 확보 현황</span>
+            <span className="text-xs text-muted-foreground">
+              RCMS 는 건별로 서류를 묶어 받습니다 — 얼마를 썼는지가 아니라{" "}
+              <span className="text-foreground">제출할 서류가 다 모였는지</span>를 봅니다
+            </span>
+            <span className="ml-auto text-xs tabular-nums text-muted-foreground">
+              {출장회의건.length - 미완료건.length}/{출장회의건.length}건 확보 완료
+            </span>
+          </div>
+
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="w-[96px]">일자</TableHead>
+                <TableHead className="w-[80px]">구분</TableHead>
+                <TableHead>거래처</TableHead>
+                <TableHead className="w-[140px]">확보</TableHead>
+                <TableHead>미확보 서류</TableHead>
+                <TableHead className="w-[60px]" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {출장회의현황.map((c) => (
+                <TableRow key={c.집행.id} className="h-[42px] text-[13px]">
+                  <TableCell className="tabular-nums text-muted-foreground">
+                    {c.집행.일자 ?? "—"}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{c.구분}</TableCell>
+                  <TableCell>{c.집행.거래처 ?? "—"}</TableCell>
+                  <TableCell
+                    className={
+                      c.확보 < c.필수
+                        ? "font-medium tabular-nums text-destructive"
+                        : "tabular-nums text-muted-foreground"
+                    }
+                  >
+                    {c.확보}/{c.필수}
+                  </TableCell>
+                  <TableCell className="text-[12px] text-muted-foreground">
+                    {c.미확보서류.length ? c.미확보서류.join(" · ") : "—"}
+                  </TableCell>
+                  <TableCell>
+                    <Link
+                      href={`/projects/${id}/expenses`}
+                      className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                    >
+                      첨부
+                    </Link>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+
+          {미완료건.length === 0 ? (
+            <p className="border-t p-3 text-[13px] text-muted-foreground">
+              출장·회의 건 {출장회의건.length}건 모두 필수 서류를 확보했습니다.
+            </p>
+          ) : (
+            <p className="border-t p-3 text-[13px] text-[var(--warning-fg)]">
+              {미완료건.length}건에 서류가 빠졌습니다 —{" "}
+              <Link
+                href={`/projects/${id}/expenses`}
+                className="underline underline-offset-2"
+              >
+                집행 탭
+              </Link>
+              에서 그 건을 열어 첨부하세요.
+            </p>
+          )}
+        </Card>
+      )}
+
       {/* ── RCMS 입력 대조 */}
       <Card>
         <div className="flex flex-wrap items-baseline gap-2 border-b p-3">
@@ -372,6 +493,19 @@ export default async function ProjectSettlementPage({
           </Table>
         )}
       </Card>
+
+      {/* ── 최종 정산 서류 (정산 탭의 마지막 단계) ──────────────────────────
+          기간이 끝나면 정산보고서·정산결과 통보서·잔액 반납 증빙을 낸다. 그 파일을 둘 자리가
+          없어서 새로 만들었다(`db/110`) — 비목이나 집행 건이 아니라 **과제가 끝났다는 사실**에 붙는다.
+          판정(`기간끝났나`)은 **서버에서** 한다. 화면이 날짜를 다시 계산하면 두 곳이 어긋난다. */}
+      {정산서류.error && <DbError what="최종 정산 서류" error={정산서류.error} />}
+      <SettlementDocuments
+        과제_id={id}
+        파일={정산서류.rows}
+        기간끝남={기간끝났나(과제?.상태, 과제?.종료일, 오늘_KST())}
+        종료일={과제?.종료일 ?? null}
+        협약연수={연차수(과제?.시작일, 과제?.종료일) || 1}
+      />
     </>
   )
 }

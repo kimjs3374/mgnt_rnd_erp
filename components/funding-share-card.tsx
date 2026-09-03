@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { MoneyInput } from "@/components/money-input"
 import { saveContractShare } from "@/app/actions/funding-share"
@@ -143,6 +144,16 @@ export function FundingShareCard({
         <p className="text-[13px] text-muted-foreground">
           {없는이유 ??
             "이 과제에 적용할 재원 분담 규칙을 찾지 못했다. 공고 규칙이나 기관유형 규정이 등록되면 자동으로 계산한다."}
+          {/* 총사업비가 비어서 못 나온 것이면 채울 수 있는 화면으로 바로 보낸다 —
+              글로만 말하고 갈 곳을 안 주면 사람이 다시 메뉴를 뒤져야 한다. */}
+          {(총사업비 == null || 총사업비 <= 0) && (
+            <>
+              {" "}
+              <Link href="/project-budgeting" className="underline underline-offset-2">
+                과제 계상에서 넣기
+              </Link>
+            </>
+          )}
         </p>
       ) : (
         <>

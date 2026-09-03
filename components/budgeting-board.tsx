@@ -3,6 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -263,9 +264,14 @@ export function BudgetingBoard({
                 ) : (
                   <Link
                     href={`/projects/${r.id}/budget`}
-                    className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                    className={
+                      r.단계 === "완료"
+                        ? "text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                        : "flex items-center gap-0.5 text-xs font-medium text-primary underline-offset-2 hover:underline"
+                    }
                   >
                     {r.단계 === "완료" ? "계상 보기" : "계상하러 가기"}
+                    {r.단계 !== "완료" && <ArrowRight className="size-3" />}
                   </Link>
                 )}
               </TableCell>
@@ -355,7 +361,9 @@ function ContractAmountDialog({
     <Dialog open onOpenChange={(o) => !o && !pending && onClose()}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="text-base">협약금액 확정</DialogTitle>
+          <DialogTitle className="text-base">
+            {row.신청단계 ? "신청 사업비 입력" : "협약금액 확정"}
+          </DialogTitle>
           <DialogDescription>
             {row.과제명}
             {row.공고명 ? ` · ${row.공고명}` : ""}
@@ -363,7 +371,14 @@ function ContractAmountDialog({
         </DialogHeader>
 
         <p className="text-[12.5px] text-muted-foreground">
-          지원 등록 때는 협약 전이라 총사업비가 0으로 들어갑니다. 협약 금액을 넣으면{" "}
+          {row.신청단계 ? (
+            <>
+              <b className="text-foreground">아직 선정 전입니다</b> — 여기 넣는 금액은
+              신청서·사업계획서에 적어 낼 사업비입니다. 선정되면 협약서 금액으로 다시 맞춥니다.{" "}
+            </>
+          ) : (
+            "지원 등록 때는 협약 전이라 총사업비가 0으로 들어갑니다. 협약 금액을 넣으면 "
+          )}
           {row.공고_id != null ? (
             <b className="text-foreground">이 공고의 재원 분담 규정</b>
           ) : (
@@ -374,8 +389,10 @@ function ContractAmountDialog({
 
         <label className="flex flex-col gap-1 text-[11.5px] text-muted-foreground">
           <span>
-            협약 총사업비 <span className="text-destructive">*</span>{" "}
-            <span className="text-[10.5px]">원 · 협약서에 적힌 금액 그대로</span>
+            {row.신청단계 ? "신청 사업비" : "협약 총사업비"} <span className="text-destructive">*</span>{" "}
+            <span className="text-[10.5px]">
+              원 · {row.신청단계 ? "신청서·사업계획서에 적을 금액" : "협약서에 적힌 금액 그대로"}
+            </span>
           </span>
           <Input
             className="h-8 text-[13px]"

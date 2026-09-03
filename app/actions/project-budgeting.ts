@@ -6,13 +6,18 @@ import { getFundingShareRules, getCompanyProfile } from "@/lib/queries-project"
 import { pickRule, computeShare } from "@/lib/funding-share"
 
 /**
- * 선정된 과제의 **협약 총사업비를 확정하고, 그 공고 규정으로 재원을 나눈다.**
+ * **총사업비를 확정하고, 그 공고 규정으로 재원을 나눈다.**
  *
  * 왜 이 단계가 따로 있나 — [지원 등록]이 만드는 줄은 **총사업비가 0** 이다
  * (`app/actions/apply.ts`: 「협약 전이라 총사업비는 아직 없다. NOT NULL 이라 0 으로 두고,
- * 협약 때 재원 구성 카드에서 채운다」). 선정이 나면 그 0을 협약 금액으로 바꿔야 하는데,
- * 그 전까지는 **비목을 나눌 기준 자체가 없어서 계상 화면에 가도 할 수 있는 게 없다.**
- * 이 액션이 공고 → 선정 → 계상 사이의 끊긴 자리를 잇는다.
+ * 협약 때 재원 구성 카드에서 채운다」). 그 전까지는 **비목을 나눌 기준 자체가 없어서
+ * 계상 화면에 가도 할 수 있는 게 없다.** 이 액션이 그 끊긴 자리를 잇는다.
+ *
+ * ⚠ **신청중 과제도 부른다**(2026-09-04 — "신청중 과제에서 사업비 계상이 되게 해달라"는
+ *   사용자 지시로 막았던 걸 풀었다). 사업비 계상은 원래 **신청서에 넣는 것**이라 선정 전에
+ *   하는 일이다(`projects-stage-view.tsx` 신청중 안내문과 같은 전제) — 협약 전이면 「신청
+ *   사업비」, 협약 후면 「협약 금액」일 뿐 **같은 필드**다. **미선정만 막는다** — 떨어진
+ *   건에 사업비를 잡아 둘 이유가 없다.
  *
  * 나누는 규칙은 **공고 > 사업유형 > 규정 기본값** 순으로 이긴다(`lib/funding-share.ts`).
  * 같은 「정부지원 비율」이 공고마다 다르기 때문이다 — 2026 지역혁신선도기업육성 공고는
@@ -50,14 +55,13 @@ export async function 협약금액_확정(input: {
     const 총사업비 = Math.round(Number(input.총사업비))
     if (!Number.isInteger(과제_id) || 과제_id <= 0) return { ok: false, error: "과제를 찾을 수 없다." }
     if (!Number.isFinite(총사업비) || 총사업비 <= 0) {
-      return { ok: false, error: "협약 총사업비를 0보다 큰 값으로 넣으세요." }
+      return { ok: false, error: "총사업비를 0보다 큰 값으로 넣으세요." }
     }
 
     const { data, error } = await db.from("projects").select("*").eq("id", 과제_id).limit(1)
     if (error) return { ok: false, error: error.message }
     const p = (data ?? [])[0] as
       | {
-          상태?: string
           선정결과?: string | null
           공고_id?: number | null
           사업유형?: string | null
@@ -68,12 +72,9 @@ export async function 협약금액_확정(input: {
       | undefined
     if (!p) return { ok: false, error: "과제를 찾을 수 없다." }
 
-    // 아직 선정 전인 건에 협약 금액을 넣으면 대장 숫자가 거짓이 된다.
-    if (p.상태 === "신청중" || p.선정결과 === "미선정") {
-      return {
-        ok: false,
-        error: "아직 선정된 과제가 아닙니다. 공고 상세에서 [선정]을 먼저 기록하세요.",
-      }
+    // 떨어진 건만 막는다. 신청중은 막지 않는다 — 사업비 계상은 원래 신청서에 넣는 일이다.
+    if (p.선정결과 === "미선정") {
+      return { ok: false, error: "미선정된 과제입니다. 사업비를 잡을 이유가 없습니다." }
     }
 
     const [규칙, 회사] = await Promise.all([getFundingShareRules(), getCompanyProfile()])

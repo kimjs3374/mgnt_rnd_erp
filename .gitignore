@@ -1,0 +1,53 @@
+# ── 자격증명 · 비밀값 ─────────────────────────────
+# 대회 규칙: 제출물에 API 키·비밀번호 포함 금지
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_*
+!id_*.md
+.studio.env
+.htpasswd
+*_htpasswd
+.git-credentials
+
+# ── 사내 실데이터 ────────────────────────────────
+# 공개 배포 URL·저장소에는 더미/합성데이터만
+/data/real/
+*.실데이터.*
+회사데이터/
+콜라보사업*/
+과제관련/
+증빙/
+팀정보.md
+
+# ── 빌드 산출물 ──────────────────────────────────
+node_modules/
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+.turbo/
+
+# ── 파이썬 ───────────────────────────────────────
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+*.egg-info/
+
+# ── 로그 · 임시 ──────────────────────────────────
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+*.swp
+*~
+/tmp/
+.cache/
+
+# ── 로컬 전용 ────────────────────────────────────
+.vscode/
+.idea/

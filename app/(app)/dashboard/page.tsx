@@ -28,7 +28,7 @@ export const dynamic = "force-dynamic"
  *
  * ```
  * 공고 확인                     ← 새로 온 기회
- * 일정(달력) | 수행 과제·사업    ← 언제 / 무엇을 하고 있나
+ * 일정(달력) | 과제 관리         ← 언제 / 무엇을 하고 있나
  * 비목 확정 | 챙길 서류 | 점검   ← 내가 눌러야 넘어가는 것
  * ```
  *
@@ -37,7 +37,8 @@ export const dynamic = "force-dynamic"
  *      더 자세히 말하는 것과 같은 내용이었다.
  *   ② **큐 카드 셋으로 쪼갰고, 0건이어도 카드는 그대로 둔다.** 자리가 고정돼야
  *      「저기 보면 된다」가 생긴다 — 사라지면 격자에 구멍이 나서 고장난 것처럼 보인다.
- *   ③ **수행 과제·사업 카드.** 메뉴를 두 번 눌러 들어가지 않아도 되게.
+ *   ③ **과제 관리 카드.** 메뉴를 두 번 눌러 들어가지 않아도 되게. 사이드바의
+ *      「과제 관리」(신청중·수행중·사업종료)와 이름·단계를 맞춘다(2026-09-04).
  *   ④ **공고 확인이 자격판정을 함께 보여준다.** `/announcements`·`/project-announcements`
  *      가 이미 쓰는 판정(가능·불가·확인필요·요건미확인, `getProgramAnnouncements`·
  *      `getRndAnnouncements`)을 id 로 붙여서 넘긴다. 새 판정 로직을 만들지 않는다 —
@@ -84,7 +85,7 @@ export default async function DashboardPage() {
   const errors = [ledger, expenses, docs, board, calendar, undated, projects]
     .map((r, i) => ({
       e: r.error,
-      what: ["대장", "집행", "서류함", "공고", "일정", "날짜 미정", "수행 과제"][i],
+      what: ["대장", "집행", "서류함", "공고", "일정", "날짜 미정", "과제 관리"][i],
     }))
     .filter((x) => x.e)
 
@@ -106,7 +107,7 @@ export default async function DashboardPage() {
       {/* ② 언제 / 무엇을 하고 있나 */}
       <div className="grid gap-4 lg:grid-cols-2">
         <CalendarBoard rows={calendar.rows} today={today} error={calendar.error} />
-        <ProjectBoard rows={projects.rows} today={today} 최대={5} error={projects.error} />
+        <ProjectBoard rows={projects.rows} today={today} error={projects.error} />
       </div>
 
       {/* ③ 내가 눌러야 넘어가는 것 — 0건이어도 카드는 그대로 있고 안이 조용해진다.

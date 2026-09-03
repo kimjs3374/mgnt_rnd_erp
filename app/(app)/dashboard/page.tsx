@@ -1,6 +1,4 @@
-import Link from "next/link"
 import { PageShell } from "@/components/page-shell"
-import { StatusBadge } from "@/components/status-badge"
 import { DbError } from "@/components/db-error"
 import { AnnouncementBoard } from "@/components/announcement-board"
 import { CalendarBoard } from "@/components/calendar-board"
@@ -17,19 +15,23 @@ import { getLabels, categoryLabel } from "@/lib/labels"
 export const dynamic = "force-dynamic"
 
 /**
- * 대시보드 — 큐 네 개.
+ * 대시보드 — 카드 둘.
  *
  * 올릴지 말지의 기준은 하나다: **행동이 필요한가.**
  *   보고 나서 할 일이 생기면 올리고, 그냥 알고 넘어가는 숫자면 안 올린다.
  *   그래서 예산 소진율 같은 상태 숫자는 뺐다(2026-09-03). 62% 를 봐도 할 일이 없다.
  *
- *   ① 새로 올라온 공고  — 놓친 기회가 있나
- *   ② 곧 닥치는 일정    — 언제까지 뭘 해야 하나
- *   ③ 손봐야 할 것      — 지금 틀려 있거나 내 확정을 기다리는 게 있나
+ *   ① 일정      — 언제까지 뭘 해야 하나 + 날짜 없이 나를 기다리는 것
+ *   ② 공고 확인 — 놓친 기회가 있나
+ *
+ * ⚠ 2026-09-03: 맨 아래 「손봐야 할 것」 카드를 없앴다. 카드가 셋이면 화면이 흩어진다.
+ *   다만 **카드만 없애고 안에 있던 것은 버리지 않는다** — 확정 대기·점검·서류 미확보는
+ *   날짜가 없어 달력에 못 올라가므로 일정 카드의 「기다리는 일」 칸으로 넘긴다.
+ *   특히 확정 대기가 사라지면, 확신도 0.70 미만이 자동 확정을 막아 생긴 줄이
+ *   쌓이는 것을 아무도 모르게 된다.
  *
  * ⚠ 아무 일 없으면 조용해야 한다. **항상 켜져 있는 경고는 경고가 아니다.**
- *   각 큐는 걸리는 게 없으면 카드째 사라진다. 회색으로 「0건」을 띄우지 않는다.
- *   매일 여는 화면이라, 늘 떠 있으면 며칠 안에 눈이 그 자리를 건너뛴다.
+ *   걸리는 게 없는 칸은 아예 안 그린다. 회색으로 「0건」을 띄우지 않는다.
  */
 
 /** 「오늘」은 서버가 정한다. 심사장 PC 의 시간대를 믿지 않는다. */
@@ -62,7 +64,49 @@ export default async function DashboardPage() {
     (r) => r.d_day != null && r.d_day >= 0 && r.d_day <= 7,
   ).length
 
-  const 손볼것 = 확정대기.length + 점검.length + 미확보서류.length
+  /**
+   * 날짜가 없어 달력에 못 올라가는 것 — 일정 카드의 「기다리는 일」 칸으로 넘긴다.
+   * 미리보기는 3줄까지만. 나머지는 각 화면에서 본다.
+   * ⚠ 건수(건수)는 잘라내기 전 기준이다. 3줄만 세면 「12건 중 3건」을 3건이라 말하게 된다.
+   */
+  const 기다림 = [
+    {
+      라벨: "확정 대기",
+      힌트: "AI 제안 → 사람이 눌러야 넘어간다",
+      링크: "/expenses",
+      건수: 확정대기.length,
+      항목: 확정대기.slice(0, 3).map((e) => ({
+        키: `e${e.id}`,
+        이름: e.거래처 ?? "거래처 미상",
+        꼬리: e.비목_대분류
+          ? categoryLabel(labels, e.비목_대분류, e.비목_세부항목).main
+          : "비목 미지정",
+      })),
+    },
+    {
+      라벨: "제출 전 점검",
+      힌트: "누락 · 날짜오류 · 금액 불일치",
+      링크: "/programs",
+      건수: 점검.length,
+      항목: 점검.slice(0, 3).map((r) => ({
+        키: `p${r.id}`,
+        이름: r.사업명,
+        꼬리: `${r.미처리점검}건`,
+      })),
+    },
+    {
+      라벨: "서류 미확보",
+      힌트: "만료됐거나 아직 없는 것",
+      링크: "/documents",
+      건수: 미확보서류.length,
+      항목: 미확보서류.slice(0, 3).map((d) => ({
+        키: `d${d.코드}`,
+        이름: d.이름,
+        꼬리: d.상태,
+        배지: true,
+      })),
+    },
+  ]
 
   const errors = [ledger, expenses, docs, board, calendar, undated]
     .map((r, i) => ({
@@ -93,104 +137,18 @@ export default async function DashboardPage() {
         )}
       </p>
 
-      {/* ② 곧 닥치는 일정 */}
+      {/* ① 일정 — 날짜 있는 것과 날짜 없이 나를 기다리는 것이 한 카드에 있다 */}
       <CalendarBoard
         rows={calendar.rows}
         undated={undated.rows}
+        기다림={기다림}
         today={today}
         error={calendar.error}
       />
 
-      {/* ① 새로 올라온 공고 — 생애주기의 입구. 여기선 앞 8건만, 전체는 공고 탐색에서. */}
+      {/* ② 새로 올라온 공고 — 생애주기의 입구. 여기선 앞 8건만, 전체는 공고 탐색에서. */}
       <AnnouncementBoard rows={board.rows} 최대={8} />
 
-      {/* ③ 손봐야 할 것 — 걸리는 게 없으면 이 카드는 통째로 사라진다 */}
-      {손볼것 > 0 && (
-        <div className="rounded-lg border bg-card">
-          <div className="border-b px-4 py-3">
-            <h2 className="text-sm font-semibold">손봐야 할 것</h2>
-          </div>
-          <div className="divide-y">
-            <Queue
-              title="확정 대기"
-              hint="AI 가 제안했지만 사람이 눌러야 넘어간다"
-              href="/expenses"
-              items={확정대기.slice(0, 5).map((e) => ({
-                key: String(e.id),
-                left: e.거래처 ?? "거래처 미상",
-                right: e.비목_대분류
-                  ? categoryLabel(labels, e.비목_대분류, e.비목_세부항목).main
-                  : "비목 미지정",
-              }))}
-              total={확정대기.length}
-            />
-            <Queue
-              title="제출 전 점검"
-              hint="누락 · 날짜오류 · 금액 불일치"
-              href="/programs"
-              items={점검.slice(0, 5).map((r) => ({
-                key: String(r.id),
-                left: r.사업명,
-                right: `${r.미처리점검}건`,
-              }))}
-              total={점검.length}
-            />
-            <Queue
-              title="서류"
-              hint="만료됐거나 아직 없는 것"
-              href="/documents"
-              items={미확보서류.slice(0, 5).map((d) => ({
-                key: d.코드,
-                left: d.이름,
-                right: <StatusBadge value={d.상태} />,
-              }))}
-              total={미확보서류.length}
-            />
-          </div>
-        </div>
-      )}
     </PageShell>
-  )
-}
-
-/** 큐 한 덩어리. 비어 있으면 아예 그리지 않는다 — 조용해야 눈에 띈다. */
-function Queue({
-  title,
-  hint,
-  href,
-  items,
-  total,
-}: {
-  title: string
-  hint: string
-  href: string
-  items: { key: string; left: string; right: React.ReactNode }[]
-  total: number
-}) {
-  if (total === 0) return null
-
-  return (
-    // 넓은 화면에서 값을 끝까지 밀지 않는다. 항목명과 1,500px 떨어지면 눈이 짝을 못 맞춘다.
-    <div className="max-w-3xl px-4 py-3">
-      <div className="mb-1.5 flex items-baseline gap-2">
-        <h3 className="text-[13px] font-medium">{title}</h3>
-        <span className="tabular-nums text-xs text-muted-foreground">{total}</span>
-        <span className="truncate text-xs text-muted-foreground">{hint}</span>
-        <Link href={href} className="ml-auto shrink-0 text-xs text-primary hover:underline">
-          전체
-        </Link>
-      </div>
-      <ul className="space-y-0.5">
-        {items.map((it) => (
-          <li key={it.key} className="flex items-center gap-3 text-[13px]">
-            <span className="min-w-0 flex-1 truncate">{it.left}</span>
-            <span className="shrink-0 text-muted-foreground">{it.right}</span>
-          </li>
-        ))}
-        {total > items.length && (
-          <li className="text-xs text-muted-foreground">외 {total - items.length}건</li>
-        )}
-      </ul>
-    </div>
   )
 }

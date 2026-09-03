@@ -3,7 +3,27 @@
 import * as React from "react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
+import { StatusBadge } from "@/components/status-badge"
 import type { CalendarRow, UndatedRow } from "@/lib/queries"
+
+/**
+ * 날짜가 없어서 달력에 못 올라가는 것 — 「기다리는 일」.
+ *
+ * 확정 대기·제출 전 점검·서류 미확보에는 날짜 개념이 아예 없다. 그래서 예전에는
+ * 대시보드 맨 아래 「손봐야 할 것」 카드에 따로 있었는데, 카드가 셋이면 화면이 흩어진다.
+ * 카드는 없애되 안에 있던 것은 버리지 않는다 — 일정 카드 안으로 들어온다.
+ *
+ * ⚠ 특히 「확정 대기」를 빠뜨리면 안 된다. 확신도 0.70 미만은 코드가 자동 확정을
+ *   막게 해 뒀으므로 사람을 기다리는 줄이 반드시 생기는데, 화면에서 사라지면
+ *   그 줄이 쌓이는 것을 아무도 모른다.
+ */
+export type 대기묶음 = {
+  라벨: string
+  힌트: string
+  링크: string
+  건수: number
+  항목: { 키: string; 이름: string; 꼬리: string; 배지?: boolean }[]
+}
 
 /**
  * 일정 달력 + 목록 패널.
@@ -28,8 +48,12 @@ const 색: Record<string, { dot: string; text: string }> = {
   관심공고: { dot: "bg-blue-500", text: "text-blue-600 dark:text-blue-400" },
   사업종료: { dot: "bg-emerald-500", text: "text-emerald-600 dark:text-emerald-400" },
   보고예정: { dot: "bg-amber-500", text: "text-amber-600 dark:text-amber-400" },
+  결과발표: { dot: "bg-violet-500", text: "text-violet-600 dark:text-violet-400" },
   서류만료: { dot: "bg-rose-500", text: "text-rose-600 dark:text-rose-400" },
 }
+
+/** 「다가오는 일정」을 종류별로 묶을 때의 순서. 급한 것부터. */
+const 종류순서 = ["서류만료", "보고예정", "결과발표", "관심공고", "사업종료"]
 const 기본색 = { dot: "bg-muted-foreground", text: "text-muted-foreground" }
 const 색깔 = (종류: string) => 색[종류] ?? 기본색
 
@@ -63,11 +87,13 @@ const 보기들: 보기[] = ["일간", "주간", "월간"]
 export function CalendarBoard({
   rows,
   undated,
+  기다림,
   today,
   error,
 }: {
   rows: CalendarRow[]
   undated: UndatedRow[]
+  기다림: 대기묶음[]
   today: string
   error?: string | null
 }) {
@@ -229,7 +255,7 @@ export function CalendarBoard({
         </div>
       ) : !격자 ? (
         <div className="p-3">
-          <div className={cn("max-w-3xl", undated.length > 0 && "sm:grid sm:grid-cols-2 sm:gap-4")}>
+          <div className="max-w-3xl">
             <Panel
               선택={null}
               날짜별={날짜별}
@@ -237,6 +263,7 @@ export function CalendarBoard({
               이번주것={이번주것}
               앞으로={앞으로}
               undated={undated}
+              기다림={기다림}
               옆칸={false}
             />
           </div>
@@ -261,7 +288,8 @@ export function CalendarBoard({
               />
             )}
           </div>
-          <div className="border-t p-3 lg:border-l lg:border-t-0">
+          {/* 패널이 길어지면 달력보다 카드가 커진다. 옆칸에서는 안에서 스크롤시킨다. */}
+          <div className="border-t p-3 lg:max-h-[560px] lg:overflow-y-auto lg:border-l lg:border-t-0">
             <Panel
               선택={선택}
               날짜별={날짜별}
@@ -269,6 +297,7 @@ export function CalendarBoard({
               이번주것={이번주것}
               앞으로={앞으로}
               undated={undated}
+              기다림={기다림}
               옆칸
             />
           </div>
@@ -423,6 +452,7 @@ function Panel({
   이번주것,
   앞으로,
   undated,
+  기다림,
   옆칸,
 }: {
   선택: string | null
@@ -431,6 +461,7 @@ function Panel({
   이번주것: CalendarRow[]
   앞으로: CalendarRow[]
   undated: UndatedRow[]
+  기다림: 대기묶음[]
   옆칸: boolean
 }) {
   if (선택) {
@@ -449,51 +480,117 @@ function Panel({
     )
   }
 
-  // 이번 주가 비면 「이번 주 일정이 없습니다」로 칸을 낭비하지 않고 다음 일정을 보여준다.
-  // 3건까지만 — 넉 달 뒤 일정을 다섯 줄 늘어놓는 건 「행동이 필요한 것만」에서 멀어진다.
-  const 다음 = 이번주것.length > 0 ? null : 앞으로.slice(0, 3)
+  // 이번 주에 든 것은 「다가오는」에서 뺀다. 같은 줄이 두 번 나오면 건수를 못 믿는다.
+  const 이번주키 = new Set(이번주것.map((r) => r.종류 + r.참조키 + r.날짜))
+  const 나중 = 앞으로.filter((r) => !이번주키.has(r.종류 + r.참조키 + r.날짜))
+
+  // 「다가오는 일정」을 종류별로 나눈다. 만료된 서류 · 보고 제출 · 결과 발표가
+  // 한 덩어리로 섞여 있으면 무엇을 준비해야 하는지가 안 보인다.
+  // ⚠ 0건인 종류는 그리지 않는다. 「아무 일 없으면 조용해야 한다」.
+  const 그룹 = new Map<string, CalendarRow[]>()
+  for (const r of 나중) {
+    const g = 그룹.get(r.종류)
+    if (g) g.push(r)
+    else 그룹.set(r.종류, [r])
+  }
+  const 그룹순 = [...그룹.keys()].sort((a, b) => {
+    const i = 종류순서.indexOf(a)
+    const j = 종류순서.indexOf(b)
+    return (i < 0 ? 99 : i) - (j < 0 ? 99 : j)
+  })
+
+  const 대기 = 기다림.filter((g) => g.건수 > 0)
   const 아무것도없음 =
     지난것.length === 0 &&
     이번주것.length === 0 &&
-    (다음?.length ?? 0) === 0 &&
-    undated.length === 0
+    나중.length === 0 &&
+    undated.length === 0 &&
+    대기.length === 0
 
   return (
     <>
-      <div>
-        {지난것.length > 0 && (
-          <div className="mb-2 rounded border border-destructive/30 bg-destructive/5 p-2">
-            <h4 className="mb-1 text-xs font-medium text-destructive">
-              지난 일정 {지난것.length}건
-            </h4>
-            <Items rows={지난것} 지남 />
-          </div>
-        )}
+      {지난것.length > 0 && (
+        <div className="mb-2 rounded border border-destructive/30 bg-destructive/5 p-2">
+          <h4 className="mb-1 text-xs font-medium text-destructive">
+            지난 일정 {지난것.length}건
+          </h4>
+          <Items rows={지난것} 지남 />
+        </div>
+      )}
 
-        {이번주것.length > 0 && (
-          <>
-            <Head title="이번 주" n={이번주것.length} />
-            <Items rows={이번주것} />
-          </>
-        )}
+      {이번주것.length > 0 && (
+        <>
+          <Head title="이번 주" n={이번주것.length} />
+          <Items rows={이번주것} />
+        </>
+      )}
 
-        {다음 && 다음.length > 0 && (
-          <>
-            <Head title="다가오는 일정" n={다음.length} />
-            <Items rows={다음} 날짜표시 />
-          </>
-        )}
+      {그룹순.length > 0 && (
+        <div className={cn(이번주것.length > 0 && "mt-3")}>
+          <Head title="다가오는 일정" n={나중.length} />
+          {그룹순.map((종류) => {
+            const list = 그룹.get(종류)!
+            return (
+              <div key={종류} className="mb-1.5">
+                <div className="flex items-baseline gap-1.5 px-2">
+                  <span className={cn("text-xs font-medium", 색깔(종류).text)}>{종류}</span>
+                  <span className="text-xs tabular-nums text-muted-foreground">
+                    {list.length}
+                  </span>
+                </div>
+                <Items rows={list.slice(0, 3)} 날짜표시 />
+                {list.length > 3 && (
+                  <p className="px-2 text-xs text-muted-foreground">외 {list.length - 3}건</p>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
 
-        {아무것도없음 && (
-          <p className="py-6 text-center text-[13px] text-muted-foreground">
-            예정된 일정이 없습니다
-          </p>
-        )}
-      </div>
+      {/* ★ 날짜가 없어 달력에 못 올리는 것 — 예전 「손봐야 할 것」 카드가 여기로 들어왔다. */}
+      {대기.length > 0 && (
+        <div className="mt-3 border-t pt-2">
+          <h4 className="mb-1.5 text-[13px] font-medium">기다리는 일</h4>
+          {대기.map((g) => (
+            <div key={g.라벨} className="mb-2">
+              <div className="flex items-baseline gap-1.5 px-2">
+                <Link href={g.링크} className="text-xs font-medium hover:underline">
+                  {g.라벨}
+                </Link>
+                <span className="text-xs tabular-nums text-muted-foreground">{g.건수}</span>
+                <span className="truncate text-xs text-muted-foreground">{g.힌트}</span>
+              </div>
+              <ul className="space-y-0.5">
+                {g.항목.map((it) => (
+                  <li
+                    key={it.키}
+                    className="flex items-center gap-2 px-2 py-0.5 text-[13px]"
+                  >
+                    <span className="min-w-0 flex-1 truncate">{it.이름}</span>
+                    <span className="shrink-0">
+                      {it.배지 ? (
+                        <StatusBadge value={it.꼬리} />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">{it.꼬리}</span>
+                      )}
+                    </span>
+                  </li>
+                ))}
+                {g.건수 > g.항목.length && (
+                  <li className="px-2 text-xs text-muted-foreground">
+                    외 {g.건수 - g.항목.length}건
+                  </li>
+                )}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
 
-      {/* ★ 날짜가 없어 달력에 못 올리는 것. 없애면 관심 공고가 조용히 사라진다. */}
+      {/* 관심 공고인데 마감이 날짜가 아닌 것(상시·소진시). 없애면 조용히 사라진다. */}
       {undated.length > 0 && (
-        <div className={cn(옆칸 && "mt-3 border-t pt-2")}>
+        <div className="mt-3 border-t pt-2">
           <h4 className="mb-1 text-xs text-muted-foreground">날짜 미정 {undated.length}건</h4>
           <ul className="space-y-0.5">
             {undated.map((u) => (
@@ -509,6 +606,12 @@ function Panel({
             ))}
           </ul>
         </div>
+      )}
+
+      {아무것도없음 && (
+        <p className="py-6 text-center text-[13px] text-muted-foreground">
+          지금 손댈 것이 없습니다
+        </p>
       )}
     </>
   )

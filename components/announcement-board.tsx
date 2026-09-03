@@ -47,7 +47,16 @@ export function AnnouncementBoard({
     return [...기본탭, ...추가.sort()]
   }, [rows])
 
-  const [active, setActive] = React.useState<string>(기본탭[0])
+  /**
+   * 처음 보이는 탭은 **내용이 있는 탭**이다.
+   * 오픈 API 수집분은 사업유형이 비어 있어 대부분 「미분류」로 온다. 그래서 「과제」를
+   * 무조건 첫 탭으로 두면, 공고가 200건 쌓여 있는데 화면은 「공고가 없습니다」로 열린다
+   * (2026-09-03 실측). 비어 있는 탭을 기본값으로 두지 않는다.
+   */
+  const [active, setActive] = React.useState<string>(() => {
+    const 있는 = 탭.find((t) => rows.some((r) => r.구분 === t))
+    return 있는 ?? 기본탭[0]
+  })
 
   const 개수 = React.useMemo(() => {
     const m = new Map<string, { 전체: number; 신규: number }>()

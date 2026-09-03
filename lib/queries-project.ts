@@ -2,6 +2,7 @@ import "server-only"
 import { db, safeSelect } from "@/lib/db"
 import type { ProjectRow } from "@/lib/queries"
 import type { ShareRule } from "@/lib/funding-share"
+import type { EvidenceRequirement, EvidenceFile } from "@/lib/evidence-types"
 
 /**
  * 과제 상세(개요 · 연구비 계상 · 정산) 전용 조회.
@@ -94,6 +95,25 @@ export const getCategories = () =>
 export const getFundingShareRules = () =>
   safeSelect<ShareRule>("funding_share_rules", () =>
     db.from("funding_share_rules").select("*"),
+  )
+
+/**
+ * 비목별 RCMS 증빙 요건. 전건이 30행 안쪽이라 통째로 받아 화면에서 비목별로 나눈다.
+ * (요건은 과제에 종속되지 않는다 — 사업유형·공고별 예외가 생기면 그 컬럼으로 걸러진다.)
+ */
+export const getEvidenceRequirements = () =>
+  safeSelect<EvidenceRequirement>("evidence_requirements", () =>
+    db.from("evidence_requirements").select("*"),
+  )
+
+/** 과제 하나에 붙은 증빙 파일. 최근에 올린 것이 위로 온다. */
+export const getProjectEvidenceFiles = (id: number) =>
+  safeSelect<EvidenceFile>("project_evidence_files", () =>
+    db
+      .from("project_evidence_files")
+      .select("*")
+      .eq("과제_id", id)
+      .order("업로드일시", { ascending: false }),
   )
 
 /** 우리 회사 프로필 — 기관유형(기업규모)을 여기서 읽는다. 규칙이 기관유형별로 갈린다. */

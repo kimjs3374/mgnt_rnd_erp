@@ -1,14 +1,18 @@
 import { DbError } from "@/components/db-error"
 import { BudgetEditor, type Line } from "@/components/budget-editor"
 import { FundingShareCard } from "@/components/funding-share-card"
+import { EvidenceAttachments } from "@/components/evidence-attachments"
 import {
   getProject,
   getProjectBudget,
   getCategories,
   getFundingShareRules,
   getCompanyProfile,
+  getEvidenceRequirements,
+  getProjectEvidenceFiles,
 } from "@/lib/queries-project"
 import { pickRule, computeShare } from "@/lib/funding-share"
+import { getCurrentUser } from "@/lib/current-user"
 
 export const dynamic = "force-dynamic"
 
@@ -33,12 +37,15 @@ export default async function ProjectBudgetPage({
   const { id: raw } = await params
   const id = Number(raw)
 
-  const [proj, budget, cats, rules, company] = await Promise.all([
+  const [proj, budget, cats, rules, company, reqs, files, who] = await Promise.all([
     getProject(id),
     getProjectBudget(id),
     getCategories(),
     getFundingShareRules(),
     getCompanyProfile(),
+    getEvidenceRequirements(),
+    getProjectEvidenceFiles(id),
+    getCurrentUser(),
   ])
   const p = proj.rows[0]
 
@@ -113,6 +120,20 @@ export default async function ProjectBudgetPage({
           기관부담_현물: p?.기관부담_현물 ?? null,
         }}
         비목목록={cats.rows.map((c) => ({ 코드: c.코드, 이름: c.이름 }))}
+      />
+
+      {/* 계상한 비목이 곧 준비해야 할 RCMS 증빙 목록이 된다. 그래서 계상 표 바로 아래에 둔다. */}
+      {reqs.error && <DbError what="증빙 요건" error={reqs.error} />}
+      {files.error && <DbError what="증빙 파일" error={files.error} />}
+      <EvidenceAttachments
+        과제_id={id}
+        요건={reqs.rows}
+        파일={files.rows}
+        비목이름={Object.fromEntries(cats.rows.map((c) => [c.코드, c.이름]))}
+        계상비목={Array.from(
+          new Set(lines.filter((l) => Number(l.배정액) > 0).map((l) => l.비목_대분류)),
+        )}
+        로그인={who.인증}
       />
 
       <p className="text-xs text-muted-foreground">

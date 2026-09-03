@@ -202,12 +202,14 @@ export function AnnouncementBoard({
                   <TableHead className="w-8" title="관심 표시하면 마감일이 달력에 뜬다">
                     <span className="sr-only">관심</span>★
                   </TableHead>
-                  {/* ⚠ 제목만 가운데다. 값(특히 사업명처럼 긴 텍스트)까지 가운데로 두면
-                      말줄임표가 양쪽에서 들쭉날쭉해져 오히려 읽기 나빠진다(2026-09-04 확인). */}
-                  <TableHead className="text-center">사업명</TableHead>
-                  <TableHead className="w-[178px] pl-4 text-center">기관</TableHead>
-                  <TableHead className="w-[212px] pl-4 text-center">접수기간</TableHead>
-                  <TableHead className="w-[92px] pl-4 text-center">출처</TableHead>
+                  {/* ⚠ 헤더와 값의 정렬 기준을 맞춘다 — 하나는 가운데, 하나는 왼쪽이면
+                      서로 다른 기준점이라 어긋나 보인다(2026-09-04 지적, 실제로 어긋났었다).
+                      사업명은 길고 왼쪽 정렬이라 헤더도 왼쪽(shadcn 기본값 그대로 둔다).
+                      나머지 셋은 값도 짧아서 헤더·값 다 가운데로 통일한다. */}
+                  <TableHead>사업명</TableHead>
+                  <TableHead className="w-[178px] text-center">기관</TableHead>
+                  <TableHead className="w-[212px] text-center">접수기간</TableHead>
+                  <TableHead className="w-[92px] text-center">출처</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -227,15 +229,15 @@ export function AnnouncementBoard({
                         <span className="truncate">{r.사업명}</span>
                       </Link>
                     </TableCell>
-                    {/* ⚠ 오른쪽 세 칸(기관·접수기간·출처)이 사업명 뒤에 다닥다닥 붙어 보였다
-                        (2026-09-04 지적) — pl-4 로 칸 사이 숨 쉴 틈을 늘린다. */}
-                    <TableCell className="max-w-[1px] truncate pl-4 text-muted-foreground">
+                    {/* 헤더가 가운데니 값도 가운데다 — 칸 너비(178·212·92px)를 넓혀 둔
+                        덕에 가운데로 모여도 옆 칸과 안 붙는다. */}
+                    <TableCell className="max-w-[1px] truncate text-center text-muted-foreground">
                       {r.기관 ?? "—"}
                     </TableCell>
-                    <TableCell className="tabular-nums pl-4 text-muted-foreground">
+                    <TableCell className="tabular-nums text-center text-muted-foreground">
                       <Period row={r} />
                     </TableCell>
-                    <TableCell className="pl-4 text-xs text-muted-foreground">{r.출처}</TableCell>
+                    <TableCell className="text-center text-xs text-muted-foreground">{r.출처}</TableCell>
                   </TableRow>
                 ))}
                 {/* 줄 수를 고정한다. 마지막 페이지가 짧다고 카드 키가 흔들리면 아래 카드가 움직인다. */}

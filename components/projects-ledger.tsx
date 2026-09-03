@@ -23,6 +23,9 @@ import {
 } from "@/components/ui/table"
 import type { ProjectRow } from "@/lib/queries"
 import { 연차수, 현재연차, 기간표기, 연차연도 } from "@/lib/fiscal-year"
+// 기간 프리셋·겹침 판정은 지원사업 대장과 **같은 것을 쓴다**(`lib/date-filter.ts`) —
+// 복사해 두면 이름이 갈린다(「올해 걸친 것」 → 「올해」로 바꿀 때 실제로 그럴 뻔했다).
+import { 기간프리셋, 프리셋범위 } from "@/lib/date-filter"
 import { ProjectLeadCell } from "@/components/project-lead-cell"
 import { 종료로표시 } from "@/app/actions/project-stage"
 import type { 과제단계, 보기범위 } from "@/lib/project-stage"
@@ -73,29 +76,6 @@ const 전체연도 = "전체"
 const 모두 = "전체"
 const 보기단위 = [10, 20] as const
 const 쪽없음 = 0
-
-/**
- * 기간 프리셋. 「수행기간이 이 범위와 **겹치는** 과제」를 고른다 — 시작일이 그 안인 것이 아니다.
- * 2022~2024 과제는 「올해」로 걸러도 올해 걸쳐 있으면 나와야 한다.
- */
-const 기간프리셋 = [
-  { v: "전체", label: "기간 전체" },
-  { v: "올해", label: "올해 걸친 것" },
-  { v: "1년", label: "최근 1년" },
-  { v: "3년", label: "최근 3년" },
-] as const
-
-function 프리셋범위(v: string): { 시작: string; 끝: string } | null {
-  const 오늘 = new Date()
-  const iso = (d: Date) => d.toISOString().slice(0, 10)
-  if (v === "올해") return { 시작: `${오늘.getFullYear()}-01-01`, 끝: `${오늘.getFullYear()}-12-31` }
-  if (v === "1년" || v === "3년") {
-    const 앞 = new Date(오늘)
-    앞.setFullYear(앞.getFullYear() - (v === "1년" ? 1 : 3))
-    return { 시작: iso(앞), 끝: iso(오늘) }
-  }
-  return null
-}
 
 /**
  * 과제사업 대장의 표 — 걸러내기 · 연도 · 쪽 나누기.

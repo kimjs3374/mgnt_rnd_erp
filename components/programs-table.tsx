@@ -31,6 +31,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { deleteApplication } from "@/app/actions/apply"
+// 기간 프리셋·겹침·연도는 과제 대장과 **같은 것을 쓴다**(복사하면 이름이 갈린다).
+import { 기간프리셋, 범위정하기, 기간겹치나, 걸친연도, 기간_전체 } from "@/lib/date-filter"
 import type { LedgerRow } from "@/lib/queries"
 
 // lib/queries.ts 는 service_role 로 여는 lib/db 를 갖고 있어 클라이언트 번들에 넣지 않는다
@@ -39,7 +41,28 @@ const won = (n: number | null | undefined) =>
   n == null ? "—" : "₩" + Number(n).toLocaleString("ko-KR")
 
 const 전체_상태 = "전체"
+const 모두 = "전체"
+const 전체연도 = "전체"
+const 보기단위 = [10, 20] as const
+const 쪽없음 = 0
 type SortKey = "사업명" | "기관" | "마감일"
+
+/** funding_schemes.이름 을 그대로 옮긴다 — 화면에서 코드가 보이면 안 된다. */
+const 사업유형_라벨: Record<string, string> = {
+  NATIONAL_RND: "국가 R&D",
+  LOCAL_TP: "지자체·TP 지원사업",
+}
+
+/**
+ * 그 사업의 기간 — **협약기간이 먼저고, 없으면 공고일~마감일**이다.
+ * 선정 전 건은 협약이 없다. 그때 「언제 공고된 건인가」가 사람이 찾는 기준이라 그걸 쓴다.
+ */
+function 사업기간(r: LedgerRow): { 시작: string | null; 끝: string | null } {
+  const 협약시작 = (r as { 협약시작?: string | null }).협약시작 ?? null
+  const 협약종료 = (r as { 협약종료?: string | null }).협약종료 ?? null
+  if (협약시작 || 협약종료) return { 시작: 협약시작, 끝: 협약종료 }
+  return { 시작: r.공고일 ?? null, 끝: r.마감일 ?? null }
+}
 
 /**
  * 단계별 줄 색 — 과제사업(`components/projects-ledger.tsx`)과 같은 색을 그대로 쓴다
@@ -88,12 +111,36 @@ export function ProgramsTable({ rows }: { rows: LedgerRow[] }) {
   const router = useRouter()
   const [search, setSearch] = React.useState("")
   const [상태, set상태] = React.useState(전체_상태)
+  const [연도, set연도] = React.useState(전체연도)
+  const [유형, set유형] = React.useState(모두)
+  const [프리셋, set프리셋] = React.useState<string>(기간_전체)
+  const [기간시작, set기간시작] = React.useState("")
+  const [기간끝, set기간끝] = React.useState("")
+  const [크기, set크기] = React.useState<number>(20)
+  const [쪽, set쪽] = React.useState(쪽없음)
   const [sortKey, setSortKey] = React.useState<SortKey | null>(null)
   const [sortDir, setSortDir] = React.useState<"asc" | "desc">("asc")
   // 삭제 확인 — 지우기는 되돌릴 수 없어서 한 번 더 물어본다. 대상만 여기 담아 둔다.
   const [삭제대상, set삭제대상] = React.useState<{ id: number; 사업명: string } | null>(null)
   const [삭제오류, set삭제오류] = React.useState<string | null>(null)
   const [삭제중, start삭제] = React.useTransition()
+
+  /** 대장에 실제로 있는 연도만 낸다 — 없는 해를 고르게 하면 빈 표가 나온다. */
+  const 연도목록 = React.useMemo(() => {
+    const s = new Set<number>()
+    for (const r of rows) {
+      const { 시작, 끝 } = 사업기간(r)
+      for (const y of 걸친연도(시작, 끝)) s.add(y)
+    }
+    return [...s].sort((a, b) => b - a)
+  }, [rows])
+
+  const 유형목록 = React.useMemo(
+    () => [...new Set(rows.map((r) => r.사업유형).filter((v): v is string => !!v))].sort(),
+    [rows],
+  )
+
+  const 범위 = React.useMemo(() => 범위정하기(프리셋, 기간시작, 기간끝), [프리셋, 기간시작, 기간끝])
 
   const 상태목록 = React.useMemo(
     () => Array.from(new Set(rows.map((r) => r.상태))).sort(),
@@ -102,8 +149,14 @@ export function ProgramsTable({ rows }: { rows: LedgerRow[] }) {
 
   const 필터된 = React.useMemo(() => {
     const q = search.trim().toLowerCase()
+    const y = 연도 === 전체연도 ? null : Number(연도)
     let out = rows.filter((r) => {
       if (상태 !== 전체_상태 && r.상태 !== 상태) return false
+      if (유형 !== 모두 && (r.사업유형 ?? "") !== 유형) return false
+      const { 시작, 끝 } = 사업기간(r)
+      // 연도는 「그 해에 걸쳐 있었는가」다 — 시작 연도만 보면 2024~2026 사업이 「2025」에서 빠진다.
+      if (y != null && !걸친연도(시작, 끝).includes(y)) return false
+      if (!기간겹치나(시작, 끝, 범위)) return false
       if (!q) return true
       return (
         r.사업명.toLowerCase().includes(q) ||
@@ -123,7 +176,15 @@ export function ProgramsTable({ rows }: { rows: LedgerRow[] }) {
       })
     }
     return out
-  }, [rows, search, 상태, sortKey, sortDir])
+  }, [rows, search, 상태, 연도, 유형, 범위, sortKey, sortDir])
+
+  // 필터를 바꾸면 첫 쪽으로 — 3쪽을 보다가 걸러서 1쪽만 남으면 빈 화면이 뜬다.
+  React.useEffect(() => {
+    set쪽(쪽없음)
+  }, [search, 상태, 연도, 유형, 프리셋, 기간시작, 기간끝, 크기])
+
+  const 쪽수 = Math.max(1, Math.ceil(필터된.length / 크기))
+  const 보이는 = 필터된.slice(쪽 * 크기, 쪽 * 크기 + 크기)
 
   function toggleSort(key: SortKey) {
     if (sortKey !== key) {
@@ -139,11 +200,23 @@ export function ProgramsTable({ rows }: { rows: LedgerRow[] }) {
   function 초기화() {
     setSearch("")
     set상태(전체_상태)
+    set연도(전체연도)
+    set유형(모두)
+    set프리셋(기간_전체)
+    set기간시작("")
+    set기간끝("")
     setSortKey(null)
     setSortDir("asc")
   }
 
-  const 필터걸림 = search.trim() !== "" || 상태 !== 전체_상태
+  const 필터걸림 =
+    search.trim() !== "" ||
+    상태 !== 전체_상태 ||
+    연도 !== 전체연도 ||
+    유형 !== 모두 ||
+    프리셋 !== 기간_전체 ||
+    기간시작 !== "" ||
+    기간끝 !== ""
 
   function Header({ label, sortk }: { label: string; sortk: SortKey }) {
     const active = sortKey === sortk
@@ -186,6 +259,88 @@ export function ProgramsTable({ rows }: { rows: LedgerRow[] }) {
             ))}
           </SelectContent>
         </Select>
+        <span className="text-xs text-muted-foreground">수행 연도</span>
+        <Select value={연도} onValueChange={(v) => set연도(v ?? 전체연도)}>
+          <SelectTrigger size="sm" className="h-7 w-24 text-[12.8px]" aria-label="수행 연도로 걸러내기">
+            <SelectValue placeholder={전체연도} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={전체연도}>전체</SelectItem>
+            {연도목록.map((y) => (
+              <SelectItem key={y} value={String(y)}>
+                {y}년
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {유형목록.length > 1 && (
+          <Select value={유형} onValueChange={(v) => set유형(v ?? 모두)}>
+            <SelectTrigger size="sm" className="h-7 w-36 text-[12.8px]" aria-label="사업유형으로 걸러내기">
+              <SelectValue placeholder="유형 전체" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={모두}>유형 전체</SelectItem>
+              {유형목록.map((t) => (
+                <SelectItem key={t} value={t}>
+                  {사업유형_라벨[t] ?? t}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
+        {/* 기간 — 프리셋으로 대부분 끝나고, 안 맞으면 날짜를 직접 넣는다(과제 대장과 같은 모양).
+            기준은 **협약기간**이고 없으면 공고일~마감일이다(선정 전 건은 협약이 없다). */}
+        <Select
+          value={프리셋}
+          onValueChange={(v) => {
+            set프리셋(v ?? 기간_전체)
+            set기간시작("")
+            set기간끝("")
+          }}
+        >
+          <SelectTrigger size="sm" className="h-7 w-32 text-[12.8px]" aria-label="기간 프리셋">
+            <SelectValue placeholder="기간 전체" />
+          </SelectTrigger>
+          <SelectContent>
+            {기간프리셋.map((p) => (
+              <SelectItem key={p.v} value={p.v}>
+                {p.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Input
+          type="date"
+          value={기간시작}
+          onChange={(e) => set기간시작(e.target.value)}
+          className="h-7 w-[132px] text-[12.8px]"
+          aria-label="기간 시작"
+        />
+        <span className="text-xs text-muted-foreground">~</span>
+        <Input
+          type="date"
+          value={기간끝}
+          onChange={(e) => set기간끝(e.target.value)}
+          className="h-7 w-[132px] text-[12.8px]"
+          aria-label="기간 끝"
+        />
+
+        <Select value={String(크기)} onValueChange={(v) => set크기(Number(v) || 20)}>
+          <SelectTrigger size="sm" className="h-7 w-20 text-[12.8px]" aria-label="한 쪽에 몇 줄">
+            <SelectValue placeholder="20" />
+          </SelectTrigger>
+          <SelectContent>
+            {보기단위.map((n) => (
+              <SelectItem key={n} value={String(n)}>
+                {n}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <span className="text-xs tabular-nums text-muted-foreground">{필터된.length}건</span>
+
         {필터걸림 && (
           <Button
             type="button"
@@ -226,7 +381,7 @@ export function ProgramsTable({ rows }: { rows: LedgerRow[] }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {필터된.map((r) => (
+              {보이는.map((r) => (
                 <TableRow
                   key={r.id}
                   className={"h-[38px] text-[13px] cursor-pointer " + (상태색[r.상태] ?? "")}

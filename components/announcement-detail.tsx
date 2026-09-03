@@ -26,6 +26,7 @@ import { DbError } from "@/components/db-error"
 import { Badge } from "@/components/ui/badge"
 import { EligibilityConfirm } from "@/components/eligibility-confirm"
 import { JudgmentNote } from "@/components/judgment-note"
+import { PhraseMark } from "@/components/phrase-mark"
 import { ApplyStatus } from "@/components/apply-status"
 import { cn } from "@/lib/utils"
 import {
@@ -365,6 +366,12 @@ export async function AnnouncementDetail({
                   announcementId={a.id}
                   검색기본질의={`${a.사업명 ?? ""} ${요약?.사업요약 ?? ""}`.trim()}
                 />
+              </div>
+
+              {/* 문구 짚기 — 위 의미 학습(뜻이 비슷하면 걸림)과 다른 층이다.
+                  글자 그대로 걸리는 추출 규칙이라 게이트로 쓰이고, 걸리면 불가가 확정된다. */}
+              <div className="mt-3 border-t pt-3">
+                <PhraseMark announcementId={a.id} />
               </div>
             </div>
 

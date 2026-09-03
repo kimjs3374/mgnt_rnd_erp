@@ -341,6 +341,26 @@ class Handler(BaseHTTPRequestHandler):
             # 사람이 고칠 수 있는 입력 오류다. 500 으로 숨기지 않는다.
             self._send(400, {"ok": False, "error": str(e)})
             return
+
+        # 재판정 결과를 **화면이 보는 테이블**(eligibility_decisions)에도 반영한다.
+        # 이게 없으면 "짚었는데 화면은 그대로"가 된다 — 오늘 하루 같은 문제를 세 번 봤다
+        # (판정 근거·해당없음·학습 연결). 사람이 이미 정정한 공고는 sync_one() 이 알아서
+        # 건너뛴다(판단 우선순위 1층). 여기서 터져도 답과 렉시콘은 이미 저장돼 있으므로
+        # 전체를 실패로 돌리지 않고 사유만 실어 보낸다.
+        재판정 = r.get("판정") or {}
+        aid = body.get("announcement_id")
+        if aid and 재판정.get("ok"):
+            try:
+                import ann_sync_decisions  # noqa: PLC0415
+                if 재판정.get("판정") in ann_sync_decisions.INCLUDE:
+                    r["동기화"] = ann_sync_decisions.sync_one(
+                        {**재판정, "announcement_id": int(aid)})
+                else:
+                    r["동기화"] = f"반영 안 함 — 「{재판정.get('판정')}」은 동기화 대상이 아니다"
+            except Exception as e:
+                log.error("rules/answer 동기화 실패: %s\n%s", e, traceback.format_exc())
+                r["동기화"] = f"실패: {type(e).__name__}: {e}"
+
         self._send(200, r)
 
     # ── 의미 기반 판정 학습 — 사람이 판정+코멘트를 남기면 임베딩해서 쌓는다 ─────

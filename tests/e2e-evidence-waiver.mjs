@@ -105,6 +105,18 @@ const 사유넣기 = async (값) => {
   await page.keyboard.type(값)
   await 잠깐(200)
 }
+/**
+ * 내 줄의 [면제] 버튼 개수 = 「안 채워지고 면제도 안 된 칸」 수.
+ * 머리 문구에서 숫자를 긁지 않는다 — 문구는 좋아질 수 있고, 그때마다 검사가 조용히 망가진다.
+ */
+const 면제버튼수 = () =>
+  page.evaluate((상호) => {
+    const li = [...document.querySelectorAll("li")].find((x) => (x.innerText ?? "").includes(상호))
+    return [...(li?.querySelectorAll("button") ?? [])].filter(
+      (b) => (b.innerText ?? "").trim() === "면제",
+    ).length
+  }, 거래처)
+
 const 저장버튼상태 = () =>
   page.evaluate(() => {
     const b = [...document.querySelectorAll("button")].find((x) => (x.innerText ?? "").trim() === "저장")
@@ -148,6 +160,23 @@ try {
     "evidence_requirements",
     "집행단위=is.true&필수여부=is.true&비목_대분류=eq.FACILITY&select=id,서류명&order=순번",
   )
+  // ★ 마지막 요건에는 **파일을 붙여 둔다.** 「안 채워진 것만 면제로 뜨는가」를 보려면
+  //   채워진 것이 하나는 있어야 한다(사용자 확인 질문).
+  const 채운요건 = 요건[요건.length - 1]
+  await 넣기("project_evidence_files", [
+    {
+      과제_id,
+      비목_대분류: "FACILITY",
+      요건_id: 채운요건.id,
+      집행_id,
+      파일명: "e2e-이미붙은-서류.pdf",
+      storage_path: `e2e/waiver/${집행_id}-${채운요건.id}.pdf`,
+      크기: 1024,
+      mime: "application/pdf",
+      업로더: "e2e",
+      업로더_인증: false,
+    },
+  ])
   확인(요건.length >= 2, `FACILITY 집행단위 필수 요건 ${요건.length}종`, 요건.map((r) => r.서류명).join(" · "))
   const 대상 = 요건[0]
 
@@ -155,8 +184,34 @@ try {
   await 카드열기()
   let text = await 본문()
   확인(text.includes(거래처), "내 집행 건이 목록에 있다")
-  const 처음빈칸 = Number((text.match(/빈 칸 (\d+)/) ?? [])[1] ?? -1)
-  log(`처음 빈 칸: ${처음빈칸}`)
+  const 처음남은칸 = await 면제버튼수()
+  log(`처음 면제 가능한 칸: ${처음남은칸}`)
+
+  // ★ 「안 채워진 것만 면제할 수 있게 뜨는가」 — 이미 채운 서류는 목록에 없어야 한다.
+  const 내줄 = await page.evaluate((상호) => {
+    const li = [...document.querySelectorAll("li")].find((x) => (x.innerText ?? "").includes(상호))
+    if (!li) return null
+    const 없는서류줄 = [...li.querySelectorAll("span")].find((sp) =>
+      (sp.innerText ?? "").trim().startsWith("없는 서류:"),
+    )
+    return {
+      글: (없는서류줄?.innerText ?? "").replace("없는 서류:", "").trim(),
+      면제버튼수: [...li.querySelectorAll("button")].filter(
+        (b) => (b.innerText ?? "").trim() === "면제",
+      ).length,
+    }
+  }, 거래처)
+  확인(!!내줄, "내 줄을 찾았다")
+  확인(
+    !내줄.글.includes(채운요건.서류명),
+    `이미 채운 서류(${채운요건.서류명})는 목록에 없다 — 면제 버튼도 없다`,
+    내줄.글,
+  )
+  확인(
+    내줄.면제버튼수 === 요건.length - 1,
+    `면제 버튼은 안 채운 서류 수만큼만 (${요건.length - 1}개)`,
+    String(내줄.면제버튼수),
+  )
 
   await 칩버튼(대상.서류명, "면제")
   const 상태 = await 저장버튼상태()
@@ -189,8 +244,11 @@ try {
   console.log("④ 미비 숫자에서 빠지고, 면제로 보인다")
   await 카드열기()
   text = await 본문()
-  const 나중빈칸 = Number((text.match(/빈 칸 (\d+)/) ?? [])[1] ?? -1)
-  확인(나중빈칸 === 처음빈칸 - 1, `빈 칸이 하나 줄었다 (${처음빈칸} → ${나중빈칸})`)
+  const 나중남은칸 = await 면제버튼수()
+  확인(
+    나중남은칸 === 처음남은칸 - 1,
+    `면제 대상이 하나 줄었다 (${처음남은칸} → ${나중남은칸}) — 미비에서 빠졌다`,
+  )
   확인(text.includes("면제 1칸"), "면제 칸 수를 따로 보여준다")
   확인(text.includes("면제:"), "면제한 서류를 목록에 남긴다")
 
@@ -218,6 +276,7 @@ try {
 } finally {
   try {
     if (집행_id) await 지우기("evidence_waivers", `집행_id=eq.${집행_id}`)
+    if (집행_id) await 지우기("project_evidence_files", `집행_id=eq.${집행_id}`)
     if (집행_id) await 지우기("expenses", `id=eq.${집행_id}`)
     if (과제_id) await 지우기("projects", `id=eq.${과제_id}`)
     const 남음 =

@@ -33,17 +33,38 @@ export function EngineLlmCompare({ cmp }: { cmp: LlmCompare }) {
 
   // 등급 막대가 더 길므로 그쪽까지 포함해 최대값을 잡는다 — 안 그러면 막대가 넘친다.
   const 최고 = Math.max(...cmp.버전별.flatMap((v) => [v.일치율, v.등급일치율]), 1)
+
+  // 값이 그대로인 버전은 접는다 — 16줄을 다 그리면 같은 막대가 반복돼 무엇이 달라졌는지
+  // 안 보인다(사용자 지적 2026-09-04: "이게 무슨말을 하고싶은건지 모르겠다").
+  // 첫 버전과 현재 버전은 기준점이라 값이 같아도 항상 남긴다.
+  const 변화지점 = cmp.버전별.filter((v, i, arr) => {
+    if (i === 0 || i === arr.length - 1) return true
+    const 앞 = arr[i - 1]
+    return v.일치율 !== 앞.일치율 || v.등급일치율 !== 앞.등급일치율
+  })
   const 첫 = cmp.버전별[0]
   const 끝 = cmp.버전별[cmp.버전별.length - 1]
 
   return (
     <Card className="p-4">
-      <h2 className="text-sm font-semibold">LLM 판정 vs 규칙 엔진 — 같은 공고를 두 방식으로</h2>
-      <p className="mt-0.5 mb-3 text-xs text-muted-foreground">
-        LLM 이 판정해 둔 <b>{cmp.처리량.llm_판정건수}건</b>을 규칙 엔진이 같은 공고에 대해
-        다시 판정한 결과와 맞대 본다. 엔진은 같은 기준으로 <b>{cmp.처리량.엔진_판정건수}건</b>을
-        판정했고 그 사이 <b>LLM 호출은 {cmp.처리량.엔진_llm호출}회</b>다.
-      </p>
+      <h2 className="text-sm font-semibold">LLM 판정 vs 규칙 엔진</h2>
+
+      {/* ⚠ 결론을 먼저 쓴다. 숫자만 늘어놓으면 "그래서 무슨 말이냐"가 된다
+          (사용자 지적 2026-09-04: "이게 무슨말을 하고싶은건지 모르겠다"). */}
+      <div className="mt-2 mb-3 rounded-lg border-l-4 border-l-[var(--success-fg)] bg-muted/40 p-3">
+        <p className="text-[13px] leading-relaxed">
+          <b>이 표가 말하는 것 —</b> LLM 은 비용 때문에{" "}
+          <b>{cmp.처리량.llm_판정건수}건</b>에서 멈췄고, 규칙 엔진은{" "}
+          <b>{cmp.처리량.엔진_판정건수}건</b>을 <b>LLM 호출 {cmp.처리량.엔진_llm호출}회</b>로
+          판정했다. 겹치는 {cmp.표본}건에서 두 방식은 등급 기준{" "}
+          <b>{cmp.등급일치율.toFixed(0)}%</b>가 같은 결론이고, 갈린 자리는 대부분{" "}
+          <b>엔진이 「본문을 못 읽었다」고 정직하게 말한 곳</b>이다.
+        </p>
+        <p className="mt-1.5 text-[12px] text-muted-foreground">
+          <b>이 표가 말하지 않는 것 —</b> 「일치율이 높으니 엔진이 옳다」. 일치율은 얼마나
+          닮았나이지 얼마나 맞나가 아니다. LLM 도 틀린다. 그래서 아래에 갈린 건을 그대로 편다.
+        </p>
+      </div>
 
       {/* 요약 3칸 */}
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
@@ -79,16 +100,18 @@ export function EngineLlmCompare({ cmp }: { cmp: LlmCompare }) {
         </div>
       </div>
 
-      {/* 버전별 일치율 추이 */}
+      {/* 버전별 일치율 추이 — **값이 바뀐 버전만** 남긴다.
+          16줄을 다 그리면 같은 값이 반복돼 무엇이 달라졌는지가 안 보인다(사용자 지적). */}
       <div className="mb-4">
-        <h3 className="mb-1.5 text-[13px] font-semibold">엔진 버전별 LLM 일치율</h3>
+        <h3 className="mb-1.5 text-[13px] font-semibold">일치율이 바뀐 지점만</h3>
         <p className="mb-2 text-[11px] text-muted-foreground">
-          같은 공고 {cmp.표본}건을 버전마다 다시 판정한 결과다 — 표본이 고정이라 버전끼리 직접
-          비교된다. 진한 막대가 글자 그대로 일치, 옅은 부분이 <b>등급으로 묶었을 때</b>
-          (확인필요·요건미확인을 「미확정」 하나로) 추가로 맞는 몫이다.
+          같은 공고 {cmp.표본}건을 버전마다 다시 판정한 결과다(표본 고정). 값이 그대로인
+          버전은 접었다 — 규칙을 고쳐서 <b>실제로 판정이 움직인 지점</b>만 남긴다.
+          진한 막대가 글자 그대로 일치, 옅은 부분이 등급으로 묶었을 때(확인필요·요건미확인을
+          「미확정」 하나로) 추가로 맞는 몫이다.
         </p>
         <div className="grid gap-1">
-          {cmp.버전별.map((v) => (
+          {변화지점.map((v) => (
             <div key={v.엔진버전} className="flex items-center gap-2">
               <span className="w-9 shrink-0 text-[11px] tabular-nums text-muted-foreground">
                 {v.엔진버전}

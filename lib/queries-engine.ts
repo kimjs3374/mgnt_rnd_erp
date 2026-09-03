@@ -258,6 +258,157 @@ export async function getEngineReport(): Promise<EngineReport> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 사람 입력의 효과 — "사람이 넣으면 무엇이 달라지는가"
+//
+// 사용자 요청(2026-09-04): "사람이 입력한 공고별 분류나 코멘트들을 입력하므로써 어떻게
+// 변화되었는지도 보고싶음".
+//
+// 이게 이 프로젝트의 핵심 주장이다 — 규칙은 쌓아도 안 늘지만 **사람이 남긴 판단은 쌓인다.**
+// 그 주장을 숫자로 보여줄 수 없으면 주장이 아니라 구호다.
+// ─────────────────────────────────────────────────────────────────────────────
+export type HumanImpact = {
+  입력: { 판정코멘트: number; 짚은문구: number; 회사답변: number; 되돌림: number }
+  효과: {
+    학습으로판정_현재: number
+    학습으로판정_최대: { 엔진버전: string; 건수: number } | null
+    사람답변적용: number
+    렉시콘특징: number
+    되돌림확정: number
+  }
+  추이: {
+    엔진버전: string; 합계: number
+    가능: number; 확인필요: number; 요건미확인: number; 불가: number; 해당없음: number
+  }[]
+  /** 표본이 같은 구간에서 잰 전/후 — 대상 건수가 바뀐 버전을 끼워 비교하면 거짓말이 된다. */
+  비교구간: { 시작: string; 끝: string; 합계: number } | null
+  타임라인: { 종류: string; 내용: string; 사람: string; 시각: string; 공고?: number | null }[]
+  error: string | null
+}
+
+export async function getHumanImpact(): Promise<HumanImpact> {
+  const [점수, 코멘트, 렉시콘, 답변, 정정, 특징] = await Promise.all([
+    페이지전체<{ 엔진버전: string; 판정: string; 판정경로: string | null }>(
+      "ann_rule_scores", "*",
+    ),
+    safeSelect<{ id: number; announcement_id: number | null; 텍스트: string; 판정: string
+      답변자: string; created_at: string }>("judgment_semantic", () =>
+      db.from("judgment_semantic").select("*").order("created_at", { ascending: false }),
+    ),
+    safeSelect<{ id: number; 패턴: string; 특징키: string; 만든이: string
+      created_at: string; 사용중: boolean }>("extraction_lexicon", () =>
+      db.from("extraction_lexicon").select("*").order("created_at", { ascending: false }),
+    ),
+    safeSelect<{ id: number; 특징키: string; 사람_값: string; 답변자: string
+      일반화: boolean; created_at: string; announcement_id: number | null }>(
+      "ann_feature_answers", () =>
+        db.from("ann_feature_answers").select("*").order("created_at", { ascending: false }),
+    ),
+    safeSelect<{ announcement_id: number; 확정_판정: string; 정정사유: string | null
+      확정자: string | null; created_at: string }>("eligibility_decisions", () =>
+      db.from("eligibility_decisions").select("*").eq("정정여부", true)
+        .order("created_at", { ascending: false }).limit(50),
+    ),
+    safeSelect<{ 규칙id: string; 엔진버전: string }>("ann_features", () =>
+      db.from("ann_features").select("*").like("규칙id", "LX-%"),
+    ),
+  ])
+
+  if (점수.length === 0) {
+    return {
+      입력: { 판정코멘트: 0, 짚은문구: 0, 회사답변: 0, 되돌림: 0 },
+      효과: { 학습으로판정_현재: 0, 학습으로판정_최대: null, 사람답변적용: 0,
+        렉시콘특징: 0, 되돌림확정: 0 },
+      추이: [], 비교구간: null, 타임라인: [],
+      error: "규칙 엔진 판정 기록이 없다.",
+    }
+  }
+
+  const 현재버전 = 점수.map((s) => s.엔진버전)
+    .reduce((a, b) => (버전번호(b) > 버전번호(a) ? b : a))
+
+  // 버전별 판정 분포
+  const 버전맵 = new Map<string, Record<string, number>>()
+  for (const s of 점수) {
+    const cur = 버전맵.get(s.엔진버전) ?? {}
+    cur[s.판정] = (cur[s.판정] ?? 0) + 1
+    버전맵.set(s.엔진버전, cur)
+  }
+  const 추이 = [...버전맵.entries()]
+    .sort((a, b) => 버전번호(a[0]) - 버전번호(b[0]))
+    .map(([엔진버전, p]) => ({
+      엔진버전,
+      합계: Object.values(p).reduce((x, y) => x + y, 0),
+      가능: p["가능"] ?? 0, 확인필요: p["확인필요"] ?? 0,
+      요건미확인: p["요건미확인"] ?? 0, 불가: p["불가"] ?? 0, 해당없음: p["해당없음"] ?? 0,
+    }))
+
+  // ⚠ 대상 건수가 바뀐 구간을 끼워 "좋아졌다"고 말하면 거짓말이다(마감 제외를 도입하면서
+  //   836 → 501 로 줄었다). **합계가 같은 마지막 연속 구간**에서만 전/후를 잰다.
+  let 비교구간: HumanImpact["비교구간"] = null
+  if (추이.length > 1) {
+    const 끝합계 = 추이[추이.length - 1].합계
+    let i = 추이.length - 1
+    while (i > 0 && 추이[i - 1].합계 === 끝합계) i -= 1
+    if (i < 추이.length - 1) {
+      비교구간 = { 시작: 추이[i].엔진버전, 끝: 추이[추이.length - 1].엔진버전, 합계: 끝합계 }
+    }
+  }
+
+  // 학습이 판정을 만든 건수 — 버전마다 다르다. 규칙이 세지면 학습이 메우던 자리를 규칙이 가져간다.
+  const 학습맵 = new Map<string, number>()
+  for (const s of 점수) {
+    if ((s.판정경로 ?? "").includes("학습")) {
+      학습맵.set(s.엔진버전, (학습맵.get(s.엔진버전) ?? 0) + 1)
+    }
+  }
+  const 학습최대 = [...학습맵.entries()].sort((a, b) => b[1] - a[1])[0]
+
+  const 타임라인 = [
+    ...코멘트.rows.map((r) => ({
+      종류: "판정 코멘트", 내용: `「${r.판정}」 ${r.텍스트.slice(0, 46)}`,
+      사람: r.답변자, 시각: r.created_at, 공고: r.announcement_id,
+    })),
+    ...렉시콘.rows.map((r) => ({
+      종류: "문구 짚기", 내용: `${r.특징키} ← 「${r.패턴.slice(0, 32)}」`,
+      사람: r.만든이, 시각: r.created_at, 공고: null,
+    })),
+    ...답변.rows.map((r) => ({
+      종류: r.일반화 ? "회사 사실 답변" : "공고별 답변",
+      내용: `${r.특징키} = ${r.사람_값}`,
+      사람: r.답변자, 시각: r.created_at, 공고: r.announcement_id,
+    })),
+    ...정정.rows.map((r) => ({
+      종류: "판정 되돌림", 내용: `「${r.확정_판정}」 ${(r.정정사유 ?? "").slice(0, 40)}`,
+      사람: r.확정자 ?? "-", 시각: r.created_at, 공고: r.announcement_id,
+    })),
+  ]
+    .sort((a, b) => (a.시각 < b.시각 ? 1 : -1))
+    .slice(0, 14)
+
+  return {
+    입력: {
+      판정코멘트: 코멘트.rows.length,
+      짚은문구: 렉시콘.rows.filter((r) => r.사용중).length,
+      회사답변: 답변.rows.filter((r) => r.일반화).length,
+      되돌림: 정정.rows.length,
+    },
+    효과: {
+      학습으로판정_현재: 학습맵.get(현재버전) ?? 0,
+      학습으로판정_최대: 학습최대 ? { 엔진버전: 학습최대[0], 건수: 학습최대[1] } : null,
+      사람답변적용: 점수.filter(
+        (s) => s.엔진버전 === 현재버전 && (s.판정경로 ?? "").includes("사람"),
+      ).length,
+      렉시콘특징: 특징.rows.filter((f) => f.엔진버전 === 현재버전).length,
+      되돌림확정: 정정.rows.length,
+    },
+    추이,
+    비교구간,
+    타임라인,
+    error: null,
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // LLM 대조 — "규칙으로도 된다"는 주장의 유일한 근거
 //
 // 사용자 요청(2026-09-04): "llm으로 수정했을때 어떻게 되는지와 우리가 만든 엔진으로

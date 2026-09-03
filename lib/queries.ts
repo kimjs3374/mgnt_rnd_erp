@@ -121,9 +121,20 @@ export const getSettlement = () =>
     db.from("v_settlement_status").select("*"),
   )
 
+export type AnnouncementSummary = {
+  지원분야: string | null
+  지원대상: string | null
+  지원규모: string | null
+  접수방법: string | null
+  문의처: string | null
+  사업요약: string | null
+  ai_확신도: number | null
+}
+
 export type AnnouncementRow = {
   id: number
   출처: string
+  출처_id: string | null
   사업명: string
   소관부처: string | null
   전문기관: string | null
@@ -131,19 +142,257 @@ export type AnnouncementRow = {
   접수시작: string | null
   접수종료: string | null
   마감유형: string
+  공고문_파일명: string | null
+  공고문_url: string | null
+  /** 원본 서버 링크가 나중에 끊겨도 살아있는, 우리 Supabase Storage 사본(db/92_ann_storage.sql). */
+  /** 다른 화면(lib/queries-programs.ts 등)은 아직 이 필드를 안 채운다 — optional 로 둬서 안 깨지게 한다. */
+  공고문_bucket_url?: string | null
   파싱상태: string
+  /** 요건을 안 읽었으면 요건미확인, 읽었지만 확정이 없으면 확인필요. 판정 등급 5종 — page.tsx 설명 참고.
+   *  "해당없음"은 2026-09-04 추가 — 행사·설명회 등 지원사업 자체가 아니라고 사람이 확정한 경우.
+   *  "확인필요"와 다르다: 확인필요는 "아직 봐야 함", 해당없음은 "이미 봤고 볼 게 아니었음". */
+  자격판정: "가능" | "불가" | "확인필요" | "요건미확인" | "해당없음"
+  /** LLM 이 회사 프로필과 대조해 매긴 0~100점. 아직 판정 전이면 null. */
+  자격판정_점수?: number | null
+  자격판정_근거?: string[]
+  /** LLM 판정의 확신도(0~1). 0.70 미만이면 자격판정이 자동으로 「확인필요」로 내려간다. */
+  자격판정_확신도?: number | null
+  /** 회사 프로필에 값이 없어 LLM이 판단하지 못한 항목 — "확인필요"의 이유를 구체적으로 짚어준다. */
+  자격판정_확인필요항목?: string[]
+  /**
+   * 확신도가 낮아 「확인필요」로 강제 하향되기 전, LLM이 원래 냈던 판정(가능/불가).
+   * 하향 안 됐으면 null(원판정=확정판정이라 따로 보여줄 필요가 없다는 뜻).
+   */
+  자격판정_원판정?: string | null
+  /**
+   * 사람이 이 판정을 확인·정정했는지 — CLAUDE.md 판단 우선순위 1층("정정 이력")이
+   * 자격판정에도 적용된 자리다(사용자 요청 2026-09-03: "우리가 확인했을 때 정말
+   * 가능한 공고는 체크할 수 있게"). null 이면 AI 제안만 있고 아직 아무도 안 봤다는 뜻.
+   */
+  자격판정_정정여부?: boolean | null
+  자격판정_확정자?: string | null
+  자격판정_확정일시?: string | null
+  /** 재공고·연장공고가 다른 출처_id로 다시 올라온 후보. 자동 병합하지 않는다 — 화면이 후보로만 보여준다. */
+  중복후보: boolean
+  /**
+   * 사람이 손으로 누른 관심 표시(app.watchlist, 종류='공고') — 자격판정(계산·AI)과는
+   * 완전히 별개다. 자격판정은 "회사 프로필과 맞는가"를 기계가 판단한 것이고, 이건
+   * "내가 챙겨보겠다"고 사람이 정한 것이다(사용자 요청 2026-09-03: "사람이 직접 보고
+   * 관심 있으면 별을 체크"). 기본은 optional — 이 필드를 안 채우는 화면은 조용히 false 취급.
+   */
+  관심?: boolean
+  /**
+   * 관심 표시의 단계 — "관심"(챙겨보는 중) 또는 "신청예정"(신청하기로 정함). 별 하나가
+   * 이 둘을 순환한다(사용자 요청 2026-09-04: "관심 공고, 신청 예정 구분"). 표시 안 함(null)은
+   * 관심 자체를 안 눌렀다는 뜻 — `관심` 이 false 인 것과 같다.
+   */
+  관심상태?: "관심" | "신청예정" | "신청완료" | null
+  /**
+   * 상세 패널용 요약. 기업마당·K-Startup 등 오픈API가 직접 주는 원본 필드
+   * (announcements.지원분야·지원대상·문의처·요약, lib/sources.mjs)가 있으면 그게 진짜라 우선한다 —
+   * IRIS 처럼 API가 구조화 필드를 안 주는 출처만 본문에서 LLM이 뽑은 값(ann_summary)으로 채운다.
+   */
+  요약: AnnouncementSummary | null
 }
 
-/** 지원사업 > 공고 탐색. 기업마당 공식 오픈 API 출처만 본다 — 과제사업 쪽과 출처를 섞지 않는다. */
-export const getAnnouncements = () =>
-  safeSelect<AnnouncementRow>("announcements", () =>
-    db
-      .from("announcements")
-      .select("*")
-      .eq("출처", "기업마당")
-      .order("id")
-      .limit(100),
+type RawAnnouncementRow = Omit<
+  AnnouncementRow,
+  | "자격판정"
+  | "자격판정_점수"
+  | "자격판정_근거"
+  | "자격판정_확신도"
+  | "자격판정_확인필요항목"
+  | "자격판정_원판정"
+  | "자격판정_정정여부"
+  | "자격판정_확정자"
+  | "자격판정_확정일시"
+  | "중복후보"
+  | "요약"
+> & {
+  지원분야: string | null
+  지원대상: string | null
+  문의처: string | null
+  요약: string | null
+  ann_requirements: { id: number }[]
+  eligibility_decisions: {
+    확정_판정: string
+    created_at: string
+    ai_확신도: number | null
+    ai_제안: { 점수?: number; 근거?: string[]; 확인필요항목?: string[]; 원판정?: string | null } | null
+    정정여부: boolean
+    확정자: string | null
+  }[]
+  // ann_summary 는 UNIQUE(announcement_id) 라 PostgREST 가 배열이 아니라 단일 객체(to-one)로
+  // 임베드한다 — ann_requirements·eligibility_decisions(유니크 없음, 배열)와 다르다. 실측 확인.
+  ann_summary: AnnouncementSummary | null
+}
+
+/**
+ * 자격판정 등급 계산 — 우선순위: ① 확정 판정(eligibility_decisions, LLM 점수든 사람
+ * 확정이든 최신 것) ② 요건은 읽었는데 확정이 없다(ann_requirements 만 있음) ③ 요건미확인.
+ *
+ * ⚠ 순서가 중요하다. 예전엔 ann_requirements 가 없으면 무조건 「요건미확인」을 먼저
+ *   반환했다 — 그러면 scripts/score-eligibility.mjs 가 본문만으로 점수를 매겨
+ *   eligibility_decisions 에 넣어도 화면은 그 점수를 무시하고 항상 「요건미확인」만
+ *   보여줬다(실측: IRIS 15건 중 13건이 그랬다 — ann_requirements 추출은 아직 2건뿐인데
+ *   eligibility_decisions 점수는 그보다 많이 매겨져 있었다). lib/queries-programs.ts 의
+ *   판정계산(지원사업 쪽, 팀원 작성)은 이미 이 순서가 맞았다 — 그쪽과 맞춘다.
+ */
+function 판정계산(row: RawAnnouncementRow): AnnouncementRow["자격판정"] {
+  if (row.eligibility_decisions.length > 0) {
+    const 최신 = row.eligibility_decisions.reduce((a, b) =>
+      a.created_at > b.created_at ? a : b,
+    )
+    const 판정 = 최신.확정_판정
+    // "해당없음"은 그대로 통과시킨다(2026-09-04) — 사람이 "이건 지원사업이 아니다"라고
+    // 명시적으로 확정한 것까지 "확인필요"로 뭉개면, 이미 처리한 건이 계속 "봐야 할 것"으로
+    // 남는다(실사용 신고: 공고 517 — 행사 안내인데 판정을 남겨도 배지가 안 바뀜).
+    if (판정 === "가능" || 판정 === "불가" || 판정 === "해당없음") return 판정
+    return "확인필요"
+  }
+  if (row.ann_requirements.length > 0) return "확인필요"
+  return "요건미확인"
+}
+
+/**
+ * 사업명에서 공백·괄호·꼬리말(공고/재공고/모집 등)을 지우고 같은 소관부처 안에서
+ * 남은 글자가 완전히 같으면 재공고·연장공고 후보로 본다. 오탐을 줄이려 완전일치만 본다 —
+ * 비슷하다고 병합하면 서로 다른 공고를 하나로 지워버릴 수 있다. 자동 병합은 하지 않는다.
+ */
+function 정규화(사업명: string): string {
+  return 사업명
+    .replace(/\(.*?\)/g, "")
+    .replace(/\s+/g, "")
+    .replace(/(공고|재공고|수정공고|모집|안내)+$/g, "")
+}
+
+function 중복후보계산(rows: RawAnnouncementRow[]): Set<number> {
+  const groups = new Map<string, number[]>()
+  for (const r of rows) {
+    const key = 정규화(r.사업명)
+    if (!key) continue
+    const list = groups.get(`${r.소관부처 ?? ""}::${key}`) ?? []
+    list.push(r.id)
+    groups.set(`${r.소관부처 ?? ""}::${key}`, list)
+  }
+  const 중복 = new Set<number>()
+  for (const ids of groups.values()) {
+    if (ids.length > 1) ids.forEach((id) => 중복.add(id))
+  }
+  return 중복
+}
+
+/**
+ * 오픈API 원본 필드(지원분야·지원대상·문의처·요약)가 있으면 그게 진짜다 — 우선한다.
+ * LLM 추출(ann_summary)은 API가 그 필드를 안 주는 출처(IRIS 등)의 대체 경로일 뿐이다.
+ * 지원규모·접수방법은 API 원본에 대응 컬럼이 없어 LLM 추출만 쓴다.
+ */
+function 요약추출(row: RawAnnouncementRow): AnnouncementSummary | null {
+  const llm = row.ann_summary
+  const 지원분야 = row.지원분야 ?? llm?.지원분야 ?? null
+  const 지원대상 = row.지원대상 ?? llm?.지원대상 ?? null
+  const 문의처 = row.문의처 ?? llm?.문의처 ?? null
+  const 사업요약 = row.요약 ?? llm?.사업요약 ?? null
+  if (!지원분야 && !지원대상 && !문의처 && !사업요약 && !llm) return null
+  return {
+    지원분야,
+    지원대상,
+    지원규모: llm?.지원규모 ?? null,
+    접수방법: llm?.접수방법 ?? null,
+    문의처,
+    사업요약,
+    ai_확신도: llm?.ai_확신도 ?? null,
+  }
+}
+
+/** 최신 자격판정의 AI 점수·근거. 사람이 아직 안 봤어도(정정 전) AI 제안은 그대로 보여준다. */
+function 점수계산(row: RawAnnouncementRow): {
+  자격판정_점수: number | null
+  자격판정_근거: string[]
+  자격판정_확신도: number | null
+  자격판정_확인필요항목: string[]
+  자격판정_원판정: string | null
+  자격판정_정정여부: boolean | null
+  자격판정_확정자: string | null
+  자격판정_확정일시: string | null
+} {
+  if (row.eligibility_decisions.length === 0)
+    return {
+      자격판정_점수: null,
+      자격판정_근거: [],
+      자격판정_확신도: null,
+      자격판정_확인필요항목: [],
+      자격판정_원판정: null,
+      자격판정_정정여부: null,
+      자격판정_확정자: null,
+      자격판정_확정일시: null,
+    }
+  const 최신 = row.eligibility_decisions.reduce((a, b) =>
+    a.created_at > b.created_at ? a : b,
   )
+  const 제안 = 최신.ai_제안
+  return {
+    자격판정_점수: typeof 제안?.점수 === "number" ? 제안.점수 : null,
+    자격판정_근거: Array.isArray(제안?.근거) ? 제안.근거 : [],
+    자격판정_확신도: typeof 최신.ai_확신도 === "number" ? 최신.ai_확신도 : null,
+    자격판정_확인필요항목: Array.isArray(제안?.확인필요항목) ? 제안.확인필요항목 : [],
+    자격판정_원판정: 제안?.원판정 ?? null,
+    자격판정_정정여부: 최신.정정여부 ?? false,
+    자격판정_확정자: 최신.확정자 ?? null,
+    자격판정_확정일시: 최신.created_at,
+  }
+}
+
+/**
+ * 사람이 손으로 누른 관심 표시(app.watchlist, 종류='공고'). 실패해도 빈 Set 을
+ * 돌려준다 — 관심 표시 하나 때문에 공고 목록 전체가 안 뜨면 안 된다(safeSelect 가
+ * 이미 에러를 콘솔에 남긴다).
+ */
+async function 공고관심목록(): Promise<Map<number, "관심" | "신청예정" | "신청완료">> {
+  const { rows } = await safeSelect<{ 참조_id: number; 상태: string }>("watchlist", () =>
+    // ⚠ 컬럼을 나열하면 supabase-js 타입 파서가 한글 식별자에서 막힌다(getExpenses 참고).
+    db.from("watchlist").select("*").eq("종류", "공고"),
+  )
+  return new Map(
+    rows.map((r) => [
+      r.참조_id,
+      r.상태 === "신청완료" ? "신청완료" : r.상태 === "신청예정" ? "신청예정" : "관심",
+    ]),
+  )
+}
+
+/**
+ * 지원사업 > 공고 탐색. 기업마당 공식 오픈 API 출처만 본다 — 과제사업 쪽과 출처를 섞지 않는다.
+ * ⚠ 임베드 select 에 한글 컬럼명을 나열하면 supabase-js 타입 파서가 막힌다(getExpenses 주석 참고) —
+ *   그래서 임베드도 `*` 로 받고 타입은 RawAnnouncementRow 로 수동으로 좁힌다.
+ */
+
+export const getAnnouncements = async () => {
+  const [r, 관심목록] = await Promise.all([
+    safeSelect<RawAnnouncementRow>("announcements", () =>
+      db
+        .from("announcements")
+        .select("*, ann_requirements(*), eligibility_decisions(*), ann_summary(*)")
+        .eq("출처", "기업마당")
+        .order("id")
+        .limit(2000),
+    ),
+    공고관심목록(),
+  ])
+  const 중복 = 중복후보계산(r.rows)
+  return {
+    ...r,
+    rows: r.rows.map((row) => ({
+      ...row,
+      자격판정: 판정계산(row),
+      ...점수계산(row),
+      중복후보: 중복.has(row.id),
+      요약: 요약추출(row),
+      관심: 관심목록.has(row.id),
+      관심상태: 관심목록.get(row.id) ?? null,
+    })) as AnnouncementRow[],
+  }
+}
 
 /**
  * 출처 우선순위 — 낮을수록 위. **IRIS > NTIS.**
@@ -178,31 +427,68 @@ export const 정보성 = (r: { 마감유형: string }) => r.마감유형 === "�
  * DB 가 준 마감 임박순이 그대로 남는다.
  */
 export const getRndAnnouncements = async () => {
-  const r = await safeSelect<AnnouncementRow>("announcements", () =>
-    db
-      .from("announcements")
-      .select("*")
-      .in("출처", ["IRIS", "NTIS"])
-      .order("접수종료", { ascending: true, nullsFirst: false })
-      .order("id")
-      .limit(200),
-  )
+  const [r, 관심목록] = await Promise.all([
+    safeSelect<RawAnnouncementRow>("announcements", () =>
+      db
+        .from("announcements")
+        .select("*, ann_requirements(*), eligibility_decisions(*), ann_summary(*)")
+        .in("출처", ["IRIS", "NTIS"])
+        .order("접수종료", { ascending: true, nullsFirst: false })
+        .order("id")
+        .limit(200),
+    ),
+    공고관심목록(),
+  ])
+  const 중복 = 중복후보계산(r.rows)
+  const rows = r.rows.map((row) => ({
+    ...row,
+    자격판정: 판정계산(row),
+    ...점수계산(row),
+    중복후보: 중복.has(row.id),
+    요약: 요약추출(row),
+    관심: 관심목록.has(row.id),
+    관심상태: 관심목록.get(row.id) ?? null,
+  })) as AnnouncementRow[]
   return {
     ...r,
-    rows: [...r.rows].sort((a, b) => 출처순위(a.출처) - 출처순위(b.출처)),
+    rows: rows.sort((a, b) => 출처순위(a.출처) - 출처순위(b.출처)),
   }
 }
 
 export type AnnouncementDetailRow = AnnouncementRow & {
   본문: string | null
-  공고문_파일명: string | null
 }
 
-/** 공고 하나의 전체 필드 — 본문·공고문_파일명까지 포함한다. 상세 화면 전용. */
-export const getAnnouncementDetail = (id: number) =>
-  safeSelect<AnnouncementDetailRow>("announcements", () =>
-    db.from("announcements").select("*").eq("id", id).limit(1),
-  )
+/**
+ * 공고 하나의 전체 필드 — 본문까지 포함하고, 목록(getAnnouncements)과 똑같이
+ * 자격판정·점수·근거·확신도·확인필요항목·요약을 계산해서 준다(사용자 요청, 2026-09-03:
+ * "사업명 누르면 나오는 내용과 체크리스트가 합쳐진 새 페이지"). 상세 화면 전용.
+ * ⚠ 단일 행 조회라 교차 중복후보는 계산하지 않는다(비교 대상이 없다) — 항상 false.
+ */
+export const getAnnouncementDetail = async (id: number) => {
+  const [r, 관심목록] = await Promise.all([
+    safeSelect<RawAnnouncementRow & { 본문: string | null }>("announcements", () =>
+      db
+        .from("announcements")
+        .select("*, ann_requirements(*), eligibility_decisions(*), ann_summary(*)")
+        .eq("id", id)
+        .limit(1),
+    ),
+    공고관심목록(),
+  ])
+  return {
+    ...r,
+    rows: r.rows.map((row) => ({
+      ...row,
+      자격판정: 판정계산(row),
+      ...점수계산(row),
+      중복후보: false,
+      요약: 요약추출(row),
+      관심: 관심목록.has(row.id),
+      관심상태: 관심목록.get(row.id) ?? null,
+    })) as AnnouncementDetailRow[],
+  }
+}
 
 export type RequiredDocRow = {
   id: number
@@ -418,3 +704,131 @@ export const getCategories = () =>
 /** 원화 표기. null 은 「—」로 둔다. 0 과 「모름」을 구분한다. */
 export const won = (n: number | null | undefined) =>
   n == null ? "—" : "₩" + Number(n).toLocaleString("ko-KR")
+
+/**
+ * 요건별 판정 — bot/mcp_server.py 의 eligibility_check() 계산을 그대로 TypeScript로
+ * 옮긴 것이다(2026-09-03, 참가 계획서 문항4① "요건별로 가능·불가·확인 필요를 표로
+ * 정리" 요구사항에 맞춰 웹에도 옮겼다 — 그 로직은 지금까지 챗봇 텍스트로만 나왔다).
+ *
+ * **계산으로 확정되는 자리라 LLM을 쓰지 않는다**(CLAUDE.md 설계원칙 2). 숫자 비교 하나다.
+ * 단위를 못 맞추면 비교하지 않고 「확인필요」로 둔다 — 실측에서 74억을 「90억 이상
+ * 충족」으로 잘못 판정한 적이 있다(원 단위 저장값과 억원 단위 기준값을 그냥 비교해서).
+ * 프롬프트 문구·판단 흐름은 파이썬 원본과 한 글자도 다르지 않게 옮겼다 — 옮기며 동시에
+ * 고치면 결과가 달라졌을 때 이식 때문인지 로직을 고쳐서인지 못 가린다.
+ */
+export type RequirementJudgment = {
+  항목: string
+  필수여부: boolean
+  판정: "충족" | "미충족" | "확인필요"
+  상세: string
+  근거: string
+}
+
+type RawRequirement = {
+  항목: string
+  필수여부: boolean
+  연산자: string | null
+  기준값: number | null
+  단위: string | null
+  원문: string
+}
+
+type CompanyProfileValues = Record<string, unknown>
+
+const 요건_항목맵: Record<string, { col: string; 저장단위: string | null }> = {
+  매출액: { col: "매출액", 저장단위: "원" },
+  매출증가율: { col: "매출증가율", 저장단위: "%" },
+  부채비율: { col: "부채비율", 저장단위: "%" },
+  자본전액잠식: { col: "자본전액잠식", 저장단위: null },
+  "R&D집약도": { col: "rnd_집약도", 저장단위: "%" },
+  rnd집약도: { col: "rnd_집약도", 저장단위: "%" },
+  기업부설연구소: { col: "기업부설연구소", 저장단위: null },
+  종업원수: { col: "종업원수", 저장단위: "명" },
+}
+
+// 저장 단위 → 요건 단위로 바꾸는 배수. (저장단위, 요건단위) 조합에 없으면 비교하지 않는다.
+const 단위_배수: Record<string, number> = {
+  "원|억원": 1 / 100_000_000,
+  "원|천만원": 1 / 10_000_000,
+  "원|백만원": 1 / 1_000_000,
+  "원|만원": 1 / 10_000,
+  "원|원": 1,
+  "%|%": 1,
+  "명|명": 1,
+}
+
+const 연산자_비교: Record<string, (a: number, b: number) => boolean> = {
+  gte: (a, b) => a >= b,
+  lte: (a, b) => a <= b,
+  gt: (a, b) => a > b,
+  lt: (a, b) => a < b,
+  eq: (a, b) => a === b,
+}
+
+function 숫자표기(n: number): string {
+  const s = n.toFixed(1).replace(/\.0$/, "")
+  return Number(s).toLocaleString("ko-KR")
+}
+
+function 요건판정(r: RawRequirement, p: CompanyProfileValues | null): { 판정: RequirementJudgment["판정"]; 상세: string } {
+  const entry = 요건_항목맵[r.항목.replace(/\s+/g, "")]
+  if (!entry) return { 판정: "확인필요", 상세: `'${r.항목}' 은 회사 프로필에 대응하는 항목이 없다` }
+
+  const v = p?.[entry.col]
+  if (p === null || v === undefined || v === null) {
+    return { 판정: "확인필요", 상세: "회사 프로필에 값이 없다" }
+  }
+
+  if (typeof v === "boolean") {
+    const ok = r.기준값 === null || r.기준값 === 1 ? v : !v
+    return { 판정: ok ? "충족" : "미충족", 상세: `우리 ${v ? "보유/해당" : "미보유/해당없음"}` }
+  }
+
+  if (r.기준값 === null || r.연산자 === null) {
+    return { 판정: "확인필요", 상세: `우리 ${v} (공고에서 기준값·연산자를 못 뽑았다)` }
+  }
+
+  const 요건단위 = (r.단위 || entry.저장단위 || "").trim()
+  const scale = 단위_배수[`${entry.저장단위 ?? ""}|${요건단위}`]
+  if (scale === undefined) {
+    return {
+      판정: "확인필요",
+      상세: `우리 ${Number(v).toLocaleString("ko-KR")} (${entry.저장단위}) / 기준 ${r.기준값} (${요건단위}) — 단위를 맞출 수 없다`,
+    }
+  }
+
+  const a = Number(v) * scale
+  const b = Number(r.기준값)
+  const cmp = 연산자_비교[r.연산자]
+  if (!cmp) return { 판정: "확인필요", 상세: `알 수 없는 연산자 ${r.연산자}` }
+  return { 판정: cmp(a, b) ? "충족" : "미충족", 상세: `우리 ${숫자표기(a)}${요건단위} / 기준 ${숫자표기(b)}${요건단위}` }
+}
+
+/**
+ * 공고 하나의 요건별 판정 표. `ann_requirements` 가 아직 없으면 빈 배열 —
+ * 화면이 "요건 미확인"으로 정직하게 그린다(요건을 추측해서 만들지 않는다).
+ */
+export const getRequirementJudgments = async (
+  announcementId: number,
+): Promise<{ rows: RequirementJudgment[]; error: string | null }> => {
+  const [{ rows: reqs, error: reqError }, { rows: profiles, error: profError }] = await Promise.all([
+    safeSelect<RawRequirement>("ann_requirements", () =>
+      db
+        .from("ann_requirements")
+        // ⚠ 컬럼을 나열하면 supabase-js 타입 파서가 한글 식별자에서 막힌다(getExpenses 참고).
+        .select("*")
+        .eq("announcement_id", announcementId)
+        .order("필수여부", { ascending: false })
+        .order("id"),
+    ),
+    safeSelect<CompanyProfileValues>("company_profile", () =>
+      db.from("company_profile").select("*").order("결산연도", { ascending: false }).limit(1),
+    ),
+  ])
+  const company = profiles[0] ?? null
+  const rows = reqs.map((r) => {
+    const { 판정, 상세 } = 요건판정(r, company)
+    return { 항목: r.항목, 필수여부: r.필수여부, 판정, 상세, 근거: r.원문 }
+  })
+  return { rows, error: reqError ?? profError }
+}

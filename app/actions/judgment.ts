@@ -28,12 +28,19 @@ import { 판정기록, 비슷한사례, 판정이력 } from "@/lib/judgment-ai.m
  * correctEligibility() 를 그대로 재사용해 같은 검증·같은 판정계산 우선순위 1층에
  * 올라타게 한다 — 로직을 따로 베끼지 않는다.
  *
- * "요건미확인"은 eligibility_decisions 스키마(db/50_program_ledger.sql)가 이미
- * 지원하는 값이지만 correctEligibility() 의 타입엔 없다(화면에 아직 노출 안 됨) —
- * 그 값일 때만 같은 검증 규칙으로 직접 삽입한다. "해당없음"(행사·교육 등 애초에
- * 지원사업이 아닌 공고)은 동기화하지 않는다 — eligibility_decisions 는 "우리가
- * 지원 가능한가"를 묻는 테이블이라 지원사업 자체가 아닌 공고엔 그 질문 자체가
- * 성립하지 않는다(수치를 지어내지 않는다 원칙 — 없는 개념을 억지로 채우지 않는다).
+ * "요건미확인"·"해당없음"은 eligibility_decisions 스키마(db/50_program_ledger.sql)가
+ * text 컬럼이라 값 자체는 받지만 correctEligibility() 의 타입엔 없다(화면에 아직
+ * 노출 안 됨) — 그 두 값일 때만 같은 검증 규칙으로 직접 삽입한다.
+ *
+ * ⚠ "해당없음" 동기화는 처음엔 일부러 뺐다 — "eligibility_decisions 는 '우리가 지원
+ *   가능한가'를 묻는 테이블이라 지원사업 자체가 아닌 공고엔 그 질문이 성립하지 않는다"고
+ *   판단했다. 그런데 실사용(공고 517 — 광운대 사업 설명회)에서 그 판단이 틀렸다는 게
+ *   드러났다: 사람이 "이건 지원사업이 아니다"라고 명시적으로 확정해도 화면 배지는
+ *   계속 "확인필요"로 남아 — 이미 끝난 검토가 계속 "봐야 할 것"으로 보였다
+ *   (사용자 지적: "브라우저에서 517 다시 확인해봐 아직도 확인필요임"). 그래서
+ *   lib/queries.ts 의 판정계산()에 "해당없음"을 5번째 등급으로 추가하고, 여기서도
+ *   동기화 대상에 넣었다 — "확인필요"(아직 봐야 함)와 "해당없음"(이미 봤고 볼 게
+ *   아니었음)은 뜻이 다르므로 배지도 달라야 한다.
  */
 
 export type JudgmentResult = {
@@ -59,8 +66,8 @@ export type SimilarJudgment = {
 const 판정_선택지 = ["가능", "불가", "확인필요", "요건미확인", "해당없음"] as const
 export type 판정값 = (typeof 판정_선택지)[number]
 
-/** eligibility_decisions 와 동기화하는 값. "해당없음"은 여기 없다(위 주석 참고). */
-const 확정판정_동기화대상 = ["가능", "불가", "확인필요", "요건미확인"] as const
+/** eligibility_decisions 와 동기화하는 값 — 5종 전부(위 주석 참고, "해당없음"도 포함). */
+const 확정판정_동기화대상 = ["가능", "불가", "확인필요", "요건미확인", "해당없음"] as const
 
 async function loadLatestDecision(announcementId: number) {
   const { data, error } = await db
@@ -95,14 +102,15 @@ async function 확정판정동기화(
     return r.ok ? { synced: true } : { synced: false, error: r.error }
   }
 
-  // 요건미확인 — 스키마는 지원하지만(db/50_program_ledger.sql) 화면(eligibility-confirm.tsx)에
-  // 아직 노출 안 된 값이라 correctEligibility() 를 못 쓴다. 같은 규칙(정정 이력·사유 필수)으로
-  // 직접 삽입한다 — AI 제안이 없어도 없는 것을 지어내지 않는다({} 로 둔다).
+  // 요건미확인 · 해당없음 — 스키마는 값을 받지만(db/50_program_ledger.sql) 화면
+  // (eligibility-confirm.tsx)에 아직 노출 안 된 값이라 correctEligibility() 를 못 쓴다.
+  // 같은 규칙(정정 이력·사유 필수)으로 직접 삽입한다 — AI 제안이 없어도 없는 것을
+  // 지어내지 않는다({} 로 둔다).
   const { error } = await db.from("eligibility_decisions").insert({
     announcement_id: announcementId,
     ai_제안: latest?.ai_제안 ?? {},
     ai_확신도: latest?.ai_확신도 ?? null,
-    확정_판정: "요건미확인",
+    확정_판정: 판정,
     정정여부: true,
     정정사유_유형: "직접확인",
     정정사유: 사유,

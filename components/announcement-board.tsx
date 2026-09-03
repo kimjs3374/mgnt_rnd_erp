@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
+import { Megaphone } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
   Table,
@@ -68,7 +69,7 @@ const 상세경로 = (탭: Tab, id: number) =>
   탭 === "과제" ? `/project-announcements/${id}` : `/announcements/${id}`
 const 목록경로 = (탭: Tab) => (탭 === "과제" ? "/project-announcements" : "/announcements")
 
-export type 자격판정값 = "가능" | "불가" | "확인필요" | "요건미확인"
+export type 자격판정값 = "가능" | "불가" | "확인필요" | "요건미확인" | "해당없음"
 
 export function AnnouncementBoard({
   rows,
@@ -131,6 +132,9 @@ export function AnnouncementBoard({
   return (
     <div className="rounded-lg border bg-card">
       <div className="flex flex-wrap items-baseline gap-2 border-b px-4 py-2.5">
+        <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+          <Megaphone className="size-3.5" />
+        </span>
         <h2 className="text-sm font-semibold">공고 확인</h2>
         <span className="text-xs text-muted-foreground">
           {error
@@ -305,6 +309,7 @@ function 판정배지({ 값 }: { 값?: 자격판정값 }) {
     불가: "border-muted-foreground/30 bg-muted text-muted-foreground",
     확인필요: "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400",
     요건미확인: "border-border text-muted-foreground/70",
+    해당없음: "border-border text-muted-foreground/70",
   }
   return (
     <span

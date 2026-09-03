@@ -84,7 +84,12 @@ function 대상해당(공고대상: string | null, 회사유형: string[]): bool
 
 type RawRow = Record<string, unknown> & {
   ann_requirements?: { id: number }[]
-  eligibility_decisions?: { 확정_판정: string; created_at: string }[]
+  eligibility_decisions?: {
+    확정_판정: string
+    created_at: string
+    ai_확신도?: number | null
+    ai_제안?: { 점수?: number; 근거?: string[]; 확인필요항목?: string[]; 원판정?: string | null } | null
+  }[]
   ann_summary?: AnnouncementSummary[]
 }
 
@@ -108,7 +113,11 @@ function 판정계산(row: RawRow, company: CompanyFilter | null): AnnouncementR
   const 결정 = row.eligibility_decisions ?? []
   if (결정.length > 0) {
     const 최신 = 결정.reduce((a, b) => (a.created_at > b.created_at ? a : b))
-    if (최신.확정_판정 === "가능" || 최신.확정_판정 === "불가") return 최신.확정_판정
+    // "해당없음"도 통과시킨다(2026-09-04, lib/queries.ts 와 같은 이유 — 행사·설명회 등
+    // 지원사업 자체가 아니라고 사람이 확정한 건은 "확인필요"로 뭉개지 않는다).
+    if (최신.확정_판정 === "가능" || 최신.확정_판정 === "불가" || 최신.확정_판정 === "해당없음") {
+      return 최신.확정_판정
+    }
     return "확인필요"
   }
 
@@ -126,6 +135,39 @@ function 판정계산(row: RawRow, company: CompanyFilter | null): AnnouncementR
 
   // ④ 근거가 없다. 안 읽은 것이지 안 되는 것이 아니다.
   return "요건미확인"
+}
+
+/**
+ * 자격판정 점수·근거 — 상세 화면에서 "왜 그 판정인지"를 보여주는 자리(사용자 요청,
+ * 2026-09-03). lib/queries.ts 의 점수계산()과 같은 모양이다 — 그 파일을 안 건드리려고
+ * (파일 맨 위 주석 참고) 여기 따로 둔다. eligibility_decisions 는 이미 select 에
+ * 임베드돼 있어 새 쿼리가 필요 없다.
+ */
+function 점수계산(row: RawRow): {
+  자격판정_점수: number | null
+  자격판정_근거: string[]
+  자격판정_확신도: number | null
+  자격판정_확인필요항목: string[]
+  자격판정_원판정: string | null
+} {
+  const 결정 = row.eligibility_decisions ?? []
+  if (결정.length === 0)
+    return {
+      자격판정_점수: null,
+      자격판정_근거: [],
+      자격판정_확신도: null,
+      자격판정_확인필요항목: [],
+      자격판정_원판정: null,
+    }
+  const 최신 = 결정.reduce((a, b) => (a.created_at > b.created_at ? a : b))
+  const 제안 = 최신.ai_제안
+  return {
+    자격판정_점수: typeof 제안?.점수 === "number" ? 제안.점수 : null,
+    자격판정_근거: Array.isArray(제안?.근거) ? 제안.근거 : [],
+    자격판정_확신도: typeof 최신.ai_확신도 === "number" ? 최신.ai_확신도 : null,
+    자격판정_확인필요항목: Array.isArray(제안?.확인필요항목) ? 제안.확인필요항목 : [],
+    자격판정_원판정: 제안?.원판정 ?? null,
+  }
 }
 
 /**
@@ -191,8 +233,26 @@ export type ProgramRow = AnnouncementRow & {
  * 정렬은 마감 임박순. 접수종료가 없는 건(상시·소진시 — 실측 56%)은 뒤로 보낸다.
  * 「곧 닫히는 것부터」가 이 화면이 답해야 할 순서다. 수집 순서(id)는 사용자에게 뜻이 없다.
  */
+/**
+ * 사람이 손으로 누른 관심 표시(app.watchlist, 종류='공고'). lib/queries.ts 에도
+ * 같은 이름의 함수가 있는데, 이 파일은 그 파일을 안 건드리는 방침이라(파일 맨 위
+ * 주석) 독립적으로 한 번 더 둔다 — 5줄짜리 순수 조회라 중복 비용이 낮다.
+ * 실패해도 빈 Set — 관심 표시 하나 때문에 목록 전체가 죽으면 안 된다.
+ */
+async function 공고관심목록(): Promise<Map<number, "관심" | "신청예정" | "신청완료">> {
+  const { rows } = await safeSelect<{ 참조_id: number; 상태: string }>("watchlist", () =>
+    db.from("watchlist").select("*").eq("종류", "공고"),
+  )
+  return new Map(
+    rows.map((r) => [
+      r.참조_id,
+      r.상태 === "신청완료" ? "신청완료" : r.상태 === "신청예정" ? "신청예정" : "관심",
+    ]),
+  )
+}
+
 export const getAnnouncementsBySource = async (출처: string[]) => {
-  const [{ company, error: companyError }, r] = await Promise.all([
+  const [{ company, error: companyError }, r, 관심목록] = await Promise.all([
     getCompanyFilter(),
     safeSelect<RawRow>("announcements", () =>
       db
@@ -205,6 +265,7 @@ export const getAnnouncementsBySource = async (출처: string[]) => {
         .order("id", { ascending: false })
         .limit(2000),
     ),
+    공고관심목록(),
   ])
 
   const 중복 = 중복후보계산(
@@ -236,8 +297,11 @@ export const getAnnouncementsBySource = async (출처: string[]) => {
       공고url: (x.공고url as string) ?? null,
       파싱상태: (x.파싱상태 as string) ?? "목록만",
       자격판정: 판정계산(x, company),
+      ...점수계산(x),
       중복후보: 중복.has(x.id as number),
       요약: 요약추출(x),
+      관심: 관심목록.has(x.id as number),
+      관심상태: 관심목록.get(x.id as number) ?? null,
     }
   })
 

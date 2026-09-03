@@ -1,4 +1,4 @@
-﻿import Link from "next/link"
+import Link from "next/link"
 import { DbError } from "@/components/db-error"
 import { BudgetEditor, type Line } from "@/components/budget-editor"
 import { FundingShareCard } from "@/components/funding-share-card"
@@ -81,6 +81,30 @@ export default async function ProjectBudgetPage({
       getNewHireRules(),
     ])
   const p = proj.rows[0]
+
+  // ⚠ 「연구비 계상」(5직접비 + 간접비 + 연구수당 한도)은 국가 R&D 전용 규정이다 —
+  //   지원사업(지자체·TP)은 정산 방식 자체가 다르다. 탭에서는 이미 뺐지만
+  //   (`components/project-tabs.tsx`) 주소로 직접 들어올 수 있어 여기서도 막는다.
+  //   「종료된 과제」처럼 지난 데이터를 읽기 전용으로 보여주는 게 아니다 — 지원사업 건에는
+  //   애초에 이 비목 체계로 계상한 적이 없으니 보여줄 데이터 자체가 없다(2026-09-04 사용자 지적:
+  //   "이건 연구비 계상이 아니야").
+  if (p != null && p.사업유형 !== "NATIONAL_RND") {
+    return (
+      <div className="rounded-lg border bg-muted/40 p-4">
+        {proj.error && <DbError what="과제" error={proj.error} />}
+        <p className="text-sm font-medium">연구비 계상은 국가 R&D 과제 전용입니다</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          5직접비 + 간접비 비목 체계와 연구수당·간접비 한도는 국가 R&D 협약에만 있는
+          규정입니다. 이 사업은 지원사업이라 그 체계로 계상한 적이 없습니다 —{" "}
+          <Link href={`/projects/${id}/settlement`} className="underline underline-offset-2">
+            정산 탭
+          </Link>
+          에서 집행·증빙을 확인하세요.
+        </p>
+      </div>
+    )
+  }
+
   // 계상이 확정됐으면 이 탭은 **볼 수만** 있다(`db/100`). 고치려면 [확정 해제]다 —
   // 「사업 대장으로 넘어간다」고 쓰지 않는다(그 이름은 지원사업 쪽 화면이다, 2026-09-04 정정).
   const 읽기전용 = confirm.확정
@@ -162,10 +186,10 @@ export default async function ProjectBudgetPage({
           ? "회사 프로필에 기업규모가 없어 어느 기관유형 규정을 적용할지 정할 수 없다. 회사 프로필을 먼저 채운다."
           : rule == null
             ? `${기관유형} 에 적용할 재원 분담 규칙이 없다. db/91_funding_share_rules.sql 로 규정을 넣거나, 공고에서 읽은 규칙을 등록한다.`
-            // ⚠ "개요 탭에서 총사업비를 먼저 넣는다"였는데 개요 탭엔 그 칸이 없었다(실측) —
-            //   총사업비를 실제로 바꾸는 곳은 협약금액_확정() 뿐이고, 그건 「과제 계상」 화면에서만 부른다.
+            // ⚠ "「과제 계상」 화면에서 먼저 넣는다"였는데 그 화면을 없앴다(2026-09-04) —
+            //   총사업비를 넣는 자리가 이제 바로 아래 재원 구성 카드(FundingShareCard) 안이다.
             //   없는 곳을 가리키는 안내는 할 일을 못 만든다.
-            : "총사업비가 비어 있어 재원을 나눌 수 없다. 「과제 계상」 화면에서 먼저 넣는다."
+            : "총사업비가 비어 있어 재원을 나눌 수 없다. 아래에서 바로 넣는다."
 
   // 확정 막대가 쓰는 값. 한도 위반은 세기만 하고 확정을 막지 않는다 —
   // 한도를 넘긴 채 협약된 과제가 실제로 있다(P01 연구수당 240,000원 초과).

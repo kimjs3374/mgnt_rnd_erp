@@ -28,6 +28,9 @@ export default async function ProjectOverviewPage({
     getProjectExpenses(id),
   ])
   const p = proj.rows[0]
+  // ⚠ 「연구비 계상」(비목·한도)은 국가 R&D 전용이다 — 지원사업 건에는 탭 자체가 없다
+  //   (`components/project-tabs.tsx`). 이 개요 카드들도 그 탭을 전제로 하니 같이 가른다.
+  const 과제사업 = p?.사업유형 === "NATIONAL_RND"
 
   const 계상 = budget.rows.reduce((s, b) => s + (b.배정액 ?? 0), 0)
   const 집행 = budget.rows.reduce((s, b) => s + Number(b.집행액 ?? 0), 0)
@@ -58,77 +61,85 @@ export default async function ProjectOverviewPage({
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="협약 총사업비" value={won(p?.총사업비)} sub={`정부지원금 ${won(p?.정부지원금)}`} />
-        <Stat
-          label="계상 합계"
-          value={won(계상)}
-          sub={
-            p?.총사업비 == null
-              ? "협약액 없음"
-              : 계상 === p.총사업비
-                ? "협약액과 일치"
-                : `협약액과 ${won(Math.abs(계상 - p.총사업비))} 차이`
-          }
-          tone={p?.총사업비 != null && 계상 !== p.총사업비 ? "danger" : "default"}
-        />
+        {과제사업 && (
+          <Stat
+            label="계상 합계"
+            value={won(계상)}
+            sub={
+              p?.총사업비 == null
+                ? "협약액 없음"
+                : 계상 === p.총사업비
+                  ? "협약액과 일치"
+                  : `협약액과 ${won(Math.abs(계상 - p.총사업비))} 차이`
+            }
+            tone={p?.총사업비 != null && 계상 !== p.총사업비 ? "danger" : "default"}
+          />
+        )}
         <Stat label="집행액" value={won(집행)} sub={`소진율 ${소진율}%`} />
-        <Stat
-          label="한도 위반"
-          value={요약.위반}
-          sub={요약.미판정 > 0 ? `미판정 ${요약.미판정}건` : "전부 판정함"}
-          tone={요약.위반 > 0 ? "danger" : 요약.미판정 > 0 ? "warn" : "default"}
-        />
+        {과제사업 && (
+          <Stat
+            label="한도 위반"
+            value={요약.위반}
+            sub={요약.미판정 > 0 ? `미판정 ${요약.미판정}건` : "전부 판정함"}
+            tone={요약.위반 > 0 ? "danger" : 요약.미판정 > 0 ? "warn" : "default"}
+          />
+        )}
       </div>
 
-      {/* 한도 검증 요약. 자세한 근거는 계상 탭에 있다. 여기선 「무엇이 걸렸는지」만. */}
-      <Card className="p-4">
-        <div className="mb-2 flex items-baseline gap-2">
-          <span className="text-[13px] font-medium">한도 검증</span>
-          {/* 종료된 과제에는 계상으로 가는 길을 두지 않는다 — 탭·대장 링크와 같은 규칙이다.
-              지난 계상은 이 화면의 「한도 검증」과 정산 탭 원장에서 그대로 본다. */}
-          {p?.상태 !== "종료" && (
-            <Link
-              href={`/projects/${id}/budget`}
-              className="text-xs text-muted-foreground hover:text-foreground"
-            >
-              연구비 계상에서 고치기 →
-            </Link>
-          )}
-        </div>
-        {checks.length === 0 ? (
-          <EmptyState
-            title="검증할 계상이 없습니다"
-            hint="연구비 계상 탭에서 비목별 배정액을 넣으면 한도를 검산합니다."
-          />
-        ) : (
-          <ul className="space-y-1.5">
-            {checks.map((c) => (
-              <li key={c.키} className="flex flex-wrap items-baseline gap-x-2 text-[13px]">
-                <span
-                  className={
-                    c.통과 === false
-                      ? "text-destructive"
-                      : c.통과 === null
-                        ? "text-[var(--warning-fg)]"
-                        : "text-muted-foreground"
-                  }
-                >
-                  {c.통과 === false ? "✗" : c.통과 === null ? "?" : "✓"}
-                </span>
-                <span>{c.이름}</span>
-                <span className="tabular-nums text-muted-foreground">
-                  {won(c.현재)}
-                  {c.기준 != null ? ` / 기준 ${won(c.기준)}` : ""}
-                </span>
-                {c.차이 != null && c.차이 > 0 && (
-                  <span className="tabular-nums text-destructive">
-                    {won(c.차이)} 초과
+      {/* 한도 검증(연구수당·간접비)은 국가 R&D 전용이다 — 지원사업 건에는 「연구비 계상」
+          탭 자체가 없으니(`components/project-tabs.tsx`) 이 카드도 같이 뺀다. 안 그러면
+          없앤 탭으로 가는 링크("연구비 계상에서 고치기")가 남아 있는 채로 보인다. */}
+      {과제사업 && (
+        <Card className="p-4">
+          <div className="mb-2 flex items-baseline gap-2">
+            <span className="text-[13px] font-medium">한도 검증</span>
+            {/* 종료된 과제에는 계상으로 가는 길을 두지 않는다 — 탭·대장 링크와 같은 규칙이다.
+                지난 계상은 이 화면의 「한도 검증」과 정산 탭 원장에서 그대로 본다. */}
+            {p?.상태 !== "종료" && (
+              <Link
+                href={`/projects/${id}/budget`}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                연구비 계상에서 고치기 →
+              </Link>
+            )}
+          </div>
+          {checks.length === 0 ? (
+            <EmptyState
+              title="검증할 계상이 없습니다"
+              hint="연구비 계상 탭에서 비목별 배정액을 넣으면 한도를 검산합니다."
+            />
+          ) : (
+            <ul className="space-y-1.5">
+              {checks.map((c) => (
+                <li key={c.키} className="flex flex-wrap items-baseline gap-x-2 text-[13px]">
+                  <span
+                    className={
+                      c.통과 === false
+                        ? "text-destructive"
+                        : c.통과 === null
+                          ? "text-[var(--warning-fg)]"
+                          : "text-muted-foreground"
+                    }
+                  >
+                    {c.통과 === false ? "✗" : c.통과 === null ? "?" : "✓"}
                   </span>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
+                  <span>{c.이름}</span>
+                  <span className="tabular-nums text-muted-foreground">
+                    {won(c.현재)}
+                    {c.기준 != null ? ` / 기준 ${won(c.기준)}` : ""}
+                  </span>
+                  {c.차이 != null && c.차이 > 0 && (
+                    <span className="tabular-nums text-destructive">
+                      {won(c.차이)} 초과
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2">
         <Card className="p-4">

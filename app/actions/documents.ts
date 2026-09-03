@@ -1,8 +1,5 @@
 "use server"
 
-import { mkdtemp, writeFile, rm } from "node:fs/promises"
-import { join } from "node:path"
-import { tmpdir } from "node:os"
 import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
 import { getCurrentUser } from "@/lib/current-user"
@@ -106,11 +103,10 @@ export async function uploadDocument(
     let 판독오류: string | null = null
 
     if (판독가능.has(ext)) {
-      const dir = await mkdtemp(join(tmpdir(), "docai-"))
-      const 임시 = join(dir, `doc.${ext}`)
+      // 임시 파일을 만들지 않는다 — 게이트웨이는 PrivateTmp 라 우리 /tmp 를 못 본다.
+      // 바이트를 그대로 넘기면 게이트웨이가 자기 쪽에 풀어 읽고 지운다(lib/doc-ai.mjs 주석).
       try {
-        await writeFile(임시, bytes)
-        const r = await 서류판독(임시, 종류이름)
+        const r = await 서류판독(bytes, ext, 종류이름)
         if (r.ok && r.결과) {
           const c = r.결과.확신도
           const 자동 = 자동확정가능(c)
@@ -139,8 +135,6 @@ export async function uploadDocument(
         }
       } catch (e) {
         판독오류 = e instanceof Error ? e.message : String(e)
-      } finally {
-        await rm(dir, { recursive: true, force: true }).catch(() => {})
       }
     } else {
       판독오류 = `.${ext} 는 자동 판독 대상이 아닙니다(pdf·이미지만)`

@@ -1,8 +1,5 @@
 "use server"
 
-import { mkdtemp, writeFile, rm } from "node:fs/promises"
-import { join } from "node:path"
-import { tmpdir } from "node:os"
 import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
 import { getCurrentUser } from "@/lib/current-user"
@@ -74,16 +71,9 @@ export async function parseCompanyDocument(
 
     const bytes = Buffer.from(await file.arrayBuffer())
 
-    // claude -p 는 로컬 파일만 Read 로 읽는다. 임시로 풀어 놓고 반드시 지운다.
-    const dir = await mkdtemp(join(tmpdir(), "company-"))
-    const 임시 = join(dir, `doc.${ext}`)
-    let r: Awaited<ReturnType<typeof 회사서류판독>>
-    try {
-      await writeFile(임시, bytes)
-      r = await 회사서류판독(임시)
-    } finally {
-      await rm(dir, { recursive: true, force: true }).catch(() => {})
-    }
+    // 임시 파일을 만들지 않는다 — 게이트웨이는 PrivateTmp 라 우리 /tmp 를 못 본다.
+    // 바이트를 그대로 넘기면 게이트웨이가 자기 쪽에 풀어 읽고 지운다(lib/doc-ai.mjs 주석).
+    const r = await 회사서류판독(bytes, ext)
 
     if (!r.ok || !r.결과) {
       return { ok: false, message: `판독하지 못했다: ${r.error ?? "이유를 알 수 없다"}` }

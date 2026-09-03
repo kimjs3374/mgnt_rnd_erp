@@ -21,6 +21,10 @@ import json
 import re
 from typing import Any
 
+import logging
+
+log = logging.getLogger(__name__)
+
 import extract  # _claude · _json_block 을 그대로 쓴다. 헤드리스 로직을 두 벌로 두지 않는다.
 
 SUMMARY_MAX_CHARS = 30_000  # llm.mjs 의 본문.slice(0, 30000) 과 같다
@@ -220,3 +224,124 @@ def score_eligibility(company_text: str, 본문: str) -> dict[str, Any]:
     if not isinstance(result, dict):
         return {"ok": False, "result": None, "error": "JSON 객체가 아니다", "text": text[:300]}
     return {"ok": True, "result": result}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ⑤ 보유 서류 판독 — 서류함·회사 프로필이 쓴다 (김정수, 2026-09-03)
+#
+#    ①~④는 **공고문**을 읽는다. 이 둘은 **우리가 가진 서류**를 읽는다 —
+#    사업자등록증·납세증명서·표준재무제표증명 같은 것이다. 목적이 달라 프롬프트가 다르다:
+#    공고문 판독은 「무엇을 요구하는가」를 찾고, 이건 「거기 적힌 값」을 그대로 옮긴다.
+#
+#    ⚠ 원래 lib/doc-ai.mjs 가 node 에서 claude 를 직접 불렀다. 게이트웨이 규칙
+#      (2026-09-03 결정 — node 에 claude 직접 호출을 한 줄도 두지 않는다)에 어긋나서
+#      **프롬프트 문구를 그대로** 여기로 옮겼다. 옮기는 것과 고치는 것을 같이 하지 않았다.
+#
+#    파일을 읽혀야 하므로 allow_read=True 다. 빼면 파일을 못 읽고 빈 응답이
+#    is_error:false 로 돌아온다 — 성공처럼 보이는 실패다.
+# ─────────────────────────────────────────────────────────────────────────────
+PROMPT_DOC_READ = """파일 {path} 를 Read 로 읽고, 아래 값을 뽑아라.
+
+이것은 한 기업이 정부지원사업에 제출하려고 보관 중인 증빙 서류다.
+
+규칙
+- 서류에 **실제로 적혀 있는 것만** 뽑는다. 없으면 null 로 둔다. 절대 지어내지 마라.
+- 발급일은 서류가 발급된 날이다. 유효기간 만료일이나 신청일이 아니다.
+  「발급일」·「발행일」·「증명일」·「작성일」로 적힌 날짜를 찾아라.
+- 결산연도는 재무제표류에만 있다. 없으면 null.
+- 확신도는 **네가 그 값을 서류에서 실제로 봤는지**에 대한 것이다.
+  흐릿하거나 여러 날짜 중 어느 것인지 애매하면 0.6 이하로 낮춰라. 추측이면 0.3 이하다.
+- 근거문장은 서류에서 **그대로 인용**한다. 요약하거나 다시 쓰지 마라.
+- 개인 실명·주민등록번호·연락처는 뽑지 마라. 필요 없는 값이다.
+
+서류 종류 후보: {candidates}
+
+JSON 객체 하나로만 답하라. 설명 금지.
+{{"서류종류": 위 후보 중 하나 또는 null,
+ "발급일": "YYYY-MM-DD" 또는 null,
+ "발급기관": 문자열 또는 null,
+ "결산연도": 정수 또는 null,
+ "근거문장": 서류에서 그대로 인용한 한 문장 또는 null,
+ "확신도": 0~1 숫자}}
+"""
+
+
+def _read(prompt: str, 이름: str) -> dict[str, Any]:
+    """파일을 읽히는 판독의 공통 껍데기.
+
+    ⚠ **터지게 두지 않는다.** `_json_any` 는 빈 문자열을 만나면 JSONDecodeError 를 던지고,
+      게이트웨이는 그걸 그대로 500 으로 내보낸다 — 화면에는
+      「JSONDecodeError: Expecting value: line 1 column 1 (char 0)」만 남는다.
+      그 메시지로는 원인을 못 찾는다(실측으로 여기서 시간을 버렸다).
+      그래서 예외를 잡아 **모델이 실제로 뭘 돌려줬는지**를 error 에 실어 보낸다.
+    """
+    try:
+        text = extract._claude(prompt, allow_read=True, timeout=300)
+    except Exception as e:
+        log.error("%s: 헤드리스 실패: %s", 이름, e)
+        return {"ok": False, "error": f"{type(e).__name__}: {e}", "result": None}
+
+    if not (text or "").strip():
+        return {"ok": False, "error": "모델이 빈 응답을 돌려줬다", "result": None}
+
+    try:
+        d = _json_any(text)
+    except Exception as e:
+        log.error("%s: JSON 파싱 실패: %s / 원문: %r", 이름, e, text[:300])
+        return {"ok": False,
+                "error": f"JSON 파싱 실패({type(e).__name__}) · 모델 응답: {text[:200]!r}",
+                "result": None}
+
+    if not isinstance(d, dict):
+        return {"ok": False, "error": f"객체가 아니라 {type(d).__name__} 이 왔다: {text[:200]!r}",
+                "result": None}
+    return {"ok": True, "result": d}
+
+
+def read_document(path: str, candidates: list[str] | None = None) -> dict[str, Any]:
+    """보유 서류 한 장에서 발급일·발급기관을 읽는다. 서류함 업로드가 부른다.
+
+    후보 목록을 같이 넘겨 서류 종류도 맞춰 본다 — 사용자가 종류를 잘못 고른 채 올릴 수 있다.
+    """
+    if not path:
+        return {"ok": False, "error": "path 가 비었다", "result": None}
+    쓸것 = " · ".join(candidates) if candidates else "(제한 없음)"
+    prompt = PROMPT_DOC_READ.format(path=path, candidates=쓸것)
+    return _read(prompt, "read_document")
+
+
+PROMPT_COMPANY_READ = """파일 {path} 를 Read 로 읽고, 회사 정보를 뽑아라.
+
+사업자등록증 · 표준재무제표증명 · 기업부설연구소 인정서 · 중소기업확인서 같은
+회사 서류다. 어떤 서류인지는 내용을 보고 판단해라.
+
+규칙
+- 서류에 **실제로 적혀 있는 값만** 뽑는다. 없으면 null. **절대 지어내지 마라.**
+  이 값들로 정부지원사업 신청 자격을 판정한다 — 지어낸 숫자는 틀린 판정을 낳는다.
+- 금액은 **원 단위 정수**로 바꿔라. "74억"이면 7400000000 이다. 단위를 착각하지 마라.
+- 비율(매출증가율·부채비율·R&D집약도)은 퍼센트 숫자만. "182.3%" → 182.3
+- 대표자 이름 외의 개인 실명·주민등록번호·연락처는 뽑지 마라.
+- 업종코드(KSIC)는 사업자등록증에 적힌 코드가 있을 때만. 업태·종목 문구에서 추측하지 마라.
+- 확신도는 값을 실제로 봤는지에 대한 것이다. 추측이면 0.3 이하로 낮춰라.
+
+JSON 객체 하나로만 답하라. 설명 금지. 못 찾은 항목은 넣지 말고 빼라.
+{{"회사명": 문자열, "사업자등록번호": "000-00-00000", "대표자": 문자열,
+ "소재지": 문자열, "설립일": "YYYY-MM-DD", "업종명": [문자열],
+ "주요제품": 문자열, "ksic_코드": [문자열], "기업규모": "중소기업"|"중견기업"|"소상공인",
+ "결산연도": 정수, "매출액": 정수(원), "매출증가율": 숫자(%), "부채비율": 숫자(%),
+ "rnd_집약도": 숫자(%), "종업원수": 정수,
+ "기업부설연구소": true|false, "자본전액잠식": true|false,
+ "근거": {{"항목명": "서류에서 그대로 인용한 문장"}},
+ "확신도": 0~1 숫자}}
+"""
+
+
+def read_company_document(path: str) -> dict[str, Any]:
+    """회사 서류 한 장에서 company_profile 항목을 읽는다. 회사 프로필 화면이 부른다.
+
+    ⚠ 결과를 DB 에 바로 쓰지 않는다 — 부르는 쪽(app/actions/company-parse.ts)이 폼에만
+      채우고 사람이 확정한다. 항목이 열 개가 넘어 하나만 틀려도 자격 판정이 뒤집힌다.
+    """
+    if not path:
+        return {"ok": False, "error": "path 가 비었다", "result": None}
+    return _read(PROMPT_COMPANY_READ.format(path=path), "read_company_document")

@@ -31,10 +31,12 @@ RND_GW_TOKEN 이 설정돼 있으면 Authorization: Bearer <토큰> 을 요구�
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import os
 import sys
+import tempfile
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -47,7 +49,9 @@ import gongo
 HOST = os.environ.get("RND_GW_HOST", "127.0.0.1")
 PORT = int(os.environ.get("RND_GW_PORT", "3611"))
 TOKEN = os.environ.get("RND_GW_TOKEN", "").strip()
-MAX_BODY = 4 * 1024 * 1024
+# 보유 서류를 base64 로 실어 보낸다(/document/read · /company/read). 25MB 파일이
+# base64 로 약 34MB 가 되므로 4MB 로는 못 받는다. 루프백 전용 서비스라 이 크기가 문제되지 않는다.
+MAX_BODY = 40 * 1024 * 1024
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("gateway")
@@ -94,7 +98,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, {"ok": True, "service": "rnd-gateway", "port": PORT,
                              "endpoints": ["/health", "/chat", "/eligibility/extract",
                                            "/documents/extract", "/summary/extract",
-                                           "/relevance/select", "/eligibility/score"]})
+                                           "/relevance/select", "/eligibility/score",
+                                           "/document/read", "/company/read"]})
             return
         self._send(404, {"ok": False, "error": f"그런 경로가 없다: {self.path}"})
 
@@ -122,6 +127,10 @@ class Handler(BaseHTTPRequestHandler):
                 self._relevance(body)
             elif path == "/eligibility/score":
                 self._score(body)
+            elif path == "/document/read":
+                self._document_read(body)
+            elif path == "/company/read":
+                self._company_read(body)
             else:
                 self._send(404, {"ok": False, "error": f"그런 경로가 없다: {path}"})
         except LookupError as e:
@@ -187,6 +196,84 @@ class Handler(BaseHTTPRequestHandler):
             self._send(400, {"ok": False, "error": "company 와 candidates 가 있어야 한다"})
             return
         self._send(200, gongo.select_relevant(company, candidates))
+
+    # ── 보유 서류 판독 (김정수, 2026-09-03) ─────────────────────────────────
+    # 공고문이 아니라 **우리가 가진 서류**를 읽는다. 서류함 업로드와 회사 프로필이 쓴다.
+    #
+    # ⚠ path 는 이 서버의 **로컬 파일 경로**다. claude 가 Read 로 열어야 하므로 그렇다.
+    #   부르는 쪽(node)이 스토리지에서 받아 임시 파일로 풀어 놓고 경로만 넘긴다.
+    #   밖으로 열려 있지 않은 루프백 서비스라 이 구조가 성립한다 — 열게 되면 반드시 막아야 한다.
+    def _파일로(self, body: dict):
+        """요청에서 판독할 파일을 확보한다. (경로, 지워야_하는가) 를 돌려준다.
+
+        ⚠ **경로를 그냥 믿을 수 없다.** 이 서비스는 PrivateTmp=yes 라 자기만의 /tmp 를 보는데,
+          웹(rnd-web)은 PrivateTmp=no 다. 웹이 /tmp 에 쓴 파일을 여기서는 못 읽는다 —
+          모델이 "파일을 찾을 수 없습니다" 라고 답해서 JSON 파싱 실패로만 보였다(실측).
+          그래서 파일을 가진 쪽이 내용을 실어 보내고, 여기서 우리 /tmp 에 풀어 쓴다.
+
+        경로도 계속 받는다. bot/*.py 안에서 부르면 같은 네임스페이스라 경로가 통한다.
+        """
+        b64 = body.get("content_b64")
+        if b64:
+            ext = str(body.get("ext") or "pdf").lstrip(".").lower()
+            if not ext.isalnum() or len(ext) > 8:
+                raise ValueError(f"확장자가 이상하다: {ext!r}")
+            try:
+                blob = base64.b64decode(b64, validate=True)
+            except Exception as e:
+                raise ValueError(f"content_b64 를 못 풀었다: {e}") from e
+            if not blob:
+                raise ValueError("content_b64 가 비었다")
+            fd, tmp = tempfile.mkstemp(prefix="docread-", suffix=f".{ext}")
+            with os.fdopen(fd, "wb") as f:
+                f.write(blob)
+            return tmp, True
+
+        path = str(body.get("path") or "").strip()
+        if not path:
+            raise ValueError("content_b64 도 path 도 없다")
+        if not os.path.isfile(path):
+            # 여기서 미리 잡는다. 모델에게 물어보면 한도만 쓰고 답은 문장으로 온다.
+            raise ValueError(
+                f"파일이 없다: {path} — 이 서비스는 PrivateTmp 라 /tmp 가 따로다. "
+                "웹에서 부를 때는 content_b64 로 보낼 것."
+            )
+        return path, False
+
+    def _document_read(self, body: dict) -> None:
+        try:
+            path, 임시 = self._파일로(body)
+        except ValueError as e:
+            self._send(400, {"ok": False, "error": str(e)})
+            return
+        cands = body.get("candidates") or []
+        if not isinstance(cands, list):
+            cands = []
+        try:
+            r = gongo.read_document(path, [str(c) for c in cands])
+        finally:
+            if 임시:
+                try:
+                    os.unlink(path)
+                except OSError:
+                    pass
+        self._send(200, r)
+
+    def _company_read(self, body: dict) -> None:
+        try:
+            path, 임시 = self._파일로(body)
+        except ValueError as e:
+            self._send(400, {"ok": False, "error": str(e)})
+            return
+        try:
+            r = gongo.read_company_document(path)
+        finally:
+            if 임시:
+                try:
+                    os.unlink(path)
+                except OSError:
+                    pass
+        self._send(200, r)
 
     def _score(self, body: dict) -> None:
         company = str(body.get("company") or "").strip()

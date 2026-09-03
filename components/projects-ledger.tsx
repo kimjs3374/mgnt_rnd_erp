@@ -38,6 +38,12 @@ const 사업유형_라벨: Record<string, string> = {
   LOCAL_TP: "지자체·TP 지원사업",
 }
 
+/** 표 안에서 쓰는 짧은 이름. 열 하나가 「지자체·TP 지원사업」 때문에 넓어지는 걸 막는다. */
+const 사업유형_짧게: Record<string, string> = {
+  NATIONAL_RND: "국가 R&D",
+  LOCAL_TP: "지자체·TP",
+}
+
 const 전체연도 = "전체"
 const 모두 = "전체"
 const 보기단위 = [10, 20] as const
@@ -388,19 +394,25 @@ export function ProjectsLedger({
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="w-[280px]">과제명</TableHead>
+                <TableHead className="w-[240px]">과제명</TableHead>
                 {/* 단계 열은 전체 보기에서만. 단계 화면에서는 열 하나가 같은 값으로 채워진다. */}
                 {전체보기중 && <TableHead className="w-[84px]">단계</TableHead>}
                 <TableHead>과제코드</TableHead>
-                <TableHead className="w-[150px]">연구책임자</TableHead>
+                <TableHead className="w-[116px]">연구책임자</TableHead>
                 <TableHead>부처 / 전문기관</TableHead>
                 <TableHead>유형</TableHead>
                 <TableHead>수행기간</TableHead>
-                <TableHead className="text-right">연차 (현재/총)</TableHead>
-                <TableHead className="text-right">총사업비</TableHead>
-                <TableHead className="text-right">정부지원금</TableHead>
+                {/* 머리글을 짧게. 뜻은 title 로 남긴다 — 「연차 (현재/총)」이 열 하나를 90px 잡아먹었다. */}
+                <TableHead className="text-right" title="현재 연차 / 총 연차">
+                  연차
+                </TableHead>
+                {/* 두 숫자를 한 칸에 위아래로 둔다 — 늘 같이 읽는 값이고(정부/총 = 지원 비율),
+                    나란히 놓으면 열 둘이 각각 115px 을 잡아 1,280px 에서 가로 스크롤이 남았다. */}
+                <TableHead className="text-right" title="총사업비 / 정부지원금">
+                  사업비
+                </TableHead>
                 <TableHead>상태</TableHead>
-                <TableHead className="w-[150px]" />
+                <TableHead className="w-[84px]" />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -418,7 +430,10 @@ export function ProjectsLedger({
                       (끝남 ? "bg-red-100 hover:bg-red-200 dark:bg-red-950 dark:hover:bg-red-900" : "")
                     }
                   >
-                    <TableCell className="font-medium">
+                    {/* ⚠ `TableCell` 기본값이 `whitespace-nowrap` 이라 긴 과제명이 한 줄로
+                        펼쳐지며 `w-[240px]` 을 무시하고 표를 밀어냈다(1,618px → 가로 스크롤).
+                        여기서만 줄바꿈을 허용한다 — 이름을 자르면 어느 과제인지 못 읽는다. */}
+                    <TableCell className="font-medium whitespace-normal">
                       {/* 계상·정산은 과제 안에서 한다. 목록은 어느 과제로 들어갈지만 고른다. */}
                       <Link
                         href={`/projects/${r.id}`}
@@ -432,7 +447,9 @@ export function ProjectsLedger({
                         {단계별[r.id] ?? "—"}
                       </TableCell>
                     )}
-                    <TableCell className="text-muted-foreground">{r.과제코드 ?? "—"}</TableCell>
+                    <TableCell className="text-[12.5px] tabular-nums text-muted-foreground">
+                      {r.과제코드 ?? "—"}
+                    </TableCell>
                     {/* 눌러서 바로 고친다. 막는 판정은 서버 액션의 `수정권한()` 한 곳에서만 한다. */}
                     <TableCell className="text-[12.5px]">
                       <ProjectLeadCell
@@ -441,15 +458,19 @@ export function ProjectsLedger({
                         로그인={로그인}
                       />
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
+                    {/* 「중소벤처기업부 · 중소기업기술정보진흥원」이 한 줄로 펼쳐지면 열이 300px 를 넘는다.
+                        두 줄로 접고 상한을 둔다. 자르지는 않는다 — 전문기관이 어디인지가 정산 창구다. */}
+                    <TableCell className="max-w-[150px] whitespace-normal text-[12.5px] text-muted-foreground">
                       {r.부처 ?? "—"}
                       {r.전문기관 ? ` · ${r.전문기관}` : ""}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {r.사업유형 ? (사업유형_라벨[r.사업유형] ?? r.사업유형) : "—"}
+                      {r.사업유형
+                        ? (사업유형_짧게[r.사업유형] ?? 사업유형_라벨[r.사업유형] ?? r.사업유형)
+                        : "—"}
                     </TableCell>
-                    <TableCell className="tabular-nums text-muted-foreground">
-                      {r.시작일 ?? "확인 필요"} ~ {r.종료일 ?? "확인 필요"}
+                    <TableCell className="text-[12.5px] tabular-nums text-muted-foreground">
+                      {r.시작일 ?? "확인 필요"}~{r.종료일 ?? "확인 필요"}
                     </TableCell>
                     {/* 연차는 회계연도로 센다 — 2022-06~2024-05 는 기간 2년이어도 3개 연차다.
                         저장된 `projects.연차` 를 그대로 찍지 않고 기간에서 계산한다. */}

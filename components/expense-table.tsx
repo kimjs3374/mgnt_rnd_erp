@@ -291,9 +291,12 @@ export function ExpenseTable({
                   {e.일자 ?? "—"}
                 </TableCell>
                 <TableCell className="font-medium">{e.거래처 ?? "—"}</TableCell>
-                <TableCell>{e.품목요약}</TableCell>
+                {/* ⚠ `TableCell` 기본값이 `whitespace-nowrap` 이다. 품목명이 한 줄로 펴지면
+                    이 열 하나가 232px 을 잡고 표가 창을 넘어간다(1,280px 실측).
+                    두 줄로 접는다 — 품목명을 자르면 어느 건인지 못 읽는다. */}
+                <TableCell className="max-w-[220px] whitespace-normal">{e.품목요약}</TableCell>
                 <TableCell className="text-right tabular-nums">{won(e.합계)}</TableCell>
-                <TableCell className="text-muted-foreground">
+                <TableCell className="max-w-[200px] whitespace-normal text-muted-foreground">
                   {e.비목_대분류 ? (labels.cat[e.비목_대분류] ?? e.비목_대분류) : "미분류"}
                   {e.비목_세부항목 && (
                     <>

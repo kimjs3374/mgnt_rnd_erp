@@ -173,19 +173,21 @@ export function BudgetingBoard({
       <Table>
         <TableHeader>
           <TableRow className="hover:bg-transparent">
-            <TableHead className="w-[300px]">과제명</TableHead>
+            <TableHead className="w-[240px]">과제명</TableHead>
             <TableHead>출처</TableHead>
             <TableHead className="text-right">총사업비</TableHead>
             <TableHead className="text-right">계상 합계</TableHead>
             <TableHead className="text-right">남은 금액</TableHead>
             <TableHead>단계</TableHead>
-            <TableHead className="w-[190px]" />
+            <TableHead className="w-[150px]" />
           </TableRow>
         </TableHeader>
         <TableBody>
           {걸러진.map((r) => (
             <TableRow key={r.id} className="h-[38px] text-[13px]">
-              <TableCell className="font-medium">
+              {/* ⚠ `TableCell` 기본값이 `whitespace-nowrap` 이라 과제명이 416px 까지 펴져
+                  표가 창을 넘겼다(1,280px 실측). 여기서만 줄바꿈을 허용한다. */}
+              <TableCell className="font-medium whitespace-normal">
                 <Link href={`/projects/${r.id}`} className="underline-offset-2 hover:underline">
                   {r.과제명}
                 </Link>

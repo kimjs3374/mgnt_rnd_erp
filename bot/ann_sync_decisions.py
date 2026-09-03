@@ -39,7 +39,14 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ann_features as F
 import rest
 
-INCLUDE = ("가능", "불가", "확인필요")   # 요건미확인은 뺀다 — 위 설명 참조
+# 해당없음을 넣는다(2026-09-04). 위 「요건미확인은 넣지 않는다」의 이유는 판정계산()이
+# 가능/불가가 아닌 값을 전부 「확인필요」로 묶어버리는 것이었는데, 그 로직을 고쳐
+# 「해당없음」은 그대로 통과시킨다(lib/queries.ts·lib/queries-programs.ts). 화면도 이 등급을
+# 5번째로 그리고(announcement-detail.tsx), 목록에서는 「불가」와 같이 접는다
+# (announcements-view.tsx). 그래서 이제 넣어야 실제로 걸러진다 —
+# 사용자 지적: 공고 488 "이 건은 네트워킹 강연인데 걸러내지를 못하고".
+# 요건미확인은 여전히 뺀다(그 값은 아직 판정계산에서 확인필요로 승격된다).
+INCLUDE = ("가능", "불가", "확인필요", "해당없음")
 
 
 def _latest_decision(announcement_id: int) -> dict | None:

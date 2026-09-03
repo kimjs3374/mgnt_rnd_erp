@@ -38,12 +38,14 @@ export const NAV: NavGroup[] = [
   },
   {
     title: "과제사업",
-    // 그룹 이름을 누르면 첫 항목(공고 탐색)으로 간다. 순서와 어긋나면 사용자가 헷갈린다.
-    url: "/project-announcements",
+    // 그룹 이름을 누르면 첫 항목(사업 대장)으로 간다. 순서와 어긋나면 사용자가 헷갈린다.
+    // 지원사업과 항목 순서를 맞춘다 — 나란히 놓인 두 그룹이 서로 다른 순서면
+    // 매번 어느 쪽이 어디 있는지 다시 읽어야 한다.
+    url: "/projects",
     icon: "Briefcase",
     items: [
-      { title: "공고 탐색", url: "/project-announcements" },
       { title: "사업 대장", url: "/projects" },
+      { title: "공고 탐색", url: "/project-announcements" },
     ],
   },
   {

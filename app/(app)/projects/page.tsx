@@ -130,8 +130,23 @@ export default async function ProjectsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map((r) => (
-                <TableRow key={r.id} className="h-[38px] text-[13px]">
+              {rows.map((r) => {
+                // 끝난 과제는 줄 전체를 **연빨강**으로 칠한다(사용자 지시).
+                // 배지 하나로는 열 줄 중 어느 게 끝난 건지 훑어서 안 잡힌다 — 색이 줄 단위여야 한 눈에 갈린다.
+                // ⚠ 색 토큰(`--warning` 등)은 `app/globals.css` 에 있는데 그 파일은 권태호 담당이고
+                //    지금 미커밋 변경이 있어 건드리지 않았다. Tailwind 기본 red 단계를 쓴다.
+                //    `TableRow` 가 `cn()`(tailwind-merge)을 거쳐서 기본 `hover:bg-muted/50` 은 이쪽이 이긴다.
+                const 끝남 = r.상태 === "종료"
+                return (
+                <TableRow
+                  key={r.id}
+                  className={
+                    "h-[38px] text-[13px] " +
+                    (끝남
+                      ? "bg-red-100 hover:bg-red-200 dark:bg-red-950 dark:hover:bg-red-900"
+                      : "")
+                  }
+                >
                   <TableCell className="font-medium">
                     {/* 계상·정산은 과제 안에서 한다. 목록은 어느 과제로 들어갈지만 고른다. */}
                     <Link
@@ -197,11 +212,21 @@ export default async function ProjectsPage() {
                     </Link>
                   </TableCell>
                 </TableRow>
-              ))}
+                )
+              })}
             </TableBody>
           </Table>
         )}
       </Card>
+
+      {/* 색이 무엇을 뜻하는지 화면에 적어 둔다. 안 적으면 빨강을 「문제 있는 과제」로 읽는다. */}
+      {rows.some((r) => r.상태 === "종료") && (
+        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="inline-block h-3 w-5 rounded-sm border bg-red-100 dark:bg-red-950" />
+          연빨강 줄은 <span className="text-foreground">종료된 과제</span>입니다 — 나머지는 수행 중입니다.
+          문제가 있다는 뜻이 아니라 끝났다는 뜻입니다.
+        </p>
+      )}
 
       {숨긴수 > 0 && (
         <p className="text-xs text-muted-foreground">

@@ -3,6 +3,7 @@ import { db, safeSelect } from "@/lib/db"
 import type { ProjectRow } from "@/lib/queries"
 import type { ShareRule } from "@/lib/funding-share"
 import type { EvidenceRequirement, EvidenceFile } from "@/lib/evidence-types"
+import type { PersonnelRow } from "@/lib/personnel"
 
 /**
  * 과제 상세(개요 · 연구비 계상 · 정산) 전용 조회.
@@ -114,6 +115,17 @@ export const getProjectEvidenceFiles = (id: number) =>
       .select("*")
       .eq("과제_id", id)
       .order("업로드일시", { ascending: false }),
+  )
+
+/** 개인별 인건비 계상. 연차 → 정렬 순서로 온다(화면이 연차 탭으로 나눈다). */
+export const getPersonnelCosts = (id: number) =>
+  safeSelect<PersonnelRow>("personnel_costs", () =>
+    db
+      .from("personnel_costs")
+      .select("*")
+      .eq("과제_id", id)
+      .order("연차")
+      .order("정렬"),
   )
 
 /** 우리 회사 프로필 — 기관유형(기업규모)을 여기서 읽는다. 규칙이 기관유형별로 갈린다. */

@@ -1,0 +1,393 @@
+"use client"
+
+import * as React from "react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { MoneyInput } from "@/components/money-input"
+import {
+  savePersonnelRows,
+  deletePersonnelRow,
+  applyPersonnelToBudget,
+} from "@/app/actions/personnel"
+import { 총액, 급여총액, 기본재원, 재원별합계, 참여율초과, type PersonnelRow } from "@/lib/personnel"
+
+/**
+ * 개인별 인건비 계상 — 연차별로 사람마다 한 줄.
+ *
+ * 실제 양식(연구개발계획서 인건비 계상표)의 열을 그대로 옮겼다.
+ * 총액 = 월급여 × 참여율 × 참여개월수 는 **치는 즉시 다시 계산**된다 — 사람이 계산기를 두 번
+ * 두드리지 않게. 그리고 그 합계를 「연구비 계상」의 인건비 줄로 그대로 보낸다
+ * (지급=현금 · 미지급=현물로 나눠서. 협약서도 그렇게 갈라져 있다).
+ *
+ * ⚠ 실명·실제 급여를 공개 URL 에 올리지 않는다(CLAUDE.md §5 절대규칙 5).
+ *   대회 기간에는 표시명에 가명을 쓴다. 화면에도 그 문구를 띄운다.
+ */
+
+const won = (n: number) => Math.round(n).toLocaleString("ko-KR")
+
+type Draft = Omit<PersonnelRow, "id"> & { id: number | null; _새것?: boolean }
+
+const 빈줄 = (연차: number, 정렬: number): Draft => ({
+  id: null,
+  연차,
+  정렬,
+  자격: "",
+  내외부: "내부",
+  표시명: "",
+  연구자등록번호: null,
+  소속기관: null,
+  소속부서: null,
+  직급: "",
+  국적: null,
+  신규채용여부: false,
+  월급여: 0,
+  참여율: 0,
+  참여개월수: 0,
+  참여시작일: null,
+  참여종료일: null,
+  지급구분: "미지급",
+  재원구분: "현물",
+  비고: null,
+  _새것: true,
+})
+
+export function PersonnelEditor({
+  과제_id,
+  초기값,
+  연차목록,
+}: {
+  과제_id: number
+  초기값: PersonnelRow[]
+  /** 과제 기간에서 뽑은 연차. 최소 1개는 온다. */
+  연차목록: number[]
+}) {
+  const [연차, set연차] = React.useState(연차목록[0] ?? 1)
+  const [rows, setRows] = React.useState<Draft[]>(초기값.map((r) => ({ ...r })))
+  const [msg, setMsg] = React.useState<{ ok: boolean; text: string } | null>(null)
+  const [상세, set상세] = React.useState(false)
+  const [pending, start] = React.useTransition()
+
+  React.useEffect(() => setRows(초기값.map((r) => ({ ...r }))), [초기값])
+
+  const 보이는 = rows.filter((r) => Number(r.연차) === 연차)
+  const 더러움 = JSON.stringify(rows) !== JSON.stringify(초기값.map((r) => ({ ...r })))
+  const 합 = 재원별합계(rows as PersonnelRow[], 연차)
+  const 총합 = 합.출연금 + 합.현금 + 합.현물
+  const 초과 = 참여율초과(rows as PersonnelRow[], 연차)
+
+  const 수정 = (row: Draft, patch: Partial<Draft>) =>
+    setRows((prev) => prev.map((r) => (r === row ? { ...r, ...patch } : r)))
+
+  function 줄추가() {
+    setRows((prev) => [...prev, 빈줄(연차, prev.length)])
+  }
+
+  function 저장() {
+    setMsg(null)
+    start(async () => {
+      const r = await savePersonnelRows(과제_id, rows as never)
+      setMsg(r.ok ? { ok: true, text: "저장했습니다." } : { ok: false, text: r.error ?? "저장하지 못했습니다." })
+    })
+  }
+
+  function 줄삭제(row: Draft) {
+    if (row.id == null) {
+      setRows((prev) => prev.filter((r) => r !== row))
+      return
+    }
+    setMsg(null)
+    start(async () => {
+      const r = await deletePersonnelRow(과제_id, row.id as number)
+      if (r.ok) setRows((prev) => prev.filter((x) => x !== row))
+      else setMsg({ ok: false, text: r.error ?? "지우지 못했습니다." })
+    })
+  }
+
+  function 반영() {
+    setMsg(null)
+    start(async () => {
+      const r = await applyPersonnelToBudget(과제_id, 연차)
+      setMsg(
+        r.ok
+          ? {
+              ok: true,
+              text: `인건비 비목에 반영했습니다 — ${Object.entries(r.반영 ?? {})
+                .filter(([, v]) => v > 0)
+                .map(([k, v]) => `${k} ${won(v)}원`)
+                .join(" · ")}`,
+            }
+          : { ok: false, text: r.error ?? "반영하지 못했습니다." },
+      )
+    })
+  }
+
+  const cell = "h-7 text-[12.5px]"
+  const num = "h-7 text-right text-[12.5px] tabular-nums"
+
+  return (
+    <div className="rounded-lg border bg-card p-4">
+      <div className="mb-3 flex flex-wrap items-baseline gap-2">
+        <span className="text-[13px] font-medium">개인별 인건비 계상</span>
+        <div className="flex gap-1">
+          {연차목록.map((y) => (
+            <Button
+              key={y}
+              type="button"
+              variant={y === 연차 ? "default" : "outline"}
+              className="h-6 px-2 text-[11.5px]"
+              onClick={() => set연차(y)}
+            >
+              {y}차년도
+            </Button>
+          ))}
+        </div>
+        <span className="text-xs text-muted-foreground">
+          {보이는.length}명 · 합계 <span className="tabular-nums">{won(총합)}</span>원
+          {합.현금 > 0 && ` (현금 ${won(합.현금)})`}
+          {합.현물 > 0 && ` (현물 ${won(합.현물)})`}
+        </span>
+        <Button
+          type="button"
+          variant="ghost"
+          className="ml-auto h-6 px-2 text-[12px] text-muted-foreground"
+          onClick={() => set상세((v) => !v)}
+        >
+          {상세 ? "기본 열만" : "상세 열 보기"}
+        </Button>
+      </div>
+
+      <p className="mb-2 text-[11.5px] text-[var(--warning-fg)]">
+        ⚠ 공개 주소에는 실명·실제 급여를 올리지 않습니다. 대회 기간에는 표시명에 가명을 쓰세요 —
+        급여이체증·4대보험 명부 업로드도 코드가 막고 있습니다.
+      </p>
+
+      {초과.length > 0 && (
+        <p className="mb-2 text-[12px] text-destructive">
+          참여율 합이 100%를 넘습니다 —{" "}
+          {초과.map((x) => `${x.표시명} ${x.합}%`).join(" · ")} (정산에서 걸립니다)
+        </p>
+      )}
+
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[1100px] border-collapse text-[12.5px]">
+          <thead>
+            <tr className="border-b text-left text-muted-foreground">
+              <th className="w-[92px] pb-1 font-normal">자격</th>
+              <th className="w-[64px] pb-1 font-normal">구분</th>
+              <th className="w-[100px] pb-1 font-normal">표시명</th>
+              {상세 && <th className="w-[110px] pb-1 font-normal">소속/부서</th>}
+              <th className="w-[80px] pb-1 font-normal">직급</th>
+              <th className="w-[52px] pb-1 text-center font-normal">신규</th>
+              <th className="w-[120px] pb-1 text-right font-normal">월급여</th>
+              <th className="w-[70px] pb-1 text-right font-normal">참여율%</th>
+              <th className="w-[62px] pb-1 text-right font-normal">개월</th>
+              <th className="w-[124px] pb-1 font-normal">참여시작</th>
+              <th className="w-[124px] pb-1 font-normal">참여종료</th>
+              <th className="w-[78px] pb-1 font-normal">지급구분</th>
+              <th className="w-[72px] pb-1 font-normal">재원</th>
+              <th className="w-[110px] pb-1 text-right font-normal">총액</th>
+              <th className="w-[110px] pb-1 text-right font-normal">급여총액</th>
+              <th className="w-[44px] pb-1" />
+            </tr>
+          </thead>
+          <tbody>
+            {보이는.length === 0 && (
+              <tr>
+                <td colSpan={상세 ? 16 : 15} className="py-8 text-center text-muted-foreground">
+                  {연차}차년도에 등록된 인원이 없습니다. 아래 「+ 인원 추가」로 시작하세요.
+                </td>
+              </tr>
+            )}
+            {보이는.map((r, i) => (
+              <tr key={r.id ?? `new-${i}`} className="border-b last:border-0">
+                <td className="py-1 pr-1">
+                  <Input
+                    className={cell}
+                    value={r.자격 ?? ""}
+                    placeholder="연구책임"
+                    onChange={(e) => 수정(r, { 자격: e.target.value })}
+                    aria-label="자격"
+                  />
+                </td>
+                <td className="py-1 pr-1">
+                  <select
+                    className="h-7 w-full rounded-md border bg-transparent px-1 text-[12.5px]"
+                    value={r.내외부}
+                    onChange={(e) => 수정(r, { 내외부: e.target.value })}
+                    aria-label="내외부"
+                  >
+                    <option value="내부">내부</option>
+                    <option value="외부">외부</option>
+                  </select>
+                </td>
+                <td className="py-1 pr-1">
+                  <Input
+                    className={cell}
+                    value={r.표시명}
+                    placeholder="연구원A"
+                    onChange={(e) => 수정(r, { 표시명: e.target.value })}
+                    aria-label="표시명"
+                  />
+                </td>
+                {상세 && (
+                  <td className="py-1 pr-1">
+                    <Input
+                      className={cell}
+                      value={r.소속부서 ?? ""}
+                      onChange={(e) => 수정(r, { 소속부서: e.target.value })}
+                      aria-label="소속부서"
+                    />
+                  </td>
+                )}
+                <td className="py-1 pr-1">
+                  <Input
+                    className={cell}
+                    value={r.직급 ?? ""}
+                    onChange={(e) => 수정(r, { 직급: e.target.value })}
+                    aria-label="직급"
+                  />
+                </td>
+                <td className="py-1 pr-1 text-center">
+                  <input
+                    type="checkbox"
+                    checked={r.신규채용여부}
+                    onChange={(e) => 수정(r, { 신규채용여부: e.target.checked })}
+                    aria-label="신규채용 여부"
+                  />
+                </td>
+                <td className="py-1 pr-1">
+                  <MoneyInput
+                    value={Number(r.월급여) || 0}
+                    onValueChange={(n) => 수정(r, { 월급여: n })}
+                    className={num}
+                    aria-label="월급여"
+                  />
+                </td>
+                <td className="py-1 pr-1">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.5}
+                    className={num}
+                    value={String(r.참여율 ?? 0)}
+                    onChange={(e) => 수정(r, { 참여율: Number(e.target.value) || 0 })}
+                    aria-label="참여율"
+                  />
+                </td>
+                <td className="py-1 pr-1">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={60}
+                    step={1}
+                    className={num}
+                    value={String(r.참여개월수 ?? 0)}
+                    onChange={(e) => 수정(r, { 참여개월수: Number(e.target.value) || 0 })}
+                    aria-label="참여개월수"
+                  />
+                </td>
+                <td className="py-1 pr-1">
+                  <Input
+                    type="date"
+                    className={cell}
+                    value={r.참여시작일 ?? ""}
+                    onChange={(e) => 수정(r, { 참여시작일: e.target.value || null })}
+                    aria-label="참여시작일"
+                  />
+                </td>
+                <td className="py-1 pr-1">
+                  <Input
+                    type="date"
+                    className={cell}
+                    value={r.참여종료일 ?? ""}
+                    onChange={(e) => 수정(r, { 참여종료일: e.target.value || null })}
+                    aria-label="참여종료일"
+                  />
+                </td>
+                <td className="py-1 pr-1">
+                  <select
+                    className="h-7 w-full rounded-md border bg-transparent px-1 text-[12.5px]"
+                    value={r.지급구분}
+                    onChange={(e) =>
+                      // 지급구분을 바꾸면 재원도 따라간다. 예외는 재원 칸에서 직접 고친다.
+                      수정(r, { 지급구분: e.target.value, 재원구분: 기본재원(e.target.value) })
+                    }
+                    aria-label="지급구분"
+                  >
+                    <option value="미지급">미지급</option>
+                    <option value="지급">지급</option>
+                  </select>
+                </td>
+                <td className="py-1 pr-1">
+                  <select
+                    className="h-7 w-full rounded-md border bg-transparent px-1 text-[12.5px]"
+                    value={r.재원구분}
+                    onChange={(e) => 수정(r, { 재원구분: e.target.value })}
+                    aria-label="재원구분"
+                  >
+                    <option value="현물">현물</option>
+                    <option value="현금">현금</option>
+                    <option value="출연금">출연금</option>
+                  </select>
+                </td>
+                <td className="py-1 pr-1 text-right font-medium tabular-nums">
+                  {won(총액(r))}
+                </td>
+                <td className="py-1 pr-1 text-right tabular-nums text-muted-foreground">
+                  {won(급여총액(r))}
+                </td>
+                <td className="py-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="h-7 px-1.5 text-[11.5px] text-muted-foreground"
+                    disabled={pending}
+                    onClick={() => 줄삭제(r)}
+                  >
+                    삭제
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Button type="button" variant="outline" className="h-7 text-[12.8px]" onClick={줄추가}>
+          + 인원 추가
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          className="h-7 text-[12.8px]"
+          disabled={pending || 더러움 || 총합 === 0}
+          onClick={반영}
+          title={더러움 ? "먼저 저장하세요" : "이 연차 합계를 인건비 비목으로 보냅니다"}
+        >
+          인건비 비목으로 반영
+        </Button>
+        <span className="ml-auto" />
+        {msg && (
+          <span className={msg.ok ? "text-[12.5px] text-muted-foreground" : "text-[12.5px] text-destructive"}>
+            {msg.text}
+          </span>
+        )}
+        <Button
+          type="button"
+          className="h-7 text-[12.8px]"
+          disabled={pending || !더러움}
+          onClick={저장}
+        >
+          {pending ? "저장 중…" : "인건비 저장"}
+        </Button>
+      </div>
+
+      <p className="mt-2 text-[11px] text-muted-foreground">
+        총액 = 월급여 × 참여율 × 참여개월수 · 급여총액 = 월급여 × 12 · 지급은 현금, 미지급은 현물로
+        잡힙니다. 「인건비 비목으로 반영」을 누르면 연구비 계상의 인건비 줄이 재원별로 덮어써집니다.
+      </p>
+    </div>
+  )
+}

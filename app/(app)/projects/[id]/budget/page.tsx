@@ -2,6 +2,7 @@ import { DbError } from "@/components/db-error"
 import { BudgetEditor, type Line } from "@/components/budget-editor"
 import { FundingShareCard } from "@/components/funding-share-card"
 import { EvidenceAttachments } from "@/components/evidence-attachments"
+import { PersonnelEditor } from "@/components/personnel-editor"
 import {
   getProject,
   getProjectBudget,
@@ -10,6 +11,7 @@ import {
   getCompanyProfile,
   getEvidenceRequirements,
   getProjectEvidenceFiles,
+  getPersonnelCosts,
 } from "@/lib/queries-project"
 import { pickRule, computeShare } from "@/lib/funding-share"
 import { getCurrentUser } from "@/lib/current-user"
@@ -37,7 +39,7 @@ export default async function ProjectBudgetPage({
   const { id: raw } = await params
   const id = Number(raw)
 
-  const [proj, budget, cats, rules, company, reqs, files, who] = await Promise.all([
+  const [proj, budget, cats, rules, company, reqs, files, people, who] = await Promise.all([
     getProject(id),
     getProjectBudget(id),
     getCategories(),
@@ -45,9 +47,21 @@ export default async function ProjectBudgetPage({
     getCompanyProfile(),
     getEvidenceRequirements(),
     getProjectEvidenceFiles(id),
+    getPersonnelCosts(id),
     getCurrentUser(),
   ])
   const p = proj.rows[0]
+
+  // 연차 탭 — 협약기간에서 뽑는다. 기간이 없으면 projects.연차 를, 그것도 없으면 1년으로 둔다.
+  const 연수 = (() => {
+    if (p?.시작일 && p?.종료일) {
+      const 일 =
+        (new Date(p.종료일).getTime() - new Date(p.시작일).getTime()) / (1000 * 60 * 60 * 24)
+      if (Number.isFinite(일) && 일 > 0) return Math.max(1, Math.ceil(일 / 365.25))
+    }
+    return Math.max(1, Number(p?.연차 ?? 1))
+  })()
+  const 연차목록 = Array.from({ length: 연수 }, (_, i) => i + 1)
 
   const 정렬 = new Map(cats.rows.map((c) => [c.코드, c.정렬 ?? 999]))
   const lines: Line[] = budget.rows
@@ -121,6 +135,11 @@ export default async function ProjectBudgetPage({
         }}
         비목목록={cats.rows.map((c) => ({ 코드: c.코드, 이름: c.이름 }))}
       />
+
+      {/* 인건비는 사람마다 참여율·월급여가 달라 비목 합계 하나로는 만들 수 없다.
+          여기서 개인별로 만들어 위 계상 표의 인건비 줄로 보낸다. */}
+      {people.error && <DbError what="개인별 인건비" error={people.error} />}
+      <PersonnelEditor 과제_id={id} 초기값={people.rows} 연차목록={연차목록} />
 
       {/* 계상한 비목이 곧 준비해야 할 RCMS 증빙 목록이 된다. 그래서 계상 표 바로 아래에 둔다. */}
       {reqs.error && <DbError what="증빙 요건" error={reqs.error} />}

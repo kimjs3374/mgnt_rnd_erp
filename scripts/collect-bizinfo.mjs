@@ -133,7 +133,7 @@ async function processOne(rec, workdir) {
       try {
         const existing = await pgSelect("ann_required_docs", `announcement_id=eq.${saved.id}&select=id&limit=1`)
         if (existing.length === 0) {
-          const r = extractDocuments(sections)
+          const r = await extractDocuments(sections)
           if (r.ok && Array.isArray(r.docs)) {
             const docRows = r.docs.map((d) => ({
               announcement_id: saved.id,
@@ -176,7 +176,7 @@ async function main() {
   } else {
     console.log(`회사 정보로 거르는 중... (${company})`)
     const candidates = list.map((rec) => ({ 사업명: rec.pblancNm, 요약: 태그제거(rec.bsnsSumryCn), rec }))
-    const picked = selectRelevant(company, candidates)
+    const picked = await selectRelevant(company, candidates)
     if (!picked) {
       console.log("회사 정보 대조 실패(로그인·타임아웃 등) — 최신순 상위로 대신한다")
       relevant = list.slice(0, maxCount)

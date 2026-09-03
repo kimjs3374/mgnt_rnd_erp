@@ -6,10 +6,11 @@
 // 로직은 01. 사전준비/프로토타입/iris.py(2026-08-21, 5건 end-to-end 검증됨)를 그대로 이식.
 //
 // 사용: node scripts/collect-iris.mjs [최대건수]
+//      node scripts/collect-iris.mjs --fix-urls   (공고문_파일명은 있는데 url이 없는 기존 행만 채운다)
 import { writeFileSync, mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { pgSelect, pgUpsertByFilter, pgInsert } from "./lib/pgrest.mjs"
+import { pgSelect, pgUpsertByFilter, pgInsert, pgPatch } from "./lib/pgrest.mjs"
 import { extractText, findSections } from "./lib/extract.mjs"
 import { extractDocuments } from "./lib/llm.mjs"
 
@@ -97,6 +98,12 @@ async function processOne(rec, workdir) {
     공고일: rec.ancmDe ?? null,
     사업유형: "NATIONAL_RND",
     공고문_파일명: notice?.name ?? null,
+    // FILE_URL 은 IRIS 가 공개 페이지에서도 그대로 쓰는 다운로드 링크다(세션·로그인 불필요,
+    // 실측: 이 스크립트가 서버에서 첨부를 받을 때 이미 이 URL로 받는다) — 그대로 저장해
+    // 화면에서 다운로드 버튼으로 쓴다.
+    공고문_url: notice
+      ? `${FILE_URL}?atchDocId=${encodeURIComponent(notice.doc_id)}&atchFileId=${encodeURIComponent(notice.file_id)}`
+      : null,
     파싱상태: "수집완료",
   }
 
@@ -134,7 +141,7 @@ async function processOne(rec, workdir) {
       : []
     if (sections.length > 0 && existing.length === 0) {
       try {
-        const r = extractDocuments(sections)
+        const r = await extractDocuments(sections)
         docsResult = r
         if (r.ok && Array.isArray(r.docs) && saved?.id) {
           // 필수여부(boolean)는 기존 컬럼 그대로 두고, 구분(text, 4분류)을 병행해 채운다.
@@ -161,7 +168,41 @@ async function processOne(rec, workdir) {
   return { id: saved?.id, 파싱상태: row.파싱상태, 문서건수: docsResult?.docs?.length ?? 0, llm_ok: docsResult?.ok ?? null }
 }
 
+/**
+ * 접수기간이 지나 fetchAll() 의 "접수 진행중" 목록에 더는 안 잡히는 기존 행을 고친다.
+ * 실측(2026-09-03): 공고문_url 을 나중에 추가한 뒤 재수집을 돌렸더니, 마감이 지난
+ * 5건이 목록에서 빠져 있어 url 이 계속 null 로 남았다(화면엔 "다운로드 링크 없음"으로
+ * 뜬다 — 고장이 아니라 이 5건만 아직 못 고친 상태였던 것). ancmId 로 상세페이지를
+ * 직접 다시 열면 목록 진행상태와 무관하게 첨부 링크를 다시 구할 수 있다.
+ */
+async function fixMissingUrls() {
+  const rows = await pgSelect(
+    "announcements",
+    "select=id,출처_id,사업명&출처=eq.IRIS&공고문_파일명=not.is.null&공고문_url=is.null",
+  )
+  console.log(`url 없는 기존 IRIS 행 ${rows.length}건`)
+  for (const r of rows) {
+    process.stdout.write(`[${r.출처_id}] ${String(r.사업명).slice(0, 40)} ... `)
+    try {
+      const { files } = await fetchDetail(r.출처_id)
+      const notice = pickNotice(files)
+      if (!notice) {
+        console.log("첨부를 다시 못 찾음(공고가 내려갔을 수 있다)")
+        continue
+      }
+      const url = `${FILE_URL}?atchDocId=${encodeURIComponent(notice.doc_id)}&atchFileId=${encodeURIComponent(notice.file_id)}`
+      await pgPatch("announcements", `id=eq.${r.id}`, { 공고문_url: url })
+      console.log("고침")
+    } catch (e) {
+      console.log(`실패: ${e.message}`)
+    }
+    await new Promise((res) => setTimeout(res, 500))
+  }
+}
+
 async function main() {
+  if (process.argv[2] === "--fix-urls") return fixMissingUrls()
+
   const maxCount = process.argv[2] ? Number(process.argv[2]) : 5
   const workdir = mkdtempSync(join(tmpdir(), "iris-"))
   console.log(`작업 디렉터리: ${workdir}`)

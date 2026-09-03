@@ -21,7 +21,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
-import extract  # _claude · _json_block · pick · _q 를 그대로 쓴다. 헤드리스 로직을 두 벌로 두지 않는다.
+import extract  # _json_block · pick · _q 를 그대로 쓴다. 로직을 두 벌로 두지 않는다.
+import gongo   # 헤드리스 호출(_headless) — 본문은 stdin 으로 넘긴다
 import rest
 from vocab import BOOLEAN_ITEMS, REQUIREMENT_ITEMS, REQUIREMENT_OPS, REQUIREMENT_UNITS
 
@@ -152,7 +153,9 @@ def extract_requirements(text: str) -> dict[str, Any]:
     if not body.strip():
         return {"요건": [], "기타": [], "잘림": False, "사유": "본문이 비어 있다"}
 
-    out = extract._claude(_prompt(body), allow_read=False, timeout=240)
+    # ⚠ 긴 본문을 `-p` 인자로 주면 --max-turns 1 인데도 stop=tool_use 로 죽는다(실측 09-03).
+    #    짧은 지시는 `-p`, 긴 본문은 stdin — gongo._headless 가 그 형태다.
+    out = gongo._headless(_prompt(body), "위 지시대로 JSON 객체 하나만 출력하라. 설명 금지.")
     data = extract._json_block(out)
     if not isinstance(data, dict):
         return {"요건": [], "기타": [], "잘림": truncated, "사유": "모델 응답을 JSON 으로 못 읽었다"}

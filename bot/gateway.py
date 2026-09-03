@@ -20,6 +20,10 @@
   POST /chat                      {"question": "...", "context": "..."}
   POST /eligibility/extract       {"announcement_id": 1, "save": true}
                                   {"text": "공고문 …", "save": false}
+  POST /documents/extract         {"sections": [...]}
+  POST /summary/extract           {"text": "공고문 본문"}
+  POST /relevance/select          {"company": "...", "candidates": [...]}
+  POST /eligibility/score         {"company": "...", "text": "공고문 본문"} → 0~100점 판정
 
 RND_GW_TOKEN 이 설정돼 있으면 Authorization: Bearer <토큰> 을 요구한다.
 없으면 루프백 신뢰로 그냥 받는다.
@@ -38,6 +42,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import announce
 import chat
+import gongo
 
 HOST = os.environ.get("RND_GW_HOST", "127.0.0.1")
 PORT = int(os.environ.get("RND_GW_PORT", "3611"))
@@ -87,7 +92,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         if self.path.split("?")[0] == "/health":
             self._send(200, {"ok": True, "service": "rnd-gateway", "port": PORT,
-                             "endpoints": ["/health", "/chat", "/eligibility/extract"]})
+                             "endpoints": ["/health", "/chat", "/eligibility/extract",
+                                           "/documents/extract", "/summary/extract",
+                                           "/relevance/select", "/eligibility/score"]})
             return
         self._send(404, {"ok": False, "error": f"그런 경로가 없다: {self.path}"})
 
@@ -107,6 +114,14 @@ class Handler(BaseHTTPRequestHandler):
                 self._chat(body)
             elif path == "/eligibility/extract":
                 self._extract(body)
+            elif path == "/documents/extract":
+                self._documents(body)
+            elif path == "/summary/extract":
+                self._summary(body)
+            elif path == "/relevance/select":
+                self._relevance(body)
+            elif path == "/eligibility/score":
+                self._score(body)
             else:
                 self._send(404, {"ok": False, "error": f"그런 경로가 없다: {path}"})
         except LookupError as e:
@@ -147,6 +162,39 @@ class Handler(BaseHTTPRequestHandler):
             res["저장"] = 0
 
         self._send(200, {"ok": True, **res})
+
+    # ── 공고 판독 — scripts/lib/llm.mjs 에 있던 것들 ─────────────────────────
+    # 실패를 200 으로 돌려준다. 수집 배치는 한 건이 실패해도 멈추지 않아야 하고,
+    # node 쪽은 ok 만 본다. HTTP 코드로 알리면 배치가 예외로 끊긴다.
+    def _documents(self, body: dict) -> None:
+        sections = body.get("sections")
+        if not isinstance(sections, list):
+            self._send(400, {"ok": False, "error": "sections 배열이 있어야 한다"})
+            return
+        self._send(200, gongo.extract_documents(sections))
+
+    def _summary(self, body: dict) -> None:
+        text = str(body.get("text") or body.get("본문") or "")
+        if not text.strip():
+            self._send(400, {"ok": False, "error": "text 가 비었다"})
+            return
+        self._send(200, gongo.extract_summary(text))
+
+    def _relevance(self, body: dict) -> None:
+        company = str(body.get("company") or "").strip()
+        candidates = body.get("candidates")
+        if not company or not isinstance(candidates, list):
+            self._send(400, {"ok": False, "error": "company 와 candidates 가 있어야 한다"})
+            return
+        self._send(200, gongo.select_relevant(company, candidates))
+
+    def _score(self, body: dict) -> None:
+        company = str(body.get("company") or "").strip()
+        text = str(body.get("text") or body.get("본문") or "")
+        if not company or not text.strip():
+            self._send(400, {"ok": False, "error": "company 와 text 가 있어야 한다"})
+            return
+        self._send(200, gongo.score_eligibility(company, text))
 
 
 def main() -> None:

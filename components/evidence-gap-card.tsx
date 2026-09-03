@@ -28,6 +28,26 @@ const won = (n: number | null | undefined) =>
 
 export type 과제구멍 = { id: number; 과제명: string; 구멍: 증빙구멍 }
 
+/**
+ * 과제 블록을 갈라 보이게 하는 **구분용** 색. (2026-09-04 사용자 지시)
+ *
+ * ⚠ **뜻이 없는 색이다.** 이 앱에서 색은 대개 뜻을 지고 있다 —
+ *   연빨강=종료 · 호박(warning)=손봐야 함 · 초록=여유 · 차트 팔레트=비목.
+ *   여기 색은 「몇 번째 과제인가」만 말한다. 그래서 **경고·상태 계열을 피해서** 골랐고
+ *   순서대로 돌려 쓴다. 과제가 다섯을 넘으면 처음 색으로 돌아온다 — 붙어 있는 두 블록만
+ *   서로 다르면 되기 때문이다.
+ *
+ * 색만으로 가르지 않는다 — **왼쪽 굵은 띠 + 머리 배경 + 순번**을 같이 준다.
+ * 색을 못 보는 사람에게도 갈라져 보여야 한다.
+ */
+const 구분색 = [
+  "border-l-sky-400 dark:border-l-sky-600",
+  "border-l-violet-400 dark:border-l-violet-600",
+  "border-l-teal-400 dark:border-l-teal-600",
+  "border-l-slate-400 dark:border-l-slate-500",
+  "border-l-fuchsia-400 dark:border-l-fuchsia-600",
+]
+
 export function EvidenceGapCard({
   과제들,
   비목이름 = {},
@@ -81,10 +101,17 @@ export function EvidenceGapCard({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3">
-            {과제들.map((p) => (
-              <div key={p.id} className="rounded-lg border">
-                <div className="flex flex-wrap items-baseline gap-2 border-b p-2.5">
+          <div className="space-y-4">
+            {과제들.map((p, i) => (
+              <div
+                key={p.id}
+                className={`overflow-hidden rounded-lg border border-l-4 ${구분색[i % 구분색.length]}`}
+              >
+                <div className="flex flex-wrap items-baseline gap-2 border-b bg-secondary/60 p-2.5">
+                  {/* 순번 — 색을 못 봐도 「몇 번째 과제」인지는 읽힌다. */}
+                  <span className="rounded bg-background px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">
+                    {i + 1}/{과제들.length}
+                  </span>
                   <Link
                     href={`/projects/${p.id}/expenses`}
                     className="text-[13px] font-medium underline-offset-2 hover:underline"

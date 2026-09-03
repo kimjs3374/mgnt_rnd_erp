@@ -55,11 +55,18 @@ export function PersonnelEditor({
   과제_id,
   초기값,
   협약연수,
+  연차연도 = [],
 }: {
   과제_id: number
   초기값: PersonnelRow[]
-  /** 협약기간으로 계산한 연수. 탭을 강제하지 않고 안내만 한다(사용자 지시: 기본 1차년도). */
+  /**
+   * 협약이 걸친 **연차 개수**. 기간을 12로 나눈 값이 아니다 —
+   * 2022-06-01~2024-05-31 은 기간 2년이지만 3개 연차다(`lib/fiscal-year.ts`).
+   * 탭을 강제하지 않고 안내만 한다(사용자 지시: 기본 1차년도).
+   */
   협약연수: number
+  /** 그 연차들이 각각 몇 년도인가. `[2022, 2023, 2024]` — 탭에 붙여서 오해를 없앤다. */
+  연차연도?: number[]
 }) {
   // **기본은 1차년도 하나뿐이고, 필요할 때 「+ 연차 추가」로 늘린다.**
   // 협약이 2년이라도 1차년도만 계상하고 넘어가는 경우가 흔해서, 빈 탭을 미리 벌려두면
@@ -145,8 +152,13 @@ export function PersonnelEditor({
                 variant={y === 연차 ? "default" : "outline"}
                 className="h-6 px-2 text-[11.5px]"
                 onClick={() => set연차(y)}
+                title={연차연도[y - 1] ? `${연차연도[y - 1]}년` : undefined}
               >
-                {y}차년도{인원 > 0 ? ` ${인원}` : ""}
+                {y}차년도
+                {연차연도[y - 1] ? (
+                  <span className="ml-1 opacity-70">{연차연도[y - 1]}</span>
+                ) : null}
+                {인원 > 0 ? ` ${인원}` : ""}
               </Button>
             )
           })}
@@ -160,13 +172,22 @@ export function PersonnelEditor({
               set최대연차(다음)
               set연차(다음)
             }}
-            title={협약연수 > 최대연차 ? `협약기간은 ${협약연수}년이다` : undefined}
+            title={
+              협약연수 > 최대연차
+                ? `이 협약은 ${협약연수}개 연차다${
+                    연차연도.length ? ` (${연차연도.join(" · ")})` : ""
+                  }`
+                : undefined
+            }
           >
             + 연차 추가
           </Button>
           {협약연수 > 최대연차 && (
+            // ⚠ 「협약 2년」이라고 쓰면 안 된다 — 기간과 연차 개수는 다르다.
+            //    2022-06~2024-05 는 기간 2년, 연차는 3개다(lib/fiscal-year.ts).
             <span className="self-center text-[11px] text-muted-foreground">
-              협약 {협약연수}년
+              협약 {협약연수}개 연차
+              {연차연도.length ? ` (${연차연도.join(" · ")})` : ""}
             </span>
           )}
         </div>

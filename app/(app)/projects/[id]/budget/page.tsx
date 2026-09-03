@@ -14,6 +14,7 @@ import {
   getPersonnelCosts,
 } from "@/lib/queries-project"
 import { pickRule, computeShare } from "@/lib/funding-share"
+import { 연차연도 } from "@/lib/fiscal-year"
 import { getCurrentUser } from "@/lib/current-user"
 
 export const dynamic = "force-dynamic"
@@ -52,17 +53,14 @@ export default async function ProjectBudgetPage({
   ])
   const p = proj.rows[0]
 
-  // 협약기간이 몇 년인지만 알려준다. **탭은 1차년도만 열고 사람이 늘린다**(사용자 지시) —
-  // 협약이 2년이어도 1차년도만 계상하고 넘어가는 경우가 흔해서, 빈 탭을 미리 벌리면
-  // 「2차년도가 비어 있다」는 잘못된 인상을 준다.
-  const 연수 = (() => {
-    if (p?.시작일 && p?.종료일) {
-      const 일 =
-        (new Date(p.종료일).getTime() - new Date(p.시작일).getTime()) / (1000 * 60 * 60 * 24)
-      if (Number.isFinite(일) && 일 > 0) return Math.max(1, Math.ceil(일 / 365.25))
-    }
-    return Math.max(1, Number(p?.연차 ?? 1))
-  })()
+  // 협약이 걸친 회계연도들. **탭은 1차년도만 열고 사람이 늘린다**(사용자 지시) —
+  // 협약이 여러 해여도 1차년도만 계상하고 넘어가는 경우가 흔해서, 빈 탭을 미리 벌리면
+  // 「2차년도가 비어 있다」는 잘못된 인상을 준다. 그래서 연도 목록은 안내로만 쓴다.
+  //
+  // ⚠ 기간을 365.25 로 나누지 않는다. 연차는 회계연도로 센다 — 2022-06-01~2024-05-31 은
+  //    기간이 2년이어도 2022·2023·2024 **3개 연차**다. 자세한 근거는 lib/fiscal-year.ts.
+  const 연도목록 = 연차연도(p?.시작일, p?.종료일)
+  const 연수 = 연도목록.length || Math.max(1, Number(p?.연차 ?? 1))
 
   const 정렬 = new Map(cats.rows.map((c) => [c.코드, c.정렬 ?? 999]))
   const lines: Line[] = budget.rows
@@ -140,7 +138,12 @@ export default async function ProjectBudgetPage({
       {/* 인건비는 사람마다 참여율·월급여가 달라 비목 합계 하나로는 만들 수 없다.
           여기서 개인별로 만들어 위 계상 표의 인건비 줄로 보낸다. */}
       {people.error && <DbError what="개인별 인건비" error={people.error} />}
-      <PersonnelEditor 과제_id={id} 초기값={people.rows} 협약연수={연수} />
+      <PersonnelEditor
+        과제_id={id}
+        초기값={people.rows}
+        협약연수={연수}
+        연차연도={연도목록}
+      />
 
       {/* 계상한 비목이 곧 준비해야 할 RCMS 증빙 목록이 된다. 그래서 계상 표 바로 아래에 둔다. */}
       {reqs.error && <DbError what="증빙 요건" error={reqs.error} />}

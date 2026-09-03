@@ -78,11 +78,24 @@ try {
     표.첫링크 ?? "없음",
   )
 
-  // 「가능만」 필터는 없앴다 — 탭별 「전체 공고 확인」 링크가 그 자리를 대신한다
+  // 「가능만」 토글 버튼은 없앴다 — 목록 자체가 이미 가능 판정만 보여준다
   const 가능만있음 = await p.evaluate(() =>
     [...document.querySelectorAll("button")].some((b) => b.textContent.trim().startsWith("가능만")),
   )
-  확인("가능만 토글 없음", !가능만있음)
+  확인("가능만 토글 버튼 없음", !가능만있음)
+
+  // 표에 뜬 판정 배지가 전부 「가능」인가 — 불가·확인필요·요건미확인이 섞이면 안 된다
+  const 판정배지들 = await p.evaluate(() =>
+    [...document.querySelectorAll("tbody span")]
+      .map((s) => s.textContent.trim())
+      .filter((t) => ["가능", "불가", "확인필요", "요건미확인"].includes(t)),
+  )
+  console.log("표의 판정 배지 :", [...new Set(판정배지들)].join(", ") || "(없음)")
+  확인(
+    "표에 뜬 판정은 전부 가능",
+    판정배지들.every((v) => v === "가능"),
+    판정배지들.join(","),
+  )
 
   const 전체공고확인 = await p.evaluate(() =>
     [...document.querySelectorAll("a")]

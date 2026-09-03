@@ -43,16 +43,22 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
 }
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
-  /** 최고관리자(admin)에게만 「관리자」 메뉴를 보여준다. */
-  role?: "member" | "admin" | null
+  /**
+   * 최고관리자(admin)에게만 「관리자」 메뉴를 보여준다.
+   * ⚠ 이름을 `role`이 아니라 `userRole`로 둔다 — `Sidebar`는 `ComponentProps<"div">`를
+   *   상속해서 네이티브 ARIA `role` 속성을 이미 갖고 있다. 같은 이름으로 커스텀 prop을
+   *   더하면 교집합 타입이 되어 `"admin"`을 못 받는데, dev 서버(Turbopack)는 타입검사를
+   *   건너뛰어 화면은 멀쩡하다가 `npm run build`(tsc)에서만 터진다. 이름을 바꿔 충돌 자체를 없앤다.
+   */
+  userRole?: "member" | "admin" | null
   userLabel?: string | null
 }
 
-export function AppSidebar({ role, userLabel, ...props }: AppSidebarProps) {
+export function AppSidebar({ userRole, userLabel, ...props }: AppSidebarProps) {
   const pathname = usePathname()
-  // 「관리자」 그룹은 role=admin 일 때만 사이드바에 노출한다.
+  // 「관리자」 그룹은 userRole=admin 일 때만 사이드바에 노출한다.
   // NAV 자체에는 항상 들어 있다 — 안 그러면 /admin/users 브레드크럼이 못 찾는다(lib/nav.ts 참조).
-  const visibleNav = role === "admin" ? NAV : NAV.filter((g) => g.title !== "관리자")
+  const visibleNav = userRole === "admin" ? NAV : NAV.filter((g) => g.title !== "관리자")
 
   return (
     <Sidebar

@@ -125,16 +125,20 @@ async function processOne(rec, workdir) {
   let docsResult = null
   if (text) {
     const sections = findSections(text)
-    if (sections.length > 0) {
+    // ⚠ 이미 판독한 공고는 LLM 을 다시 부르지 않는다. 이 검사가 extractDocuments 뒤에
+    //   있으면, 재수집할 때마다 결과를 버릴 행까지 헤드리스로 부른다(호출당 약 4만 토큰).
+    //   ⚠ 실제 테이블은 공고_id 가 아니라 announcement_id 다(2026-09-02 초기 시드,
+    //   db/*.sql 에는 CREATE 문이 없어 처음엔 없는 줄 알고 새로 만들려 했었다).
+    const existing = saved?.id
+      ? await pgSelect("ann_required_docs", `announcement_id=eq.${saved.id}&select=id&limit=1`)
+      : []
+    if (sections.length > 0 && existing.length === 0) {
       try {
         const r = extractDocuments(sections)
         docsResult = r
         if (r.ok && Array.isArray(r.docs) && saved?.id) {
-          // ⚠ 실제 테이블은 공고_id 가 아니라 announcement_id 다(2026-09-02 초기 시드,
-          //   db/*.sql 에는 CREATE 문이 없어 처음엔 없는 줄 알고 새로 만들려 했었다).
-          //   필수여부(boolean)는 기존 컬럼 그대로 두고, 구분(text, 4분류)을 병행해 채운다.
-          const existing = await pgSelect("ann_required_docs", `announcement_id=eq.${saved.id}&select=id&limit=1`)
-          if (existing.length === 0) {
+          // 필수여부(boolean)는 기존 컬럼 그대로 두고, 구분(text, 4분류)을 병행해 채운다.
+          {
             const docRows = r.docs.map((d) => ({
               announcement_id: saved.id,
               서류명: d.서류명,
@@ -162,7 +166,10 @@ async function main() {
   const workdir = mkdtempSync(join(tmpdir(), "iris-"))
   console.log(`작업 디렉터리: ${workdir}`)
 
-  const list = await fetchAll(1) // 페이지 1개(9건)만 우선 — 데모 규모에 맞춘다
+  // 접수 진행중 전부를 본다. 전에는 1페이지(9건)에서 끊겨 IRIS 가 NTIS 참고자료보다
+  // 적었다 — 본체가 참고보다 적으면 화면이 거짓말을 한다. 실측 2026-09-03: 총 15건 / 2페이지.
+  // 건수는 maxCount 로 막는다. 여기서 막지 않는다.
+  const list = await fetchAll()
   console.log(`접수 진행중 ${list.length}건 중 ${Math.min(maxCount, list.length)}건 처리`)
 
   for (const rec of list.slice(0, maxCount)) {

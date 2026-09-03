@@ -5,6 +5,7 @@ import type { 자격판정값 } from "@/components/announcement-board"
 import { CalendarBoard } from "@/components/calendar-board"
 import { ProjectBoard } from "@/components/project-board"
 import { TodoCard } from "@/components/todo-card"
+import { WatchlistStrip } from "@/components/watchlist-strip"
 import {
   getLedger,
   getExpenses,
@@ -16,6 +17,7 @@ import {
   getRndAnnouncements,
 } from "@/lib/queries"
 import { getProgramAnnouncements } from "@/lib/queries-programs"
+import { getWatchlistAnnouncements } from "@/lib/queries-budgeting"
 import { getLabels, categoryLabel } from "@/lib/labels"
 
 export const dynamic = "force-dynamic"
@@ -56,7 +58,7 @@ function 서울의_오늘() {
 
 export default async function DashboardPage() {
   // 동시에 부른다. 하나가 실패해도 나머지는 그려진다.
-  const [ledger, expenses, docs, board, calendar, undated, projects, labels, program, rnd] =
+  const [ledger, expenses, docs, board, calendar, undated, projects, labels, program, rnd, watch] =
     await Promise.all([
       getLedger(),
       getExpenses(),
@@ -70,6 +72,9 @@ export default async function DashboardPage() {
       // 자격판정만 쓰려고 부른다 — 공고 탐색과 같은 함수, 같은 값이다.
       getProgramAnnouncements(),
       getRndAnnouncements(),
+      // 「과제 계상」 화면을 없애면서(2026-09-04) 관심 공고 목록만 여기로 옮겼다 — 계상은
+      // 흐름의 끝이고 관심 공고는 처음이라 원래도 그 화면 맨 위에 있었다(watchlist-strip.tsx).
+      getWatchlistAnnouncements(),
     ])
 
   const today = 서울의_오늘()
@@ -83,15 +88,24 @@ export default async function DashboardPage() {
   const 판정: Record<number, 자격판정값 | undefined> = {}
   for (const r of [...program.rows, ...rnd.rows]) 판정[r.id] = r.자격판정
 
-  const errors = [ledger, expenses, docs, board, calendar, undated, projects]
+  // 공고 id → 출처. 과제 관리 카드가 사업유형이 빈 건(기업마당·K-Startup 출처는
+  // 실측상 사업유형을 거의 안 채운다)을 배지로 못 그릴 때, 공고 확인 카드와
+  // 같은 기준(출처)으로 대신 판정하도록 넘긴다.
+  const 공고출처: Record<number, string | undefined> = {}
+  for (const r of [...program.rows, ...rnd.rows]) 공고출처[r.id] = r.출처
+
+  const errors = [ledger, expenses, docs, board, calendar, undated, projects, watch]
     .map((r, i) => ({
       e: r.error,
-      what: ["대장", "집행", "서류함", "공고", "일정", "날짜 미정", "과제 관리"][i],
+      what: ["대장", "집행", "서류함", "공고", "일정", "날짜 미정", "과제 관리", "관심 공고"][i],
     }))
     .filter((x) => x.e)
 
   return (
-    <PageShell title="대시보드">
+    <PageShell
+      title="대시보드"
+      description="오늘 확인할 공고, 챙길 일정, 진행 중인 과제와 처리할 일을 한 화면에서 본다."
+    >
       {errors.map((x) => (
         <DbError key={x.what} what={x.what} error={x.e!} />
       ))}
@@ -105,13 +119,22 @@ export default async function DashboardPage() {
         error={board.error}
       />
 
+      {/* 관심 표시한 공고 — 마감이 지나가는 게 계상할 과제보다 급해서 새 기회 바로 다음에 둔다.
+          아무것도 관심 표시 안 했으면(대부분의 방문) 빈 카드로 자리만 차지하니 그때는 뺀다. */}
+      {watch.rows.length > 0 && <WatchlistStrip rows={watch.rows} />}
+
       {/* ② 언제 / 무엇을 하고 있나 + 내가 눌러야 넘어가는 것.
           오른쪽 열을 flex-col 로 묶는다 — 과제 관리(3줄, 내용만큼)+오늘 처리할 것(flex-1, 나머지)
           을 합친 세로 길이가 왼쪽 달력 카드와 자동으로 같아진다. */}
       <div className="grid items-stretch gap-4 lg:grid-cols-2">
         <CalendarBoard rows={calendar.rows} today={today} error={calendar.error} />
         <div className="flex flex-col gap-4">
-          <ProjectBoard rows={projects.rows} today={today} error={projects.error} />
+          <ProjectBoard
+            rows={projects.rows}
+            공고출처={공고출처}
+            today={today}
+            error={projects.error}
+          />
           <TodoCard
             갈래들={[
               {

@@ -172,35 +172,25 @@ try {
   }
   log(`${본문.includes("저장했습니다") ? "✓" : "✗"} 저장`)
 
-  // ⚠ 「인건비 비목으로 반영」은 budgets 를 덮어쓴다. 기본으로는 누르지 않는다 —
-  //   테스트가 시드 금액을 조용히 바꿔 놓으면 다음 사람이 원인을 못 찾는다(실제로 겪었다).
-  //   확인하려면 `node tests/e2e-round5.mjs --apply` 로 돌리고, 끝에 찍히는 복구 SQL 을 실행한다.
-  const 반영버튼있음 = await page.evaluate(() =>
-    [...document.querySelectorAll("button")].some((x) => x.textContent === "인건비 비목으로 반영"),
+  // ⚠ 2026-09-04 부터 **저장이 곧 반영**이다. 「인건비 비목으로 반영」 버튼은 없앴다
+  //   (사용자 지시 — 사람 손에 맡기면 개인별과 비목이 어긋난 채 남는다).
+  //   그래서 이 구간은 이제 `--apply` 없이도 **budgets 를 바꾼다.** 끝에 복구 SQL 을 찍는다.
+  //   자세한 단정은 `tests/e2e-personnel-auto.mjs` 가 한다. 여기서는 「저절로 됐는가」만 본다.
+  log(`${본문.includes("맞췄습니다") ? "✓" : "✗"} 저장하면서 비목 인건비까지 맞춘다(자동)`)
+  log(
+    `${
+      (await page.evaluate(() =>
+        [...document.querySelectorAll("button")].some((x) => x.textContent.includes("비목으로 반영")),
+      ))
+        ? "✗"
+        : "✓"
+    } 손으로 누르는 반영 버튼은 없다`,
   )
-  log(`${반영버튼있음 ? "✓" : "✗"} 「인건비 비목으로 반영」 버튼`)
-
-  if (process.argv.includes("--apply")) {
-    await page.evaluate(() => {
-      const b = [...document.querySelectorAll("button")].find(
-        (x) => x.textContent === "인건비 비목으로 반영",
-      )
-      b?.click()
-    })
-    for (let i = 0; i < 20; i++) {
-      await new Promise((r) => setTimeout(r, 500))
-      본문 = await page.evaluate(() => document.body.innerText)
-      if (본문.includes("반영했습니다")) break
-    }
-    const 반영줄 = 본문.split("\n").find((l) => l.includes("반영했습니다")) ?? ""
-    log(`${반영줄 ? "✓" : "✗"} 반영: ${반영줄.trim()}`)
-    console.log(
-      `\n  ⚠ 과제 ${안전과제} 의 인건비 배정액이 바뀌었다. 아래로 되돌릴 것:\n` +
-        `  ./db/psql.sh -c "update app.budgets set 배정액=13500000 where 과제_id=13 and 비목_대분류='PERSONNEL' and 재원구분='현물'"\n`,
-    )
-  } else {
-    log("… 반영 클릭은 건너뜀 (--apply 로 실행하면 눌러 본다)")
-  }
+  console.log(
+    `\n  ⚠ 과제 ${안전과제} 의 인건비 배정액이 바뀌었다(저장이 곧 반영이라 기본 실행에서도 바뀐다).\n` +
+      `  ./db/psql.sh -c "update app.budgets set 배정액=13500000 where 과제_id=13 and 비목_대분류='PERSONNEL' and 재원구분='현물'"\n` +
+      `  ./db/psql.sh -c "update app.budgets set 배정액=18015000 where 과제_id=13 and 비목_대분류='PERSONNEL' and 재원구분='출연금'"\n`,
+  )
 
   // 테스트가 만든 인원 줄은 지운다.
   await page.evaluate(() => {

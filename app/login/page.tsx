@@ -1,6 +1,6 @@
 "use client"
 
-import { useActionState, useState } from "react"
+import { useActionState, useEffect, useState } from "react"
 import {
   login,
   signup,
@@ -15,9 +15,31 @@ import { Label } from "@/components/ui/label"
 
 const initialState: ActionResult | null = null
 const initialFindState: FindUsernameResult | null = null
+const REMEMBER_ID_KEY = "rnd_remember_username"
 
 function LoginPanel() {
+  // 아이디 저장은 서버가 알 필요 없는 순수 클라이언트 기능이라 localStorage로 처리한다.
+  // 최초 SSR 렌더는 항상 빈 값이어야 하이드레이션이 안 어긋난다 — 그래서 useEffect에서
+  // 읽은 뒤 key를 바꿔 Input을 다시 마운트시켜 defaultValue를 반영한다.
+  const [savedUsername, setSavedUsername] = useState("")
+  const [rememberId, setRememberId] = useState(false)
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem(REMEMBER_ID_KEY)
+    if (saved) {
+      setSavedUsername(saved)
+      setRememberId(true)
+    }
+  }, [])
+
   const [state, formAction, pending] = useActionState<ActionResult | null, FormData>(async (_prev, formData) => {
+    const checked = formData.get("rememberId") === "on"
+    const username = String(formData.get("username") ?? "")
+    if (checked && username) {
+      window.localStorage.setItem(REMEMBER_ID_KEY, username)
+    } else {
+      window.localStorage.removeItem(REMEMBER_ID_KEY)
+    }
     return (await login(formData)) ?? null
   }, initialState)
 
@@ -25,11 +47,35 @@ function LoginPanel() {
     <form action={formAction} className="space-y-4">
       <div className="space-y-1.5">
         <Label htmlFor="username">아이디</Label>
-        <Input id="username" name="username" autoComplete="username" required autoFocus />
+        <Input
+          key={savedUsername}
+          id="username"
+          name="username"
+          autoComplete="username"
+          required
+          autoFocus
+          defaultValue={savedUsername}
+        />
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="password">비밀번호</Label>
         <Input id="password" name="password" type="password" autoComplete="current-password" required />
+      </div>
+      <div className="flex items-center justify-between text-sm text-muted-foreground">
+        <label className="flex items-center gap-1.5">
+          <input
+            type="checkbox"
+            name="rememberId"
+            checked={rememberId}
+            onChange={(e) => setRememberId(e.target.checked)}
+            className="size-3.5 rounded border-input"
+          />
+          아이디 저장
+        </label>
+        <label className="flex items-center gap-1.5">
+          <input type="checkbox" name="remember" className="size-3.5 rounded border-input" />
+          자동 로그인
+        </label>
       </div>
       {state && !state.ok && <p className="text-sm text-destructive">{state.error}</p>}
       <Button type="submit" className="w-full justify-center" size="lg" disabled={pending}>

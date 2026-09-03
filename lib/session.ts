@@ -14,7 +14,11 @@ if (!SECRET) {
 }
 
 export const SESSION_COOKIE = "rnd_session"
-export const SESSION_MAX_AGE = 60 * 60 * 12 // 12시간(초)
+
+/** 자동 로그인 미체크 — 이 시간이 지나면 다시 로그인해야 한다. */
+export const DEFAULT_SESSION_TTL_SEC = 60 * 60 * 12 // 12시간
+/** 자동 로그인 체크 — 브라우저를 닫아도 오래 유지된다. */
+export const REMEMBER_SESSION_TTL_SEC = 60 * 60 * 24 * 30 // 30일
 
 export type SessionPayload = {
   uid: number
@@ -22,6 +26,8 @@ export type SessionPayload = {
   name: string
   role: "member" | "admin"
   iat: number
+  /** 절대 만료 시각(초, epoch). 쿠키 Max-Age와 별개로 토큰 자체가 이 시각 이후엔 무효다. */
+  exp: number
 }
 
 function toBase64Url(bytes: ArrayBuffer | Uint8Array): string {
@@ -56,18 +62,24 @@ async function sign(body: string): Promise<string> {
   return toBase64Url(sig)
 }
 
-export async function createSessionCookie(user: {
-  id: number
-  username: string
-  name: string
-  role: "member" | "admin"
-}): Promise<string> {
+export async function createSessionCookie(
+  user: {
+    id: number
+    username: string
+    name: string
+    role: "member" | "admin"
+  },
+  opts?: { remember?: boolean },
+): Promise<string> {
+  const now = Math.floor(Date.now() / 1000)
+  const ttl = opts?.remember ? REMEMBER_SESSION_TTL_SEC : DEFAULT_SESSION_TTL_SEC
   const payload: SessionPayload = {
     uid: user.id,
     username: user.username,
     name: user.name,
     role: user.role,
-    iat: Math.floor(Date.now() / 1000),
+    iat: now,
+    exp: now + ttl,
   }
   const body = toBase64Url(new TextEncoder().encode(JSON.stringify(payload)))
   const sig = await sign(body)
@@ -94,7 +106,7 @@ export async function verifySessionCookie(value: string | undefined | null): Pro
 
   try {
     const payload = JSON.parse(new TextDecoder().decode(fromBase64Url(body))) as SessionPayload
-    if (Math.floor(Date.now() / 1000) - payload.iat > SESSION_MAX_AGE) return null
+    if (Math.floor(Date.now() / 1000) >= payload.exp) return null
     return payload
   } catch {
     return null

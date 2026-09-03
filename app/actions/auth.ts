@@ -4,7 +4,7 @@ import { cookies, headers } from "next/headers"
 import { redirect } from "next/navigation"
 import { db } from "@/lib/db"
 import { hashPassword, isPasswordStrongEnough, verifyPassword } from "@/lib/password"
-import { createSessionCookie, SESSION_COOKIE, SESSION_MAX_AGE } from "@/lib/session"
+import { createSessionCookie, SESSION_COOKIE, REMEMBER_SESSION_TTL_SEC } from "@/lib/session"
 import { checkRateLimit, resetRateLimit } from "@/lib/rate-limit"
 
 export type ActionResult = { ok: true } | { ok: false; error: string }
@@ -64,12 +64,13 @@ export async function login(formData: FormData): Promise<ActionResult> {
 
   resetRateLimit(userKey)
 
-  const cookie = await createSessionCookie({
-    id: data.id,
-    username: data.username,
-    name: data.name,
-    role: data.role,
-  })
+  // 자동 로그인 체크 시에만 쿠키에 Max-Age를 준다 — 안 주면 브라우저를 닫을 때
+  // 같이 지워지는 세션 쿠키가 된다(토큰 자체는 어느 쪽이든 12시간/30일로 만료된다).
+  const remember = formData.get("remember") === "on"
+  const cookie = await createSessionCookie(
+    { id: data.id, username: data.username, name: data.name, role: data.role },
+    { remember },
+  )
 
   const jar = await cookies()
   jar.set(SESSION_COOKIE, cookie, {
@@ -77,7 +78,7 @@ export async function login(formData: FormData): Promise<ActionResult> {
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    maxAge: SESSION_MAX_AGE,
+    ...(remember ? { maxAge: REMEMBER_SESSION_TTL_SEC } : {}),
   })
 
   // 로그인 시각 기록은 세션 발급 실패의 원인이 되면 안 되므로 실패해도 무시한다.

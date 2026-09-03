@@ -32,6 +32,10 @@ TOOLS = [
     "required_documents",
     "document_status",
     "calc_indirect",
+    # 바깥에서 공고를 받아오는 셋. 「새 공고 있어?」에 답하려면 조회만으로는 안 된다.
+    "collect_announcements",
+    "collect_progress",
+    "collection_status",
 ]
 ALLOWED = ",".join(f"mcp__rnd__{t}" for t in TOOLS)
 

@@ -29,6 +29,12 @@ CASES: list[tuple[str, dict]] = [
     ("eligibility_check", {"announcement_id": 1}),
     ("required_documents", {"announcement_id": 1}),
     ("calc_indirect", {"직접비": 88_000_000, "비율": 10.0}),
+    ("collection_status", {}),
+    ("collect_progress", {}),
+    # ⚠ 이 한 건만 실제로 바깥에 나간다. **NTIS 를 고른 이유는 claude 를 안 부르기 때문이다**
+    #   (오픈API → upsert 로 끝난다). IRIS·기업마당으로 시험하면 검증 한 번에 헤드리스
+    #   호출이 여러 번 나가 한도를 쓴다 — 규칙 §4.5 「도구 검증은 LLM 없이」.
+    ("collect_announcements", {"source": "NTIS", "limit": 3, "wait_seconds": 60}),
 ]
 
 

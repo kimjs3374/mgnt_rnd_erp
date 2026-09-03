@@ -268,9 +268,8 @@ export function EvidenceAttachments({
                                 }
                               >
                                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                  <span className="w-5 text-right text-[11px] text-muted-foreground tabular-nums">
-                                    {r.순번 || ""}
-                                  </span>
+                                  {/* 순번(실제 제출 폴더 번호)은 정렬에만 쓴다. 화면에 띄엄띄엄한
+                                      번호를 붙이면 빠진 서류가 있는 것처럼 읽힌다. */}
                                   <span
                                     className={
                                       붙은것.length

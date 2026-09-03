@@ -120,9 +120,8 @@ export function ExpenseEvidence({
           return (
             <li key={r.id}>
               <div className="flex flex-wrap items-center gap-x-2">
-                <span className="w-4 text-right text-[11px] tabular-nums text-muted-foreground">
-                  {r.순번 || ""}
-                </span>
+                {/* 순번(매그나텍 실제 제출 폴더 번호)은 정렬과 폴더 대조에만 쓰고 화면에는 안 낸다 —
+                    2·3·5·7 처럼 띄엄띄엄한 번호가 앞에 붙으면 빠진 서류가 있는 것처럼 읽힌다. */}
                 <span className={붙은것.length ? "text-muted-foreground" : "font-medium"}>
                   {붙은것.length ? "✓ " : "· "}
                   {r.서류명}

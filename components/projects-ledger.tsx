@@ -44,6 +44,28 @@ const 사업유형_짧게: Record<string, string> = {
   LOCAL_TP: "지자체·TP",
 }
 
+/**
+ * 단계별 줄 색 — **연하게**(사용자 지시, 2026-09-04). 종료(연빨강)는 이미 있던 색이고
+ * 여기에 신청중·수행중을 더한다. 「전체」 화면은 세 단계가 한 표에 섞여 있어서
+ * 「단계」 텍스트 열만으로는 죽 훑을 때 안 잡힌다 — 색으로 먼저 갈라 보이게 한다.
+ *   신청중 = 호박색(대기 느낌, 이 앱의 warning 톤과 같은 계열)
+ *   수행중 = 하늘색(지금 진행 중이라는 느낌, 경고·위험 계열과 겹치지 않게)
+ *   종료   = 연빨강(기존 그대로)
+ * ⚠ `TableRow` 기본 클래스에 `hover:bg-muted/50` 이 있다. `cn()`(tailwind-merge)을 거치므로
+ *   hover 색을 같이 안 주면 마우스를 올렸을 때 칠한 색이 사라진다(종료 줄에서 이미 겪은 함정).
+ */
+const 상태색: Record<string, string> = {
+  신청중: "bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900/60",
+  수행중: "bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/60 dark:hover:bg-sky-900/60",
+  종료: "bg-red-100 hover:bg-red-200 dark:bg-red-950 dark:hover:bg-red-900",
+}
+/** 범례에 쓰는 스와치 색(hover 뺀 배경만) + 이름. 순서가 곧 범례 순서다. */
+const 상태색_범례: { 상태: string; 스와치: string; 이름: string; 설명: string }[] = [
+  { 상태: "신청중", 스와치: "bg-amber-50 dark:bg-amber-950/60", 이름: "신청중", 설명: "결과를 기다리는 중입니다." },
+  { 상태: "수행중", 스와치: "bg-sky-50 dark:bg-sky-950/60", 이름: "수행중", 설명: "협약기간 안에서 계상·집행·정산을 합니다." },
+  { 상태: "종료", 스와치: "bg-red-100 dark:bg-red-950", 이름: "종료", 설명: "끝난 과제입니다 — 문제가 있다는 뜻이 아닙니다." },
+]
+
 const 전체연도 = "전체"
 const 모두 = "전체"
 const 보기단위 = [10, 20] as const
@@ -419,16 +441,14 @@ export function ProjectsLedger({
               {보이는.map((r) => {
                 // 끝난 과제는 줄 전체를 연빨강으로 칠한다(사용자 지시). 배지 하나로는
                 // 열 줄 중 어느 게 끝난 건지 훑어서 안 잡힌다.
-                // ⚠ `TableRow` 기본 클래스에 `hover:bg-muted/50` 이 있다. `cn()`(tailwind-merge)을
-                //    거치므로 `hover:bg-red-200` 을 같이 줘야 마우스를 올렸을 때 빨강이 안 사라진다.
                 const 끝남 = r.상태 === "종료"
+                // 단계마다 할 수 있는 일이 다르다 — 종료는 계상이 없고, 신청중은 정산이 없다.
+                const 계상가능 = !끝남
+                const 정산가능 = r.상태 !== "신청중"
                 return (
                   <TableRow
                     key={r.id}
-                    className={
-                      "h-[38px] text-[13px] " +
-                      (끝남 ? "bg-red-100 hover:bg-red-200 dark:bg-red-950 dark:hover:bg-red-900" : "")
-                    }
+                    className={"h-[38px] text-[13px] " + (상태색[r.상태] ?? "")}
                   >
                     {/* ⚠ `TableCell` 기본값이 `whitespace-nowrap` 이라 긴 과제명이 한 줄로
                         펼쳐지며 `w-[240px]` 을 무시하고 표를 밀어냈다(1,618px → 가로 스크롤).
@@ -496,18 +516,20 @@ export function ProjectsLedger({
                           「여기서 뭘 해야 하나」를 잘못 알려 준다(`components/project-tabs.tsx` 와 같은 표).
                             · 종료 → 계상 없음(계상은 협약·수행 중에 하는 일)
                             · 신청중 → 정산 없음(선정도 안 됐는데 정산할 것이 없다) */}
-                      {!끝남 && (
-                        <>
-                          <Link
-                            href={`/projects/${r.id}/budget`}
-                            className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                          >
-                            계상
-                          </Link>
-                          <span className="px-1.5 text-xs text-muted-foreground">·</span>
-                        </>
+                      {/* ⚠ 구분자는 **양쪽이 다 보일 때만** 찍는다. 계상 쪽에 붙여 두면
+                          정산이 빠지는 신청중 줄이 「계상 ·」로 끝난다(사용자 지적). */}
+                      {계상가능 && (
+                        <Link
+                          href={`/projects/${r.id}/budget`}
+                          className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                        >
+                          계상
+                        </Link>
                       )}
-                      {r.상태 !== "신청중" && (
+                      {계상가능 && 정산가능 && (
+                        <span className="px-1.5 text-xs text-muted-foreground">·</span>
+                      )}
+                      {정산가능 && (
                         <Link
                           href={`/projects/${r.id}/settlement`}
                           className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
@@ -559,12 +581,20 @@ export function ProjectsLedger({
         </div>
       )}
 
-      {/* 색이 무엇을 뜻하는지 화면에 적어 둔다. 안 적으면 빨강을 「문제 있는 과제」로 읽는다. */}
-      {보이는.some((r) => r.상태 === "종료") && (
-        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <span className="inline-block h-3 w-5 rounded-sm border bg-red-100 dark:bg-red-950" />
-          <span className="text-foreground">종료된 과제</span>입니다 — 나머지는 수행 중입니다.
-          문제가 있다는 뜻이 아니라 끝났다는 뜻입니다.
+      {/* 색이 무엇을 뜻하는지 화면에 적어 둔다. 안 적으면 빨강을 「문제 있는 과제」로 읽는다.
+          지금 보이는 줄에 실제로 있는 색만 적는다 — 단계 화면(신청중만·수행중만·종료만)에서는
+          한 가지 색만 뜨니 나머지 둘을 굳이 설명하지 않는다. */}
+      {상태색_범례.some((s) => 보이는.some((r) => r.상태 === s.상태)) && (
+        <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          {상태색_범례
+            .filter((s) => 보이는.some((r) => r.상태 === s.상태))
+            .map((s) => (
+              <span key={s.상태} className="flex items-center gap-1.5">
+                <span className={`inline-block h-3 w-5 rounded-sm border ${s.스와치}`} />
+                <span className="text-foreground">{s.이름}</span>
+                {s.설명}
+              </span>
+            ))}
         </p>
       )}
     </>

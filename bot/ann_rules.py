@@ -112,15 +112,43 @@ def apply_answers(company: dict, answers: list[dict]) -> tuple[dict, list[str]]:
 # ─────────────────────────────────────────────────────────────────────────────
 # 판정
 # ─────────────────────────────────────────────────────────────────────────────
+def 과거판정_찾기(ann: dict, 코퍼스: list[dict] | None = None) -> list[dict]:
+    """이 공고와 뜻이 비슷한 **과거 사람 판정**을 찾는다. 실패해도 판정을 막지 않는다.
+
+    질의로 사업명만 쓴다 — 실측(공고 452)에서 사업명 하나로 창업업력 불가 사례가
+    0.573·0.568·0.506 으로 정확히 올라왔다. 요약·지원분야를 붙이면 「중소기업」·「사업화」
+    같은 범용어가 섞여 유사도가 뭉개진다.
+
+    ⚠ 임베딩 서버가 죽어 있거나 느려도 규칙엔진은 그대로 돌아야 한다 — 예외를 삼키고
+      빈 목록을 준다(학습이 할 말이 없는 것과 같게 취급된다). 학습은 규칙을 돕는 층이지
+      규칙이 학습에 매달리면 안 된다.
+    """
+    사업명 = (ann.get("사업명") or "").strip()
+    if not 사업명:
+        return []
+    try:
+        import semantic_learn  # noqa: PLC0415 — 무거운 의존이 아니지만 배치 밖에선 안 쓴다
+        return semantic_learn.find_similar(
+            사업명, top_k=8, min_sim=ann_score.LEARN_MIN_SIM, rows=코퍼스,
+        )
+    except Exception as e:
+        print(f"  [학습] 과거 판정 조회 실패(무시하고 규칙만 쓴다): {type(e).__name__}: {e}",
+              file=sys.stderr)
+        return []
+
+
 def judge_one(ann: dict, company: dict, weights: list[dict],
-              lexicon: list[dict], answers: list[dict] | None = None) -> dict:
+              lexicon: list[dict], answers: list[dict] | None = None,
+              판정코퍼스: list[dict] | None = None) -> dict:
     c, 얹은것 = apply_answers(company, answers or [])
     t0 = time.monotonic()
-    r = ann_score.judge(ann, c, weights=weights, lexicon=lexicon)
+    r = ann_score.judge(ann, c, weights=weights, lexicon=lexicon,
+                        과거판정=과거판정_찾기(ann, 판정코퍼스))
     if r.get("ok"):
         r["ms"] = int((time.monotonic() - t0) * 1000)
         if 얹은것:
-            r["판정경로"] = "규칙+사람"
+            # 경로를 덮어쓰지 않고 덧붙인다 — 학습이 판정을 바꿨는지도 같이 남아야 한다.
+            r["판정경로"] = f"{r.get('판정경로', '규칙')}+사람"
             r["근거"] = list(r["근거"]) + [f"사람 답변 적용: {', '.join(얹은것)}"]
         r["질문"] = ann_score.questions(r, ann)
     return r
@@ -284,18 +312,31 @@ def batch(limit: int | None = None, save: bool = True) -> dict:
             rest.delete("ann_rule_scores", {"announcement_id": a["id"], "엔진버전": F.ENGINE_VERSION})
             rest.delete("ann_features", {"announcement_id": a["id"], "엔진버전": F.ENGINE_VERSION})
 
+    # 과거 판정 코퍼스는 한 번만 읽는다 — 공고마다 다시 읽으면 REST 호출이 공고 수만큼 늘어난다.
+    # 조회 자체가 실패해도 배치는 돈다(학습은 규칙을 돕는 층이다).
+    try:
+        import semantic_learn  # noqa: PLC0415
+        판정코퍼스 = semantic_learn.corpus()
+        print(f"  학습 코퍼스: 과거 판정 {len(판정코퍼스)}건")
+    except Exception as e:
+        판정코퍼스 = []
+        print(f"  ⚠ 학습 코퍼스를 못 읽었다(규칙만 쓴다): {type(e).__name__}: {e}")
+
     통계: dict[str, int] = {}
+    학습적용 = 0
     실패: list[str] = []
     t0 = time.monotonic()
     for i, ann in enumerate(anns, 1):
         try:
-            r = judge_one(ann, company, weights, lexicon, answers)
+            r = judge_one(ann, company, weights, lexicon, answers, 판정코퍼스=판정코퍼스)
             if not r.get("ok"):
                 실패.append(f"[{ann['id']}] {r.get('error')}")
                 continue
             if save:
                 save_one(int(ann["id"]), r)
             통계[r["판정"]] = 통계.get(r["판정"], 0) + 1
+            if r.get("학습근거"):
+                학습적용 += 1
         except Exception as e:                       # 한 건 실패로 배치를 멈추지 않는다
             실패.append(f"[{ann['id']}] {type(e).__name__}: {e}")
         if i % 100 == 0:
@@ -303,6 +344,7 @@ def batch(limit: int | None = None, save: bool = True) -> dict:
 
     초 = round(time.monotonic() - t0, 1)
     return {"ok": True, "대상": len(anns), "마감제외": len(마감스킵), "판정": 통계,
+            "학습적용": 학습적용, "학습코퍼스": len(판정코퍼스),
             "실패": 실패[:20], "실패수": len(실패), "초": 초, "llm_호출": 0,
             "엔진버전": F.ENGINE_VERSION}
 

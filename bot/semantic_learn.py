@@ -153,7 +153,20 @@ def fill_embedding(row_id: int, text: str) -> None:
               file=sys.stderr)
 
 
-def find_similar(text: str, top_k: int = 5, min_sim: float = 0.40) -> list[dict[str, Any]]:
+def corpus() -> list[dict[str, Any]]:
+    """판정 코퍼스를 한 번만 읽는다 — 배치(ann_rules.batch)가 공고마다 다시 읽지 않게.
+
+    find_similar() 에 그대로 넘기면 된다. 코퍼스는 수백 건 규모라 통째로 들고 있어도 된다
+    (벡터 DB 를 쓰지 않는다는 전제가 여기서도 그대로다)."""
+    return rest.select(
+        "judgment_semantic",
+        f"select=id,announcement_id,텍스트,임베딩,임베딩모델,판정,특징키,사유,답변자,created_at"
+        f"&임베딩모델=eq.{MODEL_NAME}&order=id.desc&limit=2000",
+    )
+
+
+def find_similar(text: str, top_k: int = 5, min_sim: float = 0.40,
+                 rows: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     """의미가 비슷한 과거 판정 사례를 찾는다. 정답을 대신 내리지 않는다 — 참고 사례만 준다.
 
     ⚠ min_sim 기본값(0.40)은 실측으로 잡았다(2026-09-04). 처음엔 다국어 범용 모델
@@ -167,11 +180,8 @@ def find_similar(text: str, top_k: int = 5, min_sim: float = 0.40) -> list[dict[
     text = (text or "").strip()
     if not text:
         return []
-    rows = rest.select(
-        "judgment_semantic",
-        f"select=id,announcement_id,텍스트,임베딩,임베딩모델,판정,특징키,사유,답변자,created_at"
-        f"&임베딩모델=eq.{MODEL_NAME}&order=id.desc&limit=2000",
-    )
+    if rows is None:
+        rows = corpus()
     if not rows:
         return []
 

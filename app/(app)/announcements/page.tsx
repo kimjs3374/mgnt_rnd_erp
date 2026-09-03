@@ -1,4 +1,4 @@
-import { AnnouncementsExplorer } from "@/components/announcements-explorer"
+import { AnnouncementsView } from "@/components/announcements-view"
 import { SyncAnnouncementsButton } from "@/components/sync-announcements-button"
 import { getProgramAnnouncements } from "@/lib/queries-programs"
 
@@ -41,7 +41,7 @@ export default async function AnnouncementsPage() {
         : `${출처별} 실제 수집한 공고 ${rows.length}건입니다. 회사 프로필이 비어 있어 대조할 기준이 없습니다 — 「회사 > 회사 프로필」에서 지역·지원대상을 채우면 자격판정이 살아납니다.`
 
   return (
-    <AnnouncementsExplorer
+    <AnnouncementsView
       title="공고 탐색 (지원사업)"
       description="기업마당·K-Startup 공식 오픈API로 공고를 모아, 회사 프로필의 지역·지원대상과 대조해 우리가 신청할 수 있는 것을 가린다."
       rows={rows}

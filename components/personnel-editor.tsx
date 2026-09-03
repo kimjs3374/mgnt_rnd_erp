@@ -9,6 +9,7 @@ import {
   deletePersonnelRow,
 } from "@/app/actions/personnel"
 import { 총액, 급여총액, 재원별합계, 참여율초과, type PersonnelRow } from "@/lib/personnel"
+import { 참여종료일계산 } from "@/lib/participation"
 
 /**
  * 개인별 인건비 계상 — 연차별로 사람마다 한 줄.
@@ -400,7 +401,15 @@ export function PersonnelEditor({
                     step={1}
                     className={num}
                     value={String(r.참여개월수 ?? 0)}
-                    onChange={(e) => 수정(r, { 참여개월수: Number(e.target.value) || 0 })}
+                    onChange={(e) => {
+                      const n = Number(e.target.value) || 0
+                      // 개월수를 고치면 종료일도 따라온다. **직접 넣은 종료일은 덮지 않는다**
+                      // (`?? r.참여종료일`) — 계산이 안 되는 값(비정수 개월수)도 그대로 둔다.
+                      수정(r, {
+                        참여개월수: n,
+                        참여종료일: 참여종료일계산(r.참여시작일, n) ?? r.참여종료일,
+                      })
+                    }}
                     aria-label="참여개월수"
                   />
                 </td>
@@ -409,7 +418,15 @@ export function PersonnelEditor({
                     type="date"
                     className={cell}
                     value={r.참여시작일 ?? ""}
-                    onChange={(e) => 수정(r, { 참여시작일: e.target.value || null })}
+                    onChange={(e) => {
+                      const v = e.target.value || null
+                      // 시작일 + 개월수 → 종료일. 종료일 = 시작일 + 개월수 − 1일이다
+                      // (2022-06-01 + 24개월 = 2024-05-31 — 과제 13 협약기간과 일치).
+                      수정(r, {
+                        참여시작일: v,
+                        참여종료일: 참여종료일계산(v, r.참여개월수) ?? r.참여종료일,
+                      })
+                    }}
                     aria-label="참여시작일"
                   />
                 </td>

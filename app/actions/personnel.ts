@@ -5,6 +5,8 @@ import { db } from "@/lib/db"
 import { 재원별합계, type PersonnelRow } from "@/lib/personnel"
 // 인건비 산출은 계상의 일부다 — 확정된 과제는 여기도 잠긴다.
 import { 계상잠김 } from "@/app/actions/budget-confirm"
+// 국책 과제 참여율 합계 100% 초과 판정 — **다른 과제까지 읽어야** 하므로 조회 계층에 있다.
+import { 국책참여율초과 } from "@/lib/queries-participation"
 
 /**
  * 개인별 인건비 계상 — 저장 · 삭제 · 인건비 비목 반영.
@@ -64,6 +66,15 @@ export async function savePersonnelRows(과제_id: number, rows: 입력[]): Prom
         return { ok: false, error: `${r.표시명}: 재원구분은 현금·현물 중 하나여야 합니다.` }
       }
     }
+
+    // ★ **국책 과제 참여율 합계 100% 초과를 막는다**(2026-09-04 사용자 지시).
+    //   과제 하나만 보고는 판정할 수 없다 — 한 사람이 여러 과제에 걸쳐 있고, 그 합이 100% 를
+    //   넘으면 정산에서 반려된다. 그래서 **다른 과제까지 읽어** 기간이 겹치는 것만 더한다.
+    //   민간과제는 합산하지 않는다(`lib/participation.ts` 의 `국책인가`).
+    //   ⚠ 화면에서만 막으면 우회된다. 판정은 서버에 둔다.
+    //   조회가 실패하면 빈 배열이 와서 저장을 막지 않는다 — 조회 실패로 일을 세우지 않는다.
+    const 참여율초과건 = await 국책참여율초과(과제_id, rows)
+    if (참여율초과건.length) return { ok: false, error: 참여율초과건[0].메시지 }
 
     // 새 줄과 기존 줄을 나눠 넣는다. upsert 로 한 번에 하면 id 없는 줄에 null 이 들어가 터진다.
     const 기존 = rows.filter((r) => r.id != null)
@@ -125,7 +136,9 @@ export async function deletePersonnelRow(과제_id: number, id: number): Promise
     if (error) return { ok: false, error: error.message }
 
     // 지운 뒤에도 맞춘다 — 사람이 빠졌으면 비목 인건비도 그만큼 줄어야 한다.
-    const 반영 = await 인건비동기화(과제_id)
+    // ★ `빈것도반영`: **지우기는 사람의 명시적인 행동**이라 합계가 0 이 되면 0 으로 반영한다.
+    //   저장 경로는 그렇지 않다(아직 덜 적은 줄일 수 있다) — 아래 `인건비동기화` 주석 참고.
+    const 반영 = await 인건비동기화(과제_id, { 빈것도반영: true })
 
     revalidatePath(`/projects/${과제_id}/budget`)
     revalidatePath(`/projects/${과제_id}`)
@@ -150,21 +163,30 @@ export async function deletePersonnelRow(과제_id: number, id: number): Promise
  * ⚠ 개인별 줄이 **하나도 없으면 비목을 건드리지 않는다.** 12개 과제 중 개인별 계상을 쓰는 건
  *   일부뿐이고, 안 쓰는 과제의 인건비를 0 으로 밀어 버리면 그게 사고다.
  *
+ * ★ 단 **`빈것도반영: true`(삭제 경로)면 0 도 반영한다.**(2026-09-04 사용자 지적)
+ *   사람을 다 지웠는데 비목 인건비가 그대로 남아 있으면, 그 표가 협약·정산과 대조될 때
+ *   그대로 거짓말이 된다. 「다 지웠다」와 「아직 덜 적었다」는 값으로는 구별되지 않지만
+ *   **경로로는 구별된다** — 지우기는 사람의 명시적인 행동이다.
+ *   0 으로 만들 때도 **줄은 남긴다**(아래 주석) — 줄어든 것이 눈에 보여야 한다.
+ *
  * ⚠ 개인별에서 사라진 재원은 **0 으로 남긴다. 줄을 지우지 않는다.**
  *   지우면 「왜 줄었는지」를 아무도 못 보고, 0 이면 화면에 남아 사람이 눈으로 확인한다.
  */
-async function 인건비동기화(과제_id: number): Promise<Record<string, number> | null> {
+async function 인건비동기화(
+  과제_id: number,
+  { 빈것도반영 = false }: { 빈것도반영?: boolean } = {},
+): Promise<Record<string, number> | null> {
   const { data, error } = await db.from("personnel_costs").select("*").eq("과제_id", 과제_id)
   if (error) return null
   const rows = (data ?? []) as unknown as PersonnelRow[]
-  if (!rows.length) return null // 개인별이 없으면 손대지 않는다
 
   const 합 = 재원별합계(rows) // 연차 인자 없음 = 전 연차 합계
+  const 비었다 = !rows.length || Object.values(합).every((v) => !v || v <= 0)
 
-  // ⚠ 합계가 0 이면 손대지 않는다. 이름만 적어 두고 참여율·월급여를 아직 안 넣은 줄이 흔한데
-  //   (실제로 그런 행이 있었다), 그걸 근거로 비목 인건비를 0 으로 밀면 그게 사고다.
-  //   「사람을 다 지웠으니 0」과 「아직 덜 적었다」를 구별할 방법이 없어 안전한 쪽을 고른다.
-  if (Object.values(합).every((v) => !v || v <= 0)) return null
+  // ⚠ 합계가 0 인데 저장 경로면 손대지 않는다. 이름만 적어 두고 참여율·월급여를 아직 안 넣은
+  //   줄이 흔한데(실제로 그런 행이 있었다), 그걸 근거로 비목 인건비를 0 으로 밀면 사고다.
+  //   삭제 경로(`빈것도반영`)는 다르다 — 사람이 지운 것이니 0 이 사실이다.
+  if (비었다 && !빈것도반영) return null
 
   const { data: 기존 } = await db.from("budgets").select("*").eq("과제_id", 과제_id)
   const 기존재원 = new Set(
@@ -176,12 +198,18 @@ async function 인건비동기화(과제_id: number): Promise<Record<string, num
   // ⚠ 금액이 0 인 재원을 **새로 만들지 않는다.** `재원별합계` 는 출연금·현금·현물 세 키를
   //   0 으로 초기화해 돌려주므로, 그대로 쓰면 쓰지도 않는 「현금 0원」 줄이 표에 생긴다.
   //   이미 있던 재원은 0 이라도 남긴다 — 줄어든 것이 눈에 보여야 한다.
-  const 재원들 = new Set<string>([
-    ...Object.entries(합)
-      .filter(([, v]) => v > 0)
-      .map(([k]) => k),
-    ...기존재원,
-  ])
+  // 비었으면 **이미 있던 인건비 줄만** 0 으로 만든다. 없던 재원 줄을 새로 만들지 않는다 —
+  // 쓰지도 않는 「현물 0원」 줄이 표에 생기면 그게 또 오해를 만든다.
+  const 재원들 = new Set<string>(
+    비었다
+      ? [...기존재원]
+      : [
+          ...Object.entries(합)
+            .filter(([, v]) => v > 0)
+            .map(([k]) => k),
+          ...기존재원,
+        ],
+  )
   const 넣을것 = [...재원들].map((재원) => ({
     과제_id,
     비목_대분류: "PERSONNEL",
@@ -190,7 +218,8 @@ async function 인건비동기화(과제_id: number): Promise<Record<string, num
     // 인건비에는 한도비율이 없다(연구수당·간접비만 있다). null 로 둬야 검증이 오해하지 않는다.
     한도비율: null,
   }))
-  if (!넣을것.length) return null
+  // 지울 것도 없고 넣을 것도 없으면(개인별 0행 + 기존 인건비 줄 0개) 할 일이 없다.
+  if (!넣을것.length) return 비었다 ? {} : null
 
   const { error: upErr } = await db
     .from("budgets")

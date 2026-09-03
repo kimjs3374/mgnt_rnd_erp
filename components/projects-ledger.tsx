@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import * as React from "react"
 import Link from "next/link"
@@ -24,6 +24,8 @@ import {
 import type { ProjectRow } from "@/lib/queries"
 import { 연차수, 현재연차, 기간표기, 연차연도 } from "@/lib/fiscal-year"
 import { ProjectLeadCell } from "@/components/project-lead-cell"
+import { 종료로표시 } from "@/app/actions/project-stage"
+import type { 과제단계 } from "@/lib/project-stage"
 
 // lib/queries.ts 는 service_role 로 여는 lib/db 를 갖고 있어 클라이언트 번들에 넣지 않는다
 // (CLAUDE.md §3.5). 타입만 가져오고 won() 은 여기서 다시 만든다 — programs-table.tsx 와 같은 이유.
@@ -55,8 +57,17 @@ export function ProjectsLedger({
   rows,
   책임자,
   로그인,
+  단계,
+  밀린종료 = [],
 }: {
   rows: ProjectRow[]
+  /** 이 화면이 보여주는 단계. 제목·빈 화면 문구가 여기 맞춰 갈린다. */
+  단계?: 과제단계
+  /**
+   * 수행기간은 끝났는데 저장된 `상태` 가 아직 「수행중」인 과제 id.
+   * 사업종료 화면에서만 넘어온다 — 화면이 짚어 주고 사람이 눌러 맞춘다.
+   */
+  밀린종료?: number[]
   /**
    * 과제 id → 연구책임자 표시명. `app.projects` 가 `supabase_admin` 소유라 컬럼을 못 붙여
    * 옆 테이블(`app.project_leads`)에 있다(`db/104_project_lead.sql`). 그래서 따로 받는다.
@@ -66,7 +77,6 @@ export function ProjectsLedger({
 }) {
   const [search, setSearch] = React.useState("")
   const [연도, set연도] = React.useState<string>(전체연도)
-  const [종료숨김, set종료숨김] = React.useState(false)
   const [크기, set크기] = React.useState<number>(20)
   const [쪽, set쪽] = React.useState(1)
 
@@ -81,19 +91,18 @@ export function ProjectsLedger({
     const q = search.trim().toLowerCase()
     const y = 연도 === 전체연도 ? null : Number(연도)
     return rows.filter((r) => {
-      if (종료숨김 && r.상태 === "종료") return false
       if (y != null && !연차연도(r.시작일, r.종료일).includes(y)) return false
       if (!q) return true
       // 연구책임자도 검색에 넣는다 — 「홍길동이 맡은 과제」를 찾는 게 이 열을 붙인 이유다.
       return [r.과제명, r.과제코드, r.부처, r.전문기관, r.사업명, 책임자[r.id]]
         .some((v) => (v ?? "").toLowerCase().includes(q))
     })
-  }, [rows, search, 연도, 종료숨김, 책임자])
+  }, [rows, search, 연도, 책임자])
 
   // 조건이 바뀌면 1쪽으로 돌아간다. 3쪽을 보다 걸러서 1쪽밖에 없으면 빈 화면이 뜬다.
   React.useEffect(() => {
     set쪽(1)
-  }, [search, 연도, 종료숨김, 크기])
+  }, [search, 연도, 크기])
 
   const 쪽수 = 크기 === 전체보기 ? 1 : Math.max(1, Math.ceil(필터된.length / 크기))
   const 지금쪽 = Math.min(쪽, 쪽수)
@@ -102,15 +111,23 @@ export function ProjectsLedger({
   const 처음 = 필터된.length === 0 ? 0 : (지금쪽 - 1) * (크기 === 전체보기 ? 0 : 크기) + 1
   const 끝 = 크기 === 전체보기 ? 필터된.length : Math.min(지금쪽 * 크기, 필터된.length)
 
-  const 필터걸림 = search.trim() !== "" || 연도 !== 전체연도 || 종료숨김
+  const 필터걸림 = search.trim() !== "" || 연도 !== 전체연도
   function 초기화() {
     setSearch("")
     set연도(전체연도)
-    set종료숨김(false)
     set쪽(1)
   }
 
-  const 종료수 = rows.filter((r) => r.상태 === "종료").length
+  // 수행기간이 끝났는데 저장된 상태가 아직 「수행중」인 건 맞추기.
+  const [맞춤중, 맞춤시작] = React.useTransition()
+  const [맞춤말, set맞춤말] = React.useState<string | null>(null)
+  function 종료로맞추기() {
+    set맞춤말(null)
+    맞춤시작(async () => {
+      const r = await 종료로표시(밀린종료)
+      set맞춤말(r.ok ? `${r.바뀐수}건을 종료로 기록했습니다.` : (r.error ?? "바꾸지 못했습니다."))
+    })
+  }
 
   return (
     <>
@@ -137,17 +154,10 @@ export function ProjectsLedger({
           </SelectContent>
         </Select>
 
-        {/* 종료 숨김 — 누른 상태가 눈에 보여야 한다. 안 보이면 「과제가 사라졌다」가 된다. */}
-        <Button
-          type="button"
-          variant={종료숨김 ? "default" : "outline"}
-          className="h-7 text-[12.8px]"
-          aria-pressed={종료숨김}
-          onClick={() => set종료숨김((v) => !v)}
-          title={`종료된 과제 ${종료수}건`}
-        >
-          {종료숨김 ? `종료 숨김 (${종료수}건)` : "종료 숨기기"}
-        </Button>
+        {/* ⚠ 「종료 숨기기」 토글이 여기 있었는데 **뺐다**(2026-09-03).
+            화면이 신청중 · 수행중 · 사업종료로 나뉘면서 한 화면에 종료와 수행중이 섞이지 않는다 —
+            수행중 화면에선 누를 게 없고 사업종료 화면에선 누르면 목록이 통째로 빈다.
+            **숨기는 일은 이제 단계 칩이 한다.** 아무 일도 안 하는 버튼을 화면에 두지 않는다. */}
 
         <Select value={String(크기)} onValueChange={(v) => set크기(Number(v))}>
           <SelectTrigger size="sm" className="h-7 w-24 text-[12.8px]" aria-label="한 쪽에 볼 개수">
@@ -180,20 +190,54 @@ export function ProjectsLedger({
         )}
       </div>
 
+      {/* 수행기간이 끝났는데 저장된 상태가 아직 수행중인 건. 목록은 이미 여기로 옮겨 놨고,
+          **저장값을 맞추는 것은 사람이 누른다** — 조회가 조용히 DB 를 고치면 기록이 사라진다. */}
+      {밀린종료.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-[var(--warning-fg)]/30 bg-[var(--warning)] px-3 py-2 text-xs text-[var(--warning-fg)]">
+          <span>
+            수행기간이 끝났는데 상태가 아직 「수행중」인 과제가 {밀린종료.length}건 있습니다.
+            목록에는 이미 사업종료로 옮겨 두었습니다.
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            className="ml-auto h-7 bg-card text-[12.8px]"
+            disabled={맞춤중}
+            onClick={종료로맞추기}
+          >
+            {맞춤중 ? "기록 중…" : `${밀린종료.length}건 종료로 기록`}
+          </Button>
+        </div>
+      )}
+
+      {/* ⚠ 결과 문구는 **배너 밖**에 둔다. 다 맞추고 나면 배너가 사라지는데, 문구가 그 안에 있으면
+          같이 사라져서 「눌렀는데 아무 말도 없다」가 된다. 실제로 그렇게 만들어 놨다가 고쳤다. */}
+      {맞춤말 && <p className="px-1 text-xs text-muted-foreground">{맞춤말}</p>}
+
       <Card>
         {rows.length === 0 ? (
           <EmptyState
-            title="선정된 과제가 없습니다"
-            hint="공고에서 지원을 등록하고 선정되면 여기에 쌓입니다."
+            title={
+              단계 === "신청중"
+                ? "신청 중인 과제가 없습니다"
+                : 단계 === "사업종료"
+                  ? "종료된 과제가 없습니다"
+                  : "수행 중인 과제가 없습니다"
+            }
+            hint={
+              단계 === "신청중"
+                ? "공고 탐색에서 [지원 등록]을 누르면 여기에 생깁니다. 선정을 기록하면 수행중으로 넘어갑니다."
+                : 단계 === "사업종료"
+                  ? "수행기간이 끝나면 저절로 여기로 넘어옵니다."
+                  : "공고에서 지원을 등록하고 선정되면 여기에 쌓입니다."
+            }
           />
         ) : 필터된.length === 0 ? (
           <EmptyState
             title="조건에 맞는 과제가 없습니다"
-            hint={
-              종료숨김 && rows.every((r) => r.상태 === "종료")
-                ? "지금 있는 과제가 전부 종료된 건입니다. 「종료 숨김」을 풀어 보세요."
-                : "검색어나 연도를 바꿔 보세요."
-            }
+            hint={`검색어나 연도를 바꿔 보세요. 다른 단계에 있는 과제라면 위 ${
+              단계 === "수행중" ? "「신청중」·「사업종료」" : "단계 칩"
+            }에서 찾습니다.`}
           />
         ) : (
           <Table>

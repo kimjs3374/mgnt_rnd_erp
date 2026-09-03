@@ -17,10 +17,11 @@ import { 사업자번호_숫자만, 사업자번호_점검 } from "@/lib/vendor-
  * 내려주는 것도 60초 서명 URL 뿐이다 — 공개 주소가 존재하지 않는다.
  *
  * ⚠ 계좌번호를 마스킹하지 않는다(2026-09-03 사용자 결정 — 내부 인원이 공유하는 화면).
- *   ⚠ **로그인 게이트는 아직 붙지 않았다**(`middleware.ts`·`app/login` 없음 — 실측 09-03).
- *   그래서 지금 남는 보호막은 **비공개 버킷 + 60초 서명 URL** 하나다(공개 주소가 없다).
  *   화면 값(계좌번호·업체명)은 페이지를 여는 사람이면 그대로 본다.
  *   **실제 통장사본을 올리면 그건 실데이터다**(CLAUDE.md §5-5) — 게이트가 붙기 전에는 비워 둔다.
+ *
+ * ⚠ 권한(2026-09-04) — 업체 대장은 마스터 데이터라 등록·수정·서류 업로드·삭제는 관리자 이상만.
+ *   다운로드는 조회라 전 등급에 연다.
  */
 
 export type VendorActionResult = {
@@ -45,6 +46,11 @@ const t = (v: FormDataEntryValue | null) => {
  */
 export async function saveVendor(formData: FormData): Promise<VendorActionResult> {
   try {
+    const who = await getCurrentUser()
+    if (!who.인증 || (who.role !== "admin" && who.role !== "super_admin")) {
+      return { ok: false, error: "업체 등록·수정은 관리자 이상만 할 수 있습니다." }
+    }
+
     const idRaw = formData.get("id")
     const id = idRaw ? Number(idRaw) : null
     const 업체명 = String(formData.get("업체명") ?? "").trim()
@@ -103,6 +109,11 @@ function 중복이면(msg: string, 사업자번호: string | null): string {
  */
 export async function uploadVendorDocuments(formData: FormData): Promise<VendorActionResult> {
   try {
+    const who = await getCurrentUser()
+    if (!who.인증 || (who.role !== "admin" && who.role !== "super_admin")) {
+      return { ok: false, error: "업체 서류 업로드는 관리자 이상만 할 수 있습니다." }
+    }
+
     const 업체_id = Number(formData.get("업체_id") ?? 0)
     if (!업체_id) return { ok: false, error: "어느 업체의 서류인지 알 수 없습니다." }
 
@@ -119,7 +130,6 @@ export async function uploadVendorDocuments(formData: FormData): Promise<VendorA
       .filter((f): f is File => f instanceof File && f.size > 0)
     if (!files.length) return { ok: false, error: "파일을 고르세요." }
 
-    const who = await getCurrentUser()
     const 실패: string[] = []
     let 올린수 = 0
 
@@ -178,7 +188,7 @@ export async function uploadVendorDocuments(formData: FormData): Promise<VendorA
   }
 }
 
-/** 다운로드 — 60초 서명 URL. 버킷이 비공개라 공개 주소가 없다. */
+/** 다운로드 — 60초 서명 URL. 버킷이 비공개라 공개 주소가 없다. 조회라 전 등급에 연다. */
 export async function getVendorDownloadUrl(id: number): Promise<VendorActionResult> {
   try {
     const { data, error } = await db.from("vendor_documents").select("*").eq("id", id).limit(1)
@@ -201,6 +211,11 @@ export async function getVendorDownloadUrl(id: number): Promise<VendorActionResu
 /** 서류 삭제 — 저장소와 DB 를 같이 지운다. 저장소만 남으면 아무도 못 찾는 쓰레기가 된다. */
 export async function deleteVendorDocument(id: number): Promise<VendorActionResult> {
   try {
+    const who = await getCurrentUser()
+    if (!who.인증 || (who.role !== "admin" && who.role !== "super_admin")) {
+      return { ok: false, error: "업체 서류 삭제는 관리자 이상만 할 수 있습니다." }
+    }
+
     const { data, error } = await db.from("vendor_documents").select("*").eq("id", id).limit(1)
     if (error) return { ok: false, error: error.message }
     const f = (data ?? [])[0] as { storage_path?: string } | undefined
@@ -226,6 +241,11 @@ export async function deleteVendorDocument(id: number): Promise<VendorActionResu
  */
 export async function deleteVendor(id: number): Promise<VendorActionResult> {
   try {
+    const who = await getCurrentUser()
+    if (!who.인증 || (who.role !== "admin" && who.role !== "super_admin")) {
+      return { ok: false, error: "업체 삭제는 관리자 이상만 할 수 있습니다." }
+    }
+
     const { data: v, error: vErr } = await db.from("v_vendor_status").select("*").eq("id", id).limit(1)
     if (vErr) return { ok: false, error: vErr.message }
     const 업체 = (v ?? [])[0] as { 집행건수?: number; 업체명?: string } | undefined

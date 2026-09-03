@@ -24,6 +24,8 @@ import type { 과제상태 } from "@/lib/project-entry"
  *
  * 출처는 `app.project_entry_log` 에 남긴다(`db/99`) — 어느 줄이 사람이 옮겨 담은 것인지
  * 나중에 못 대면 그 줄은 근거가 없는 줄이다(CLAUDE.md §6-1).
+ *
+ * ⚠ 권한(2026-09-04) — 마스터 데이터(과제 신규 등록)는 관리자 이상만. 일반회원은 조회만.
  */
 
 export type CreateResult = {
@@ -69,6 +71,12 @@ async function 임시코드() {
 
 export async function createProject(formData: FormData): Promise<CreateResult> {
   try {
+    // 마스터 데이터 등록은 관리자 이상만. who는 아래 출처 기록(등록자)에도 그대로 쓴다.
+    const who = await getCurrentUser()
+    if (!who.인증 || (who.role !== "admin" && who.role !== "super_admin")) {
+      return { ok: false, error: "관리자 이상만 과제를 등록할 수 있습니다." }
+    }
+
     const 과제명 = 글자(formData.get("과제명"))
     const 시작일 = 글자(formData.get("시작일"))
     const 종료일 = 글자(formData.get("종료일"))
@@ -153,7 +161,6 @@ export async function createProject(formData: FormData): Promise<CreateResult> {
 
     // 출처를 남긴다. 여기서 실패해도 과제는 이미 있으므로 되돌리지 않는다 —
     // 대장 한 줄이 사라지는 것보다 출처 한 줄이 비는 편이 낫다. 대신 주의로 말한다.
-    const who = await getCurrentUser()
     const { error: logErr } = await db.from("project_entry_log").insert({
       과제_id: 만든것.id,
       등록경로: "수기입력",

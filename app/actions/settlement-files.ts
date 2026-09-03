@@ -19,6 +19,9 @@ import { 기간끝났나, 오늘_KST } from "@/lib/settlement-types"
  *
  * ⚠ 실제 정산 파일에는 계좌·인건비·개인정보가 들어 있다(CLAUDE.md §5-5).
  *   로그인 게이트가 없는 지금은 비공개 버킷이 유일한 보호막이다. 제출·시연 상태에서는 비워 둔다.
+ *
+ * ⚠ 권한(2026-09-04) — 정산 제출(업로드)·삭제는 승인성 조작이라 관리자 이상만 한다.
+ *   다운로드는 조회라 전 등급에 연다.
  */
 
 export type SettlementFileResult = {
@@ -55,6 +58,11 @@ export async function uploadSettlementDocuments(
   formData: FormData,
 ): Promise<SettlementFileResult> {
   try {
+    const who = await getCurrentUser()
+    if (!who.인증 || (who.role !== "admin" && who.role !== "super_admin")) {
+      return { ok: false, error: "정산 서류 제출은 관리자 이상만 할 수 있습니다." }
+    }
+
     const 과제_id = Number(formData.get("과제_id") ?? 0)
     if (!과제_id) return { ok: false, error: "어느 과제의 정산인지 알 수 없습니다." }
 
@@ -72,7 +80,6 @@ export async function uploadSettlementDocuments(
       .filter((f): f is File => f instanceof File && f.size > 0)
     if (!files.length) return { ok: false, error: "파일을 고르세요." }
 
-    const who = await getCurrentUser()
     const 실패: string[] = []
     let 올린수 = 0
 
@@ -134,7 +141,7 @@ export async function uploadSettlementDocuments(
   }
 }
 
-/** 다운로드 — 60초 서명 URL. 버킷이 비공개라 공개 주소가 없다. */
+/** 다운로드 — 60초 서명 URL. 버킷이 비공개라 공개 주소가 없다. 조회라 전 등급에 연다. */
 export async function getSettlementDownloadUrl(id: number): Promise<SettlementFileResult> {
   try {
     const { data, error } = await db
@@ -166,6 +173,11 @@ export async function getSettlementDownloadUrl(id: number): Promise<SettlementFi
  */
 export async function deleteSettlementDocument(id: number): Promise<SettlementFileResult> {
   try {
+    const who = await getCurrentUser()
+    if (!who.인증 || (who.role !== "admin" && who.role !== "super_admin")) {
+      return { ok: false, error: "정산 서류 삭제는 관리자 이상만 할 수 있습니다." }
+    }
+
     const { data, error } = await db
       .from("settlement_documents")
       .select("*")

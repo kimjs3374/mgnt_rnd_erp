@@ -16,6 +16,8 @@ import { 회사서류판독, 자동확정가능 } from "@/lib/doc-ai.mjs"
  *
  * 파일은 서류함과 같은 비공개 버킷(company-docs)에 남긴다 — 근거 문서가 없으면
  * 「그 숫자 어디서 나왔냐」에 답할 수 없다. 종류를 알아보면 서류함에도 같이 등록한다.
+ *
+ * ⚠ 권한(2026-09-04) — 서류함에 기록이 남는(documents insert) 조작이라 관리자 이상만 한다.
  */
 
 export type ParseResult = {
@@ -53,6 +55,11 @@ export async function parseCompanyDocument(
   formData: FormData,
 ): Promise<ParseResult> {
   try {
+    const who = await getCurrentUser()
+    if (!who.인증 || (who.role !== "admin" && who.role !== "super_admin")) {
+      return { ok: false, message: "회사 서류 판독은 관리자 이상만 할 수 있습니다." }
+    }
+
     const file = formData.get("file")
     if (!(file instanceof File) || file.size === 0) return { ok: false, message: "파일을 고르세요." }
     if (file.size > 최대크기) {
@@ -124,7 +131,6 @@ export async function parseCompanyDocument(
         })
       }) as Record<string, unknown> | undefined
 
-      const who = await getCurrentUser()
       const { error: insErr } = await db.from("documents").insert({
         doc_type: (맞는종류?.코드 as string) ?? null,
         발급일: null, // 회사 서류 판독은 발급일을 목표로 하지 않는다. 서류함에서 따로 확정한다.

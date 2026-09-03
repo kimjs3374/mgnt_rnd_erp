@@ -14,6 +14,9 @@ import { 문서_확장자, 문서파일_점검 } from "@/lib/upload-limits"
  *
  * 저장소는 기존 `evidence` 버킷(비공개)이다. `db/70_storage_rls.sql` 이 INSERT 정책을 일부러
  * 만들지 않았으므로 브라우저에서 직접 올리는 경로는 없고, 이 서버 액션(service_role)만 쓴다.
+ *
+ * ⚠ 권한(2026-09-04) — 규정 문서함은 마스터 데이터라 업로드·삭제는 관리자 이상만.
+ *   다운로드는 조회라 전 등급에 연다.
  */
 
 // ⚠ `"use server"` 파일은 **export 가 전부 async 함수**여야 한다. 타입·상수는 여기 두지 못한다
@@ -49,6 +52,11 @@ function 범위점검(
  */
 export async function uploadRuleDocuments(formData: FormData): Promise<RuleActionResult> {
   try {
+    const who = await getCurrentUser()
+    if (!who.인증 || (who.role !== "admin" && who.role !== "super_admin")) {
+      return { ok: false, error: "규정 문서함 업로드는 관리자 이상만 할 수 있습니다." }
+    }
+
     const 적용범위Raw = String(formData.get("적용범위") ?? "")
     const annRaw = formData.get("announcement_id")
     const 사업유형Raw = formData.get("사업유형")
@@ -69,7 +77,6 @@ export async function uploadRuleDocuments(formData: FormData): Promise<RuleActio
     const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0)
     if (!files.length) return { ok: false, error: "파일을 고르세요." }
 
-    const who = await getCurrentUser()
     // 범위별로 경로를 갈라 둔다. 나중에 「이 공고 것만」 지울 때 경로만 보고도 된다.
     const 키 =
       범위.범위 === "공고" ? `ann-${announcement_id}`
@@ -144,7 +151,7 @@ export async function uploadRuleDocuments(formData: FormData): Promise<RuleActio
   }
 }
 
-/** 다운로드 — 60초 서명 URL. 버킷이 비공개라 공개 주소가 없다. */
+/** 다운로드 — 60초 서명 URL. 버킷이 비공개라 공개 주소가 없다. 조회라 전 등급에 연다. */
 export async function getRuleDownloadUrl(id: number): Promise<RuleActionResult> {
   try {
     const { data, error } = await db.from("rule_documents").select("*").eq("id", id).limit(1)
@@ -167,6 +174,11 @@ export async function getRuleDownloadUrl(id: number): Promise<RuleActionResult> 
 /** 삭제 — 저장소와 DB 를 같이 지운다. 저장소만 남으면 아무도 못 찾는 쓰레기가 된다. */
 export async function deleteRuleDocument(id: number): Promise<RuleActionResult> {
   try {
+    const who = await getCurrentUser()
+    if (!who.인증 || (who.role !== "admin" && who.role !== "super_admin")) {
+      return { ok: false, error: "규정 문서함 삭제는 관리자 이상만 할 수 있습니다." }
+    }
+
     const { data, error } = await db.from("rule_documents").select("*").eq("id", id).limit(1)
     if (error) return { ok: false, error: error.message }
     const f = (data ?? [])[0] as { storage_path?: string; announcement_id?: number | null } | undefined

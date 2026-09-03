@@ -15,6 +15,9 @@ import { 서류판독, 자동확정가능 } from "@/lib/doc-ai.mjs"
  *
  * 올린 뒤 `claude -p` 로 발급일을 읽는다. **확신도 0.70 미만은 코드가 자동 확정을 막는다** —
  * 모델은 모호해도 단정하기 때문이다(§5-3). AI 제안값과 사람 확정값을 따로 저장한다.
+ *
+ * ⚠ 권한(2026-09-04) — 서류함은 마스터 데이터라 업로드·확정·삭제는 관리자 이상만.
+ *   다운로드는 조회라 전 등급에 연다.
  */
 
 export type UploadResult = {
@@ -56,6 +59,11 @@ export async function uploadDocument(
   formData: FormData,
 ): Promise<UploadResult> {
   try {
+    const who = await getCurrentUser()
+    if (!who.인증 || (who.role !== "admin" && who.role !== "super_admin")) {
+      return { ok: false, message: "서류함 업로드는 관리자 이상만 할 수 있습니다." }
+    }
+
     const doc_type = String(formData.get("doc_type") ?? "").trim()
     const file = formData.get("file")
 
@@ -140,8 +148,6 @@ export async function uploadDocument(
       판독오류 = `.${ext} 는 자동 판독 대상이 아닙니다(pdf·이미지만)`
     }
 
-    const who = await getCurrentUser()
-
     const { error: insErr } = await db.from("documents").insert({
       doc_type,
       발급일,
@@ -191,6 +197,7 @@ export async function uploadDocument(
 /**
  * 다운로드 — 60초 서명 URL. 버킷이 비공개라 공개 URL 이 없다.
  * 원래 파일명을 실어 보내면 브라우저가 `1735-a8f2.pdf` 대신 `사업자등록증.pdf` 로 저장한다.
+ * 조회라 전 등급에 연다.
  */
 export async function getDocumentDownloadUrl(id: number): Promise<ActionResult> {
   try {
@@ -220,6 +227,11 @@ export async function confirmDocument(
   _prev: { ok: boolean; message: string } | null,
   formData: FormData,
 ): Promise<{ ok: boolean; message: string }> {
+  const who = await getCurrentUser()
+  if (!who.인증 || (who.role !== "admin" && who.role !== "super_admin")) {
+    return { ok: false, message: "서류함 확정은 관리자 이상만 할 수 있습니다." }
+  }
+
   const id = Number(formData.get("id"))
   if (!Number.isInteger(id)) return { ok: false, message: "잘못된 요청이다." }
 
@@ -249,6 +261,11 @@ export async function confirmDocument(
 /** 삭제 — 저장소와 DB 를 같이 지운다. 저장소만 남으면 아무도 못 찾는 쓰레기가 된다. */
 export async function deleteDocument(id: number): Promise<ActionResult> {
   try {
+    const who = await getCurrentUser()
+    if (!who.인증 || (who.role !== "admin" && who.role !== "super_admin")) {
+      return { ok: false, error: "서류함 삭제는 관리자 이상만 할 수 있습니다." }
+    }
+
     const { data, error } = await db.from("documents").select("*").eq("id", id).limit(1)
     if (error) return { ok: false, error: error.message }
     const f = (data ?? [])[0] as { storage_path?: string } | undefined

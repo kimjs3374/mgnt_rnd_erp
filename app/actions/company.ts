@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
+import { getCurrentUser } from "@/lib/current-user"
 
 export type SaveResult = { ok: boolean; message: string }
 
@@ -41,11 +42,18 @@ function 배열(v: FormDataEntryValue | null): string[] | null {
  *
  * **추측으로 채우지 않는다.** 모르는 값은 비워 두는 것이 맞다. 지어낸 재무값으로
  * 자격을 판정하면 틀린 답에 근거까지 붙여서 내놓게 된다(CLAUDE.md §6).
+ *
+ * ⚠ 권한(2026-09-04) — 회사 프로필은 마스터 데이터라 관리자 이상만 저장할 수 있다.
  */
 export async function saveCompany(
   _prev: SaveResult | null,
   formData: FormData,
 ): Promise<SaveResult> {
+  const who = await getCurrentUser()
+  if (!who.인증 || (who.role !== "admin" && who.role !== "super_admin")) {
+    return { ok: false, message: "회사 프로필 저장은 관리자 이상만 할 수 있습니다." }
+  }
+
   const 결산연도 = 숫자(formData.get("결산연도"))
   if (결산연도 == null) {
     return { ok: false, message: "결산연도는 있어야 한다 — 어느 해 기준인지 모르면 재무값이 뜻이 없다." }

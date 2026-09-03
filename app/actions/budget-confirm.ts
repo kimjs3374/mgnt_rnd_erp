@@ -19,6 +19,8 @@ import { getConfirmState } from "@/lib/queries-confirm"
  * ⚠ 한도 위반은 **막지 않는다.** 경고로만 말한다 —
  *   한도를 넘긴 채로 협약이 된 과제가 실제로 있고(P01 연구수당 240,000원 초과),
  *   여기서 막으면 그 과제는 영영 확정하지 못한다. 넘긴 사실은 계상 표가 이미 빨갛게 말하고 있다.
+ *
+ * ⚠ 권한(2026-09-04) — 예산 확정·해제는 승인성 조작이라 관리자 이상만 한다.
  */
 
 export type ConfirmResult = { ok: boolean; error?: string; 주의?: string[] }
@@ -48,6 +50,11 @@ async function 합계(과제_id: number) {
 
 export async function 계상확정(과제_id: number): Promise<ConfirmResult> {
   try {
+    const who = await getCurrentUser()
+    if (!who.인증 || (who.role !== "admin" && who.role !== "super_admin")) {
+      return { ok: false, error: "예산 확정은 관리자 이상만 할 수 있습니다." }
+    }
+
     const id = Number(과제_id)
     if (!Number.isInteger(id) || id <= 0) return { ok: false, error: "과제를 찾을 수 없다." }
 
@@ -75,7 +82,6 @@ export async function 계상확정(과제_id: number): Promise<ConfirmResult> {
       }
     }
 
-    const who = await getCurrentUser()
     const { error } = await db.from("budget_confirmations").insert({
       과제_id: id,
       동작: "확정",
@@ -98,6 +104,11 @@ export async function 계상확정(과제_id: number): Promise<ConfirmResult> {
 /** 해제 — **사유가 없으면 저장되지 않는다.** 화면·여기·DB 제약 세 겹이 막는다. */
 export async function 계상확정해제(과제_id: number, 사유: string): Promise<ConfirmResult> {
   try {
+    const who = await getCurrentUser()
+    if (!who.인증 || (who.role !== "admin" && who.role !== "super_admin")) {
+      return { ok: false, error: "예산 확정 해제는 관리자 이상만 할 수 있습니다." }
+    }
+
     const id = Number(과제_id)
     const 이유 = (사유 ?? "").trim()
     if (!Number.isInteger(id) || id <= 0) return { ok: false, error: "과제를 찾을 수 없다." }
@@ -109,7 +120,6 @@ export async function 계상확정해제(과제_id: number, 사유: string): Pro
     if (!s.확정) return { ok: false, error: "확정된 상태가 아닙니다." }
 
     const { 총사업비, 배정합 } = await 합계(id)
-    const who = await getCurrentUser()
     const { error } = await db.from("budget_confirmations").insert({
       과제_id: id,
       동작: "해제",

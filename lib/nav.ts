@@ -73,14 +73,16 @@ export const NAV: NavGroup[] = [
     //    단계는 여전히 **저장하지 않고 계산한다**(`lib/project-stage.ts`) — 선정을 기록하는 순간
     //    수행중으로, 수행기간이 지나면 사업종료로 저절로 넘어간다. 이건 안 바뀌었다.
     title: "통합 관리",
-    // 그룹 이름을 누르면 첫 항목(과제 관리)으로 간다.
-    url: "/projects/all",
+    // 그룹 이름을 누르면 첫 항목(지원사업 관리)으로 간다.
+    // ⚠ 2026-09-04 순서 변경(사용자 지시) — 지원사업이 먼저다. CLAUDE.md 의 "지원사업이
+    //   중심, R&D 는 그중 한 유형" 원칙과 같은 이유로 두 leaf 의 순서도 맞춘다.
+    url: "/programs",
     // ⚠ 아이콘은 `components/app-sidebar.tsx` 의 ICONS 에 **이미 있는 것**만 쓴다.
     //    없는 이름을 적으면 아이콘이 조용히 안 그려진다.
     icon: "ClipboardCheck",
     items: [
-      { title: "과제 관리", url: "/projects/all" },
       { title: "지원사업 관리", url: "/programs" },
+      { title: "과제 관리", url: "/projects/all" },
       // 내부 연구원 명부. 단계와 성격이 달라(「어디까지 왔나」 대 「누가 있나」) 별도 항목이다.
       // ⑥ 「연구원」을 사이드바에서 뺐다(2026-09-04 사용자 지시) — 명부는 인건비 계상 안에서
       //    관리한다(`app/(app)/projects/[id]/budget/page.tsx`). 명부는 인건비 표에 이름을 넣기

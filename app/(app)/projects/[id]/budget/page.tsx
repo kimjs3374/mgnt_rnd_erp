@@ -1,4 +1,4 @@
-import Link from "next/link"
+﻿import Link from "next/link"
 import { DbError } from "@/components/db-error"
 import { BudgetEditor, type Line } from "@/components/budget-editor"
 import { FundingShareCard } from "@/components/funding-share-card"
@@ -6,6 +6,7 @@ import { FormTemplates } from "@/components/form-templates"
 import { BudgetConfirmBar } from "@/components/budget-confirm-bar"
 import { PersonnelEditor } from "@/components/personnel-editor"
 import { 재원별합계 } from "@/lib/personnel"
+import { getResearchers } from "@/lib/queries-researchers"
 import {
   getProject,
   getProjectBudget,
@@ -44,7 +45,7 @@ export default async function ProjectBudgetPage({
   const { id: raw } = await params
   const id = Number(raw)
 
-  const [proj, budget, cats, rules, company, reqs, forms, people, confirm, who] =
+  const [proj, budget, cats, rules, company, reqs, forms, people, confirm, who, 명부] =
     await Promise.all([
       getProject(id),
       getProjectBudget(id),
@@ -56,6 +57,8 @@ export default async function ProjectBudgetPage({
       getPersonnelCosts(id),
       getConfirmState(id),
       getCurrentUser(),
+      // 내부 연구원 명부 — 인건비 표에서 골라 넣는다(`db/105_researchers.sql`).
+      getResearchers(),
     ])
   const p = proj.rows[0]
   // 계상이 확정됐으면 이 탭은 **볼 수만** 있다. 관리 위치는 사업 대장으로 넘어간다(`db/100`).
@@ -216,6 +219,7 @@ export default async function ProjectBudgetPage({
         협약연수={연수}
         연차연도={연도목록}
         읽기전용={읽기전용}
+        명부={명부.rows}
       />
 
       <BudgetEditor

@@ -55,6 +55,7 @@ export function PersonnelEditor({
   초기값,
   협약연수,
   연차연도 = [],
+  명부 = [],
   읽기전용 = false,
 }: {
   과제_id: number
@@ -67,6 +68,22 @@ export function PersonnelEditor({
   협약연수: number
   /** 그 연차들이 각각 몇 년도인가. `[2022, 2023, 2024]` — 탭에 붙여서 오해를 없앤다. */
   연차연도?: number[]
+  /**
+   * 내부 연구원 명부(`db/105_researchers.sql`). 골라서 한 줄 넣는 데 쓴다.
+   * ⚠ **값을 복사해 넣는다. 참조하지 않는다** — 계상은 그때의 연봉으로 확정된 기록이라
+   *   나중에 명부의 연봉이 바뀌어도 지난 계상이 따라 움직이면 안 된다.
+   */
+  명부?: {
+    id: number
+    표시명: string
+    연구자등록번호: string | null
+    소속기관: string | null
+    소속부서: string | null
+    직급: string | null
+    국적: string | null
+    내외부: string
+    연봉: number
+  }[]
   /**
    * 계상이 확정된 과제 — 인건비 산출도 계상의 일부라 같이 잠긴다.
    * **표와 엑셀 다운로드는 그대로 둔다.** 확정된 내역을 못 보거나 못 받으면 곤란하다.
@@ -99,6 +116,36 @@ export function PersonnelEditor({
 
   function 줄추가() {
     setRows((prev) => [...prev, 빈줄(연차, prev.length)])
+  }
+
+  /**
+   * 명부에서 골라 한 줄 넣는다(2026-09-04 사용자 지시).
+   *
+   * 이름·연구자등록번호·부서·직급·**월급여(연봉÷12)** 를 채워 준다.
+   * 참여율·참여개월수는 **비워 둔다** — 과제마다 다른 값이고, 명부가 알 수 있는 것이 아니다.
+   * 여기서 짐작해 채우면 사람이 확인 안 하고 넘어가 그대로 협약에 들어간다.
+   *
+   * ⚠ 명부를 **참조하지 않고 값을 복사한다.** 계상은 그때의 연봉으로 확정된 기록이라,
+   *   나중에 명부의 연봉이 바뀌어도 지난 계상이 따라 움직이면 안 된다.
+   */
+  function 명부에서넣기(id: number) {
+    const r = 명부.find((x) => x.id === id)
+    if (!r) return
+    setMsg(null)
+    setRows((prev) => [
+      ...prev,
+      {
+        ...빈줄(연차, prev.length),
+        표시명: r.표시명,
+        연구자등록번호: r.연구자등록번호 ?? null,
+        소속기관: r.소속기관 ?? null,
+        소속부서: r.소속부서 ?? null,
+        직급: r.직급 ?? null,
+        국적: r.국적 ?? null,
+        내외부: r.내외부 ?? "내부",
+        월급여: Math.floor(Math.max(0, Number(r.연봉 ?? 0)) / 12),
+      },
+    ])
   }
 
   function 저장() {
@@ -229,6 +276,7 @@ export function PersonnelEditor({
               <th className="w-[92px] pb-1 font-normal">자격</th>
               <th className="w-[64px] pb-1 font-normal">구분</th>
               <th className="w-[100px] pb-1 font-normal">표시명</th>
+              {상세 && <th className="w-[110px] pb-1 font-normal">연구자등록번호</th>}
               {상세 && <th className="w-[110px] pb-1 font-normal">소속/부서</th>}
               <th className="w-[80px] pb-1 font-normal">직급</th>
               <th className="w-[52px] pb-1 text-center font-normal">신규</th>
@@ -247,7 +295,8 @@ export function PersonnelEditor({
           <tbody>
             {보이는.length === 0 && (
               <tr>
-                <td colSpan={상세 ? 16 : 15} className="py-8 text-center text-muted-foreground">
+                {/* 상세 열이 둘(연구자등록번호·소속/부서)이라 17. 열을 더하면 여기도 같이 고친다. */}
+                <td colSpan={상세 ? 17 : 15} className="py-8 text-center text-muted-foreground">
                   {연차}차년도에 등록된 인원이 없습니다. 아래 「+ 인원 추가」로 시작하세요.
                 </td>
               </tr>
@@ -283,6 +332,19 @@ export function PersonnelEditor({
                     aria-label="표시명"
                   />
                 </td>
+                {/* 연구자등록번호 — 계상표 엑셀에 들어가는 값인데 화면에 없어서
+                    명부에서 제대로 넘어왔는지 확인할 길이 없었다(2026-09-04). 상세 열로 낸다. */}
+                {상세 && (
+                  <td className="py-1 pr-1">
+                    <Input
+                      className={cell}
+                      value={r.연구자등록번호 ?? ""}
+                      placeholder="R-0000000"
+                      onChange={(e) => 수정(r, { 연구자등록번호: e.target.value })}
+                      aria-label="연구자등록번호"
+                    />
+                  </td>
+                )}
                 {상세 && (
                   <td className="py-1 pr-1">
                     <Input
@@ -412,6 +474,38 @@ export function PersonnelEditor({
         <Button type="button" variant="outline" className="h-7 text-[12.8px]" onClick={줄추가}>
           + 인원 추가
         </Button>
+
+        {/* 명부에서 골라 넣기(2026-09-04). 사람이 없으면 select 대신 어디서 등록하는지 알려 준다 —
+            빈 목록을 띄우면 「고장났나」가 된다. */}
+        {!읽기전용 &&
+          (명부.length > 0 ? (
+            <select
+              className="h-7 rounded-md border bg-transparent px-2 text-[12.5px] text-foreground"
+              value=""
+              aria-label="명부에서 연구원 넣기"
+              onChange={(e) => {
+                const v = Number(e.target.value)
+                if (v) 명부에서넣기(v)
+                e.target.value = ""
+              }}
+            >
+              <option value="">명부에서 넣기…</option>
+              {명부.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.표시명}
+                  {r.직급 ? ` · ${r.직급}` : ""} · 월{" "}
+                  {Math.floor(Number(r.연봉 ?? 0) / 12).toLocaleString("ko-KR")}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <a
+              href="/researchers"
+              className="text-[11.5px] text-muted-foreground underline underline-offset-2"
+            >
+              연구원 명부에 등록해 두면 골라 넣을 수 있습니다
+            </a>
+          ))}
         {/* 엑셀은 **저장된 값**으로 만든다(서버가 DB 를 읽는다). 저장 안 한 편집분이 파일로
             나가면 그 파일과 DB 가 어긋나고, 이 표는 협약서 부속으로 제출된다. */}
         <a

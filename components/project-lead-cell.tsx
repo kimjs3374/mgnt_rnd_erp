@@ -115,7 +115,7 @@ export function ProjectLeadCell({
       ) : (
         // 절대규칙 5 — 배포 URL 은 열려 있다. 서버가 실명을 걸러낼 수는 없으니 여기서 말한다.
         <span className="text-[11px] text-muted-foreground">
-          공개 주소에는 가명을 쓰세요{로그인 === false && " · 로그인 전이라 바꾼 사람이 「미인증」으로 남습니다"}
+          공개 주소에는 가명을 쓰세요
         </span>
       )}
     </div>

@@ -177,11 +177,6 @@ export function EvidenceAttachments({
           필수 {전체필수.length}건 중 {확보된필수}건 확보
           {전체필수.length - 확보된필수 > 0 ? ` · 미확보 ${전체필수.length - 확보된필수}` : ""}
         </span>
-        {!로그인 && (
-          <span className="rounded px-1.5 py-0.5 text-[11px] text-[var(--warning-fg)]">
-            로그인 전이라 업로더가 「미인증」으로 기록된다
-          </span>
-        )}
         <Button
           type="button"
           variant="ghost"
@@ -320,10 +315,8 @@ export function EvidenceAttachments({
                                     <span className="text-foreground">{f.파일명}</span>
                                     <span className="tabular-nums">{KB(f.크기)}</span>
                                     <span className="tabular-nums">{시각(f.업로드일시)}</span>
-                                    <span>{f.업로더}</span>
-                                    {!f.업로더_인증 && (
-                                      <span className="text-[var(--warning-fg)]">미인증</span>
-                                    )}
+                                    {/* 로그인이 없다 — 확인된 업로더만 적는다. */}
+                                    {f.업로더_인증 && <span>{f.업로더}</span>}
                                     <button
                                       type="button"
                                       className="underline hover:text-foreground"
@@ -382,8 +375,7 @@ export function EvidenceAttachments({
                           <span className="text-foreground">{f.파일명}</span>
                           <span className="tabular-nums">{KB(f.크기)}</span>
                           <span className="tabular-nums">{시각(f.업로드일시)}</span>
-                          <span>{f.업로더}</span>
-                          {!f.업로더_인증 && <span className="text-[var(--warning-fg)]">미인증</span>}
+                          {f.업로더_인증 && <span>{f.업로더}</span>}
                           <button
                             type="button"
                             className="underline hover:text-foreground"

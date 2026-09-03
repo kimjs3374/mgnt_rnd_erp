@@ -177,7 +177,6 @@ export function RuleDocuments({
           </span>
           {!로그인 && (
             <span className="rounded px-1.5 py-0.5 text-[11px] text-[var(--warning-fg)]">
-              로그인 전이라 업로더가 「미인증」으로 기록된다
             </span>
           )}
         </div>
@@ -487,7 +486,6 @@ function RuleGroup({
                         {d.근거메모 && <span className="text-foreground">근거: {d.근거메모}</span>}
                         <span className="ml-auto tabular-nums">{시각(d.업로드일시)}</span>
                         <span>{d.업로더}</span>
-                        {!d.업로더_인증 && <span className="text-[var(--warning-fg)]">미인증</span>}
                       </div>
                     </li>
                   ))}

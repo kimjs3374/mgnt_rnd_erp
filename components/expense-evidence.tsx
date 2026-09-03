@@ -222,7 +222,6 @@ export function ExpenseEvidence({
                   <span className="tabular-nums">{KB(f.크기)}</span>
                   <span className="tabular-nums">{시각(f.업로드일시)}</span>
                   <span>{f.업로더}</span>
-                  {!f.업로더_인증 && <span className="text-[var(--warning-fg)]">미인증</span>}
                   <button
                     type="button"
                     className="underline hover:text-foreground"

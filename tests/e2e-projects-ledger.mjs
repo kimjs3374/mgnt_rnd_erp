@@ -30,11 +30,18 @@ const 잠깐 = (ms) => new Promise((r) => setTimeout(r, ms))
 const 줄수 = () => page.evaluate(() => document.querySelectorAll("tbody tr").length)
 const 빨강수 = () =>
   page.evaluate(() => [...document.querySelectorAll("tbody tr")].filter((t) => t.className.includes("bg-red-100")).length)
-/** 각 줄의 수행기간 칸(다섯째 열) — 연도 필터를 화면 값으로 검산하려고 읽는다. */
+/**
+ * 각 줄의 수행기간 칸 — 연도 필터를 화면 값으로 검산하려고 읽는다.
+ * ⚠ 열 번호를 박지 않는다. 「연구책임자」가 중간에 끼면서 한 칸씩 밀린 적이 있다.
+ *   머리글에서 자리를 찾아 쓴다 — 열이 또 늘어도 안 깨진다.
+ */
 const 기간들 = () =>
-  page.evaluate(() =>
-    [...document.querySelectorAll("tbody tr")].map((t) => t.children[4]?.textContent?.trim() ?? ""),
-  )
+  page.evaluate(() => {
+    const 머리 = [...document.querySelectorAll("thead th")].map((t) => t.textContent.trim())
+    const i = 머리.indexOf("수행기간")
+    if (i < 0) return []
+    return [...document.querySelectorAll("tbody tr")].map((t) => t.children[i]?.textContent?.trim() ?? "")
+  })
 const 누르기 = (label) =>
   page.evaluate((l) => {
     const b = [...document.querySelectorAll("button")].find((x) => x.textContent.trim().startsWith(l))

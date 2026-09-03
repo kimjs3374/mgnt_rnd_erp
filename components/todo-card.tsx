@@ -106,7 +106,7 @@ export function TodoCard({ 갈래들 }: { 갈래들: 큐갈래[] }) {
   return (
     <div className="flex flex-1 flex-col overflow-hidden rounded-lg border bg-card">
       <div className="flex items-baseline justify-between border-b px-4 py-2.5">
-        <h2 className="text-sm font-semibold">오늘 처리할 것</h2>
+        <h2 className="text-sm font-semibold">확인 및 조치</h2>
         <span className="text-xs tabular-nums text-muted-foreground">{총건수}건</span>
       </div>
 

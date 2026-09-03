@@ -36,6 +36,16 @@ import unicodedata
 from dataclasses import dataclass, field
 from typing import Any, Iterable
 
+# r5 → r6 (2026-09-04): 사용자 지적 "필터 순위를 정해서 걸러야 — 지역, 중소기업여부,
+# 창업기업여부 등등"에 따라 게이트 두 개를 더 세운다.
+#   ⑨ 창업업력_제한 — K-Startup 상세페이지의 "창업업력" 필드(예비창업자~N년미만).
+#      설립일(2005-12-22, 사업자등록증 직접 확인)을 넣어 계산으로 확정한다.
+#   ⑩ 특정업종전용 — "일반음식점을 영업 중인 자"류. 지역·기업규모는 통과해도
+#      우리 업종과 무관한 걸 실측(id 192·193)에서 잡았다.
+# 이벤트 감지(행사공지_*)도 이번에 추가했다 — "일시:…장소:" 가 서로 다른 청크로
+# 갈리는 경우(id 349, "-" 글머리마다 청크가 나뉜다)를 잡으려고 일시/장소를 따로
+# 찾아 judge() 에서 합친다.
+#
 # r4 → r5 (2026-09-04): 업종 근거 없는 「가능」을 막는다. 실측(id 192·193): 보성군
 # 「일반음식점 시설환경개선 지원사업」이 지역·마감·「중소기업」 태그만으로 60점을
 # 넘겨 「가능」이 됐다 — 업종적합도 가산은 0 이었다. 문서 원문엔 "일반음식점을 영업
@@ -59,7 +69,7 @@ from typing import Any, Iterable
 #   ② 「□ 신청자격」 꼴 제목을 못 읽어 공고 2건의 구역이 전부 None 이었다 → 글머리형 제목 추가
 #   ③ 「기업 참여 불가」(대학·연구기관 전용) 게이트가 아예 없었다 → R-ORG-TYPE-EXCL 추가
 # r1 판정은 지우지 않는다. 나란히 두고 「고쳐서 나아졌는가」를 v_ann_rule_vs_llm 으로 본다.
-ENGINE_VERSION = "r5"
+ENGINE_VERSION = "r6"
 
 # NTIS 본문이 "AB01"(4자)로 들어와 있다. 이 길이로는 조항을 읽을 수 없다.
 # 「짧아서 못 읽었다」와 「읽었는데 조항이 없다」는 다른 상태다 — 섞으면 안 된다.
@@ -226,7 +236,7 @@ def chunks(text: str) -> list[Chunk]:
 # 구역 이름 → 표준 구역. 「신청자격」과 「지원제외」에 같은 문구가 있으면 뜻이 반대다.
 _SECTION_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("지원제외", re.compile(r"(지원제외|제외대상|선정제외|참여제한|결격사유|지원배제)")),
-    ("신청자격", re.compile(r"(신청자격|지원자격|사업자격|응모자격|참가자격|신청대상|지원대상자|사업대상자|신청및|자격요건)")),
+    ("신청자격", re.compile(r"(신청자격|지원자격|사업자격|응모자격|참가자격|신청대상|지원대상자|사업대상자|신청및|자격요건|지원기준)")),
     ("제출서류", re.compile(r"(제출서류|구비서류|신청서류|제출할서류|서류사항)")),
     ("지원규모", re.compile(r"(지원규모|지원한도|지원내용|지원금액|지원형태|지원조건|사업비|연구개발비지원|지원기간및)")),
     ("평가",     re.compile(r"(평가기준|평가절차|선정평가|평가방법|심사기준)")),
@@ -250,17 +260,25 @@ _SECTION_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 _HEADING_NUM = re.compile(
     r"^[ \t]*(?:\d{1,2}\s*[-－]\s*\d{1,2}|\d{1,2})\s*\.\s*(\S.{0,50})$", re.M)
 _HEADING_BULLET = re.compile(r"^[ \t]*[□■◇◆ㅁ]\s*(\S[^\n]{0,24})$", re.M)
+# 로마숫자 절 제목 — 실측(보성군 「Ⅲ 지원기준」)에서 놓쳤다. 이걸 못 읽으면 그 절이
+# 통째로 "앞 절"의 구역으로 잘못 흡수된다(id 192: 지원대상이 「지원규모」로 묶여
+# R-EXCLUSIVE-INDUSTRY 가 그 구역을 못 봤다). ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ 만 흔히 쓰인다.
+_HEADING_ROMAN = re.compile(r"^[ \t]*([ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ])\s*[.\s]?\s*(\S.{0,50})$", re.M)
 _BULLET_TITLE_MAX = 20      # 공백 지운 제목이 이보다 길면 본문 문장으로 본다
 
 
 def _heading_hits(text: str) -> list[tuple[int, str]]:
-    """제목 줄 위치와 제목 문자열. 두 꼴을 모아 위치순으로 돌려준다."""
+    """제목 줄 위치와 제목 문자열. 세 꼴을 모아 위치순으로 돌려준다."""
     hits: list[tuple[int, str]] = []
     for m in _HEADING_NUM.finditer(text or ""):
         hits.append((m.start(), strip_ws(m.group(1))))
     for m in _HEADING_BULLET.finditer(text or ""):
         t = strip_ws(m.group(1))
         # 쉼표가 있으면 문장이다. 「□ 신청자격」에는 쉼표가 없다.
+        if len(t) <= _BULLET_TITLE_MAX and "," not in t:
+            hits.append((m.start(), t))
+    for m in _HEADING_ROMAN.finditer(text or ""):
+        t = strip_ws(m.group(2))
         if len(t) <= _BULLET_TITLE_MAX and "," not in t:
             hits.append((m.start(), t))
     hits.sort()
@@ -483,6 +501,37 @@ RULES: list[Rule] = [
          re.compile(r"(기업부설연구소|연구개발전담부서|연구전담부서)"),
          conf=0.75, sections=None,
          설명="자격이든 가점이든 우리가 보유하고 있으면 유리하다. 필수 여부는 R-LAB-REQ 가 본다"),
+
+    # 사용자 지적(2026-09-04): "이벤트 공지는 별도 필터링으로 제외시켜야함". 지원분야
+    # 태그(멘토링ㆍ컨설팅ㆍ교육 등)만으론 못 가른다 — 실측으로 확인했다(같은 태그 안에
+    # 전시회 참가비 지원 같은 진짜 지원사업이 섞여 있다). 대신 상세페이지 본문에서
+    # "일시:…장소:"(단발성 행사 구조) · "참가비/교육비 무료" · "관심 있는 누구나(제한
+    # 없음)" 를 직접 찾는다 — 실측(K-Startup id 335 "[창업 교육] 투자자가 보는 기업
+    # 가치와 IR 전략")에서 이 세 문구가 다 나왔다. ann_score.judge() 가 이 특징을 보면
+    # 게이트·점수 계산 전에 "해당없음"으로 바로 끝낸다(자격 문제가 아니라 애초에 지원금
+    # 신청이 아니다).
+    # ⚠ "일시:…장소:" 를 한 규칙(하나의 청크 안)으로 찾다가 실측(id 349)에서 놓쳤다 —
+    #   「- 일 시 : … \n - 장 소 : …」처럼 각 줄 앞에 "-" 글머리가 붙으면 그 자체가
+    #   청크 경계라 일시와 장소가 서로 다른 청크로 갈라진다. 그래서 둘을 따로 찾고
+    #   judge() 에서 "청크가 달라도 됐다"로 합친다(아래 R-EVENT-LOCATION 과 짝).
+    Rule("R-EVENT-DATETIME", "행사공지_일시", "정보",
+         re.compile(r"일\s*시[:：]"),
+         conf=0.60, sections=None, 구역없어도=True,
+         설명="실측 id 335·349: 「일시:」/「일 시 :」. 단독으론 약해서 낮게 두고, "
+              "장소와 같이 있어야 judge() 에서 이벤트로 본다"),
+    Rule("R-EVENT-LOCATION", "행사공지_장소", "정보",
+         re.compile(r"장\s*소[:：]"),
+         conf=0.60, sections=None, 구역없어도=True,
+         설명="실측 id 349: 「- 장 소 : 용인특례시 미디어센터…」"),
+    Rule("R-EVENT-FREE", "행사공지_무료", "정보",
+         re.compile(r"(참가비|교육비|참가|수강료)무료|무료(진행|참가|교육)"),
+         conf=0.80, sections=None, 구역없어도=True,
+         설명="실측 id 335: 「교육비 무료, 소소한 다과 제공」"),
+    Rule("R-EVENT-OPEN", "행사공지_제한없음", "정보",
+         re.compile(r"신청대상.{0,30}(누구나|제한없음|관심있는)"),
+         conf=0.80, sections=None, 구역없어도=True,
+         설명="실측 id 335: 「신청대상: 해당 주제에 관심이 있는 누구나(제한 없음)」 — "
+              "진짜 지원사업은 지원대상을 이렇게 열어두지 않는다"),
 
     Rule("R-SME-TARGET", "대상_중소기업명시", "가산",
          re.compile(r"(중소기업기본법제2조|중소기업기본법에따른중소기업|중소기업만|중소기업에한|중소기업을대상|중소기업이수행)"),
@@ -738,6 +787,99 @@ def industry_features(ann: dict[str, Any], company: dict[str, Any]) -> list[Feat
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 창업업력 게이트 — K-Startup 상세페이지엔 이 필드가 구조화돼 있다
+#
+# 사용자 지적(2026-09-04): "필터 순위를 정해서 걸러야되지않을까 — 지역, 중소기업여부,
+# 창업기업여부 등등". 지역·중소기업여부는 이미 게이트가 있었는데 창업업력(업력 제한)은
+# 없었다 — K-Startup 은 이름 그대로 창업 지원 플랫폼이라 "예비창업자, 1년미만,
+# 2년미만…" 같은 업력 제한이 흔하다(실측 id 336·347). 회사 설립일(2005-12-22,
+# 사업자등록증 직접 확인)을 알면 이건 정답이 하나인 계산이다 — 창업 20년차 회사는
+# "7년미만" 상한이 있는 사업에 못 들어간다.
+# ─────────────────────────────────────────────────────────────────────────────
+_STARTUP_AGE_FIELD = re.compile(r"창업업력\s*\n*\s*([^\n]{0,120})")
+_STARTUP_AGE_YEAR = re.compile(r"(\d{1,2})\s*년\s*미만")
+
+
+def startup_age_feature(text: str, company: dict) -> Feature | None:
+    m = _STARTUP_AGE_FIELD.search(text or "")
+    if not m:
+        return None
+    값 = m.group(1).strip().rstrip("\r")
+    if "전체" in 값 or "무관" in 값 or not 값:
+        return None  # 제한 없음 — 게이트 대상이 아니다
+
+    상한들 = [int(y) for y in _STARTUP_AGE_YEAR.findall(값)]
+    if not 상한들:
+        return None  # "전체"도 아니고 숫자 상한도 못 읽었으면 단정하지 않는다
+
+    설립일 = company.get("설립일")
+    if not 설립일:
+        # 회사 설립일을 모르면 게이트를 확정하지 않는다 — 확인필요로 넘어가게
+        # 값_불리언 을 비워 둔다(judge() 의 확인필요 로직이 이 특징키를 보고 묻는다).
+        return Feature(
+            특징키="창업업력_제한", 종류="게이트", 규칙id="R-STARTUP-STAGE", 규칙신뢰도=0.85,
+            추출원="본문", 근거문장=f"창업업력 {값}", 값_텍스트=값,
+        )
+
+    try:
+        기준일 = _date(설립일)
+        업력년 = (_today() - 기준일).days / 365.25
+    except Exception:
+        return None
+
+    최대상한 = max(상한들)
+    자격됨 = 업력년 < 최대상한
+    return Feature(
+        특징키="창업업력_제한", 종류="게이트", 규칙id="R-STARTUP-STAGE", 규칙신뢰도=0.90,
+        추출원="본문", 근거문장=f"창업업력 {값} (요구 상한 {최대상한}년 미만)",
+        값_텍스트=값, 값_불리언=자격됨,
+        단위=f"우리 업력 {업력년:.0f}년(설립일 {설립일})",
+    )
+
+
+def _date(v) -> "date":
+    import datetime as _dt
+    if isinstance(v, _dt.date):
+        return v
+    return _dt.date.fromisoformat(str(v)[:10])
+
+
+def _today() -> "date":
+    import datetime as _dt
+    return _dt.date.today()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 특정 업종 전용 게이트 — "일반음식점을 영업 중인 자"류
+#
+# 실측(id 192·193, 보성군 일반음식점·이미용업소 시설환경개선): 지역·기업규모 게이트는
+# 다 통과하는데 실제로는 특정 생활밀착업종(음식점·미용업 등) 전용이라 우리(제조업)와
+# 무관했다. 사용자 지적대로 "필터를 정립"한다 — 신청자격/지원대상 구역에서 이
+# 업종명이 유일한 대상으로 명시되고, 우리 업종(제조업)이 같이 열거되지 않을 때만
+# 게이트를 건다. 목록에 "제조업"이 같이 있으면(복수 업종 대상) 걸지 않는다 —
+# 오탐이 낫다고 확신할 근거가 없다.
+# ─────────────────────────────────────────────────────────────────────────────
+_EXCLUSIVE_INDUSTRY = (
+    "일반음식점", "이용업", "미용업", "숙박업", "목욕장업", "세탁업",
+    "천일염", "수산물", "어업", "양식업", "농산물", "축산업", "관광펜션",
+)
+
+
+def exclusive_industry_feature(cs: list["Chunk"]) -> Feature | None:
+    targets = [c for c in cs if c.구역 in ("신청자격", None) and
+               ("지원대상" in c.flat or "신청대상" in c.flat or "지원자격" in c.flat)]
+    for c in targets:
+        for 업종 in _EXCLUSIVE_INDUSTRY:
+            if 업종 in c.flat and "제조업" not in c.flat:
+                return Feature(
+                    특징키="특정업종전용", 종류="게이트", 규칙id="R-EXCLUSIVE-INDUSTRY",
+                    규칙신뢰도=0.75, 추출원="본문", 근거문장=tidy(c.원문), 구역=c.구역,
+                    값_텍스트=업종, 값_불리언=False,
+                )
+    return None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 진입점
 # ─────────────────────────────────────────────────────────────────────────────
 def extract(ann: dict[str, Any], company: dict[str, Any],
@@ -787,6 +929,13 @@ def extract(ann: dict[str, Any], company: dict[str, Any],
         if 본문출처 == "원문":
             feats += scan_documents(cs)     # 제출서류 사전은 요약 텍스트엔 적용하지 않는다 —
                                              # 요약은 서류 목록을 담을 만큼 길지 않고, 오탐 위험만 있다
+
+        나이 = startup_age_feature(쓸텍스트, company)
+        if 나이 is not None:
+            feats.append(나이)
+        업종전용 = exclusive_industry_feature(cs)
+        if 업종전용 is not None:
+            feats.append(업종전용)
 
     # 같은 (특징키, 규칙id) 중복 제거 — 신뢰도 높은 것을 남긴다
     최선: dict[tuple[str, str], Feature] = {}

@@ -265,6 +265,18 @@ def batch(limit: int | None = None, save: bool = True) -> dict:
     if limit:
         anns = anns[:limit]
 
+    # 사용자 지적(2026-09-04): "이미 마감된 공고는 판단할 필요가 없잖아 불가처리도
+    # 필요없어" — 마감은 "자격이 안 된다"와 다른 사실이다(둘 다 「불가」로 묶으면
+    # 왜 못 넣는지가 화면에서 안 갈린다). 마감된 건 아예 판정 대상에서 뺀다 —
+    # ann_rule_scores 에 행 자체를 안 만든다.
+    import datetime as _dt
+    오늘 = _dt.date.today().isoformat()
+    마감스킵 = [a for a in anns if a.get("마감유형") == "dated" and a.get("접수종료")
+               and str(a["접수종료"])[:10] < 오늘]
+    anns = [a for a in anns if a not in 마감스킵]
+    if 마감스킵:
+        print(f"  마감 지나 판정 제외: {len(마감스킵)}건")
+
     통계: dict[str, int] = {}
     실패: list[str] = []
     t0 = time.monotonic()
@@ -283,8 +295,9 @@ def batch(limit: int | None = None, save: bool = True) -> dict:
             print(f"  {i}/{len(anns)} …")
 
     초 = round(time.monotonic() - t0, 1)
-    return {"ok": True, "대상": len(anns), "판정": 통계, "실패": 실패[:20],
-            "실패수": len(실패), "초": 초, "llm_호출": 0, "엔진버전": F.ENGINE_VERSION}
+    return {"ok": True, "대상": len(anns), "마감제외": len(마감스킵), "판정": 통계,
+            "실패": 실패[:20], "실패수": len(실패), "초": 초, "llm_호출": 0,
+            "엔진버전": F.ENGINE_VERSION}
 
 
 # ─────────────────────────────────────────────────────────────────────────────

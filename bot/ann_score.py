@@ -241,6 +241,20 @@ def _gates(ann: dict, company: dict, feats: list[F.Feature]) -> list[dict]:
         put("기관유형_제한", False,
             "대학·연구기관 전용 공고다 (기업 참여 불가)", f.근거문장, f.규칙신뢰도)
 
+    # ⑨ 창업업력 제한 — 사용자 지적(2026-09-04) 「창업기업여부」 필터.
+    #    설립일을 알면 계산 하나로 끝난다(정답이 하나인 자리). 모르면 확정하지 않고
+    #    확인필요로 넘긴다(_확인필요() 가 값_불리언 None 인 이 특징을 보고 묻는다).
+    f = by키.get("창업업력_제한")
+    if f is not None and f.값_불리언 is not None:
+        put("창업업력_제한", f.값_불리언,
+            f"{f.값_텍스트} 대상 / {f.단위 or ''}", f.근거문장, f.규칙신뢰도)
+
+    # ⑩ 특정 업종 전용 — "일반음식점을 영업 중인 자"류. 실측 id 192·193.
+    f = by키.get("특정업종전용")
+    if f is not None:
+        put("특정업종전용", False,
+            f"「{f.값_텍스트}」 전용 공고다 — 우리 업종과 무관", f.근거문장, f.규칙신뢰도)
+
     return out
 
 
@@ -394,6 +408,26 @@ def judge(ann: dict, company: dict, weights: list[dict] | None = None,
 
     ext = F.extract(ann, company, lexicon=lexicon)
     feats: list[F.Feature] = ext["features"]
+
+    # 사용자 지적(2026-09-04): 이벤트 공지는 게이트·점수를 매기기 전에 먼저 걸러낸다.
+    # "일시:…장소:"(단발성 행사 구조) 하나만으로도 충분히 특정적이다(실측 확인) — 그게
+    # 없으면 "무료"와 "제한없음" 둘 다 있어야 한다(하나만으론 진짜 지원사업 문구에도
+    # 우연히 나올 수 있다). 자격 문제가 아니므로 게이트·확인필요를 거치지 않는다 —
+    # ann_rule_scores.chk_rule_판정 을 db/106_event_notice.sql 로 넓혀 이 값을 받는다.
+    행사키 = {f.특징키 for f in feats if f.특징키.startswith("행사공지_")}
+    if "행사공지_일시장소" in 행사키 or {"행사공지_무료", "행사공지_제한없음"} <= 행사키:
+        행사근거 = [f.근거문장 for f in feats if f.특징키.startswith("행사공지_")]
+        return {
+            "ok": True, "엔진버전": F.ENGINE_VERSION, "점수": 0, "판정": "해당없음",
+            "확신도": 0.85, "커버리지": 1.0 if ext.get("본문사용") else 0.0,
+            "커버리지_상세": {"메타": 0.0, "본문": 1.0 if ext.get("본문사용") else 0.0},
+            "판정경로": "규칙", "llm_호출": 0,
+            "게이트_결과": [], "특징_기여": [], "확인필요항목": [], "확인필요_상세": [],
+            "근거": ["지원금 신청이 아니라 무료 행사·교육 공지로 읽힌다 — 자격 판정 대상이 아니다"]
+                    + 행사근거,
+            "features": feats, "본문사용": ext["본문사용"], "본문길이": ext["본문길이"],
+            "구역": ext["구역"], "제출서류": [],
+        }
 
     게이트 = _gates(ann, company, feats)
     기여 = _가산(ann, company, feats, w)

@@ -46,14 +46,28 @@ const 사업유형이름: Record<string, string> = {
 
 /** projects.select("*") 가 실제로 주는데 ProjectRow 타입 선언엔 없는 필드.
  *  타입만 넓히는 것이라 lib/queries.ts 를 고칠 필요가 없다. */
-type ProjectRowExt = ProjectRow & { 선정결과?: string | null }
+type ProjectRowExt = ProjectRow & { 선정결과?: string | null; 공고_id?: number | null }
+
+/**
+ * `사업유형` 대신 쓸 것 없을 때만 부른다. 공고 확인 카드의 `탭구분`과 같은 기준(출처) —
+ * 실측으로 기업마당(304건 중 2건)·K-Startup(1000건 중 0건)은 사업유형을 거의 안 채운다.
+ * IRIS·NTIS 는 항상 채우므로(NATIONAL_RND) 여기까지 올 일이 없다.
+ */
+function 출처로_유형추정(출처?: string): string | null {
+  if (출처 === "기업마당" || 출처 === "K-Startup") return "LOCAL_TP"
+  if (출처 === "IRIS" || 출처 === "NTIS") return "NATIONAL_RND"
+  return null
+}
 
 export function ProjectBoard({
   rows,
+  공고출처,
   today,
   error,
 }: {
   rows: ProjectRow[]
+  /** 공고 id → 출처. `사업유형`이 빈 건의 배지를 대신 판정하는 데만 쓴다. */
+  공고출처: Record<number, string | undefined>
   /** 「오늘」은 서버가 정한다. 심사장 PC 시계를 믿지 않는다. */
   today: string
   error?: string | null
@@ -62,9 +76,13 @@ export function ProjectBoard({
     const ext = rows as ProjectRowExt[]
     return ext
       .filter((r) => !미선정인가(r))
-      .map((r) => ({ row: r, 단계: 단계판정(r, today) }))
+      .map((r) => ({
+        row: r,
+        단계: 단계판정(r, today),
+        유형: r.사업유형 ?? 출처로_유형추정(r.공고_id != null ? 공고출처[r.공고_id] : undefined),
+      }))
       .filter((x) => x.단계 !== "사업종료")
-  }, [rows, today])
+  }, [rows, today, 공고출처])
 
   // 0건인 탭은 세우지 않는다. 빈 탭은 「없다」가 아니라 「고장났다」로 읽힌다.
   const 탭 = React.useMemo(() => {
@@ -82,7 +100,7 @@ export function ProjectBoard({
   }
 
   const 전체행 = React.useMemo(
-    () => 대상.filter((x) => x.단계 === 현재).map((x) => x.row),
+    () => 대상.filter((x) => x.단계 === 현재),
     [대상, 현재],
   )
   const 총페이지 = Math.max(1, Math.ceil(전체행.length / 페이지당))
@@ -98,7 +116,7 @@ export function ProjectBoard({
           <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-[var(--success)] text-[var(--success-fg)]">
             <Briefcase className="size-3.5" />
           </span>
-          <h2 className="text-sm font-semibold">과제 관리</h2>
+          <h2 className="text-sm font-semibold">통합 관리</h2>
         </div>
         <span className="text-xs tabular-nums text-muted-foreground">{대상.length}건</span>
       </div>
@@ -152,7 +170,7 @@ export function ProjectBoard({
           </div>
 
           <ul className="flex-1 divide-y">
-            {보이는행.map((r) => (
+            {보이는행.map(({ row: r, 유형 }) => (
               <li key={r.id} className="h-[52px]">
                 <Link
                   href={`/projects/${r.id}`}
@@ -160,13 +178,13 @@ export function ProjectBoard({
                 >
                   {/* 배지를 사업명·부제 두 줄 블록과 나란한 열로 뺐다 — items-center 라
                       두 줄의 세로 가운데에 온다. 두 줄은 같은 블록 안이라 시작점이 같다. */}
-                  <사업유형배지 코드={r.사업유형} />
+                  <사업유형배지 코드={유형} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[13px]" title={r.과제명}>
                       {r.과제명}
                     </span>
                     <span className="block truncate text-xs text-muted-foreground">
-                      {부제(r, 현재)}
+                      {부제(r, 현재, 유형)}
                     </span>
                   </span>
                 </Link>
@@ -229,7 +247,7 @@ function 사업유형배지({ 코드 }: { 코드: string | null }) {
  * 신청중은 아직 협약 전이라 종료일이 의미 없다 — 시작 예정일을 쓴다.
  * 수행중은 종료일(연도 포함, 전체)을 쓴다. D-day 는 없다 — 마감 임박은 일정(달력) 카드가 담당한다.
  */
-function 부제(row: ProjectRow, 단계: 과제단계 | null): string {
+function 부제(row: ProjectRow, 단계: 과제단계 | null, 유형: string | null): string {
   const 기관 = row.부처 ?? row.전문기관 ?? "기관 미상"
   const 조각 = [기관]
   if (row.연차 != null) 조각.push(`${row.연차}차년도`)
@@ -237,7 +255,7 @@ function 부제(row: ProjectRow, 단계: 과제단계 | null): string {
   if (단계 === "신청중") {
     if (row.시작일) 조각.push(`시작 예정 ${row.시작일}`)
   } else if (row.종료일) {
-    const 라벨 = row.사업유형 === "LOCAL_TP" ? "사업종료일" : "과제종료일"
+    const 라벨 = 유형 === "LOCAL_TP" ? "사업종료일" : "과제종료일"
     조각.push(`${라벨} ${row.종료일}`)
   }
 

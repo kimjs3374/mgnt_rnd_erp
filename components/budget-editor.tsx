@@ -45,6 +45,7 @@ export function BudgetEditor({
   협약,
   비목목록,
   읽기전용 = false,
+  인건비자동 = false,
 }: {
   과제_id: number
   초기값: Line[]
@@ -55,6 +56,14 @@ export function BudgetEditor({
    * 숨기면 「무엇으로 확정했는지」를 못 본다. 확정 뒤 관리 위치는 사업 대장이다(`db/100`).
    */
   읽기전용?: boolean
+  /**
+   * 개인별 인건비가 한 줄이라도 있는 과제. **인건비 줄을 여기서 못 고치게 한다.**
+   *
+   * 저장할 때마다 개인별 합계가 이 줄을 덮으므로(`app/actions/personnel.ts`),
+   * 열어 두면 손으로 고친 값이 다음 저장에 조용히 사라진다.
+   * 막는 것이 아니라 **어디서 고쳐야 하는지 알려주는 것**이다 — 위의 개인별 표에서 고친다.
+   */
+  인건비자동?: boolean
 }) {
   const [lines, setLines] = React.useState<Line[]>(초기값)
   const [msg, setMsg] = React.useState<{ ok: boolean; text: string } | null>(null)
@@ -226,10 +235,18 @@ export function BudgetEditor({
                 const 잔액 = (Number(l.배정액) || 0) - l.집행액
                 return (
                   <TableRow key={`${l.비목_대분류}-${l.재원구분}`} className="h-[42px] text-[13px]">
-                    <TableCell className="font-medium">{l.비목명 ?? l.비목_대분류}</TableCell>
+                    <TableCell className="font-medium">
+                      {l.비목명 ?? l.비목_대분류}
+                      {/* 이 줄이 어디서 오는지 줄에서 바로 보여야 한다. 안 적으면 「왜 못 고치지」가 된다. */}
+                      {인건비자동 && l.비목_대분류 === "PERSONNEL" && (
+                        <span className="ml-1.5 rounded bg-secondary px-1 py-0.5 text-[10.5px] font-normal text-muted-foreground">
+                          개인별에서 자동
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-muted-foreground">{l.재원구분}</TableCell>
                     <TableCell>
-                      {읽기전용 ? (
+                      {읽기전용 || (인건비자동 && l.비목_대분류 === "PERSONNEL") ? (
                         <span className="block text-right tabular-nums">
                           {won(Number(l.배정액) || 0)}
                         </span>

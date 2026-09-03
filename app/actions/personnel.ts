@@ -106,8 +106,13 @@ export async function savePersonnelRows(과제_id: number, rows: 입력[]): Prom
       if (error) return { ok: false, error: error.message }
     }
 
+    // 저장한 그 자리에서 비목 인건비까지 맞춘다. 사람이 버튼을 한 번 더 누르게 하지 않는다.
+    const 반영 = await 인건비동기화(과제_id)
+
     revalidatePath(`/projects/${과제_id}/budget`)
-    return { ok: true }
+    revalidatePath(`/projects/${과제_id}`)
+    revalidatePath(`/projects/${과제_id}/settlement`)
+    return { ok: true, 반영: 반영 ?? undefined }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   }
@@ -120,11 +125,80 @@ export async function deletePersonnelRow(과제_id: number, id: number): Promise
 
     const { error } = await db.from("personnel_costs").delete().eq("id", id).eq("과제_id", 과제_id)
     if (error) return { ok: false, error: error.message }
+
+    // 지운 뒤에도 맞춘다 — 사람이 빠졌으면 비목 인건비도 그만큼 줄어야 한다.
+    const 반영 = await 인건비동기화(과제_id)
+
     revalidatePath(`/projects/${과제_id}/budget`)
-    return { ok: true }
+    revalidatePath(`/projects/${과제_id}`)
+    revalidatePath(`/projects/${과제_id}/settlement`)
+    return { ok: true, 반영: 반영 ?? undefined }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   }
+}
+
+/**
+ * 개인별 인건비 → **비목 인건비 자동 반영.** (2026-09-04 사용자 지시)
+ *
+ * 저장·삭제할 때마다 이걸 부른다. 사람이 따로 버튼을 누르지 않는다 —
+ * **개인별 표가 근거고 비목 인건비는 그 합계**인데, 사람 손에 맡기면 둘이 어긋난 채로 남는다.
+ * 어긋난 비목 표는 협약서·정산과 대조할 때 그대로 거짓말이 된다.
+ *
+ * ★ **연차를 가리지 않고 전부 더한다.** 예전에 화면이 고른 연차만 반영하는 바람에
+ *   1차년도만 든 6,000,000 이 2년 합계 13,500,000 을 덮은 적이 있다(과제 13, 복구함).
+ *   비목 인건비는 과제 전체의 값이라 연차로 자를 이유가 없다.
+ *
+ * ⚠ 개인별 줄이 **하나도 없으면 비목을 건드리지 않는다.** 12개 과제 중 개인별 계상을 쓰는 건
+ *   일부뿐이고, 안 쓰는 과제의 인건비를 0 으로 밀어 버리면 그게 사고다.
+ *
+ * ⚠ 개인별에서 사라진 재원은 **0 으로 남긴다. 줄을 지우지 않는다.**
+ *   지우면 「왜 줄었는지」를 아무도 못 보고, 0 이면 화면에 남아 사람이 눈으로 확인한다.
+ */
+async function 인건비동기화(과제_id: number): Promise<Record<string, number> | null> {
+  const { data, error } = await db.from("personnel_costs").select("*").eq("과제_id", 과제_id)
+  if (error) return null
+  const rows = (data ?? []) as unknown as PersonnelRow[]
+  if (!rows.length) return null // 개인별이 없으면 손대지 않는다
+
+  const 합 = 재원별합계(rows) // 연차 인자 없음 = 전 연차 합계
+
+  // ⚠ 합계가 0 이면 손대지 않는다. 이름만 적어 두고 참여율·월급여를 아직 안 넣은 줄이 흔한데
+  //   (실제로 그런 행이 있었다), 그걸 근거로 비목 인건비를 0 으로 밀면 그게 사고다.
+  //   「사람을 다 지웠으니 0」과 「아직 덜 적었다」를 구별할 방법이 없어 안전한 쪽을 고른다.
+  if (Object.values(합).every((v) => !v || v <= 0)) return null
+
+  const { data: 기존 } = await db.from("budgets").select("*").eq("과제_id", 과제_id)
+  const 기존재원 = new Set(
+    ((기존 ?? []) as { 비목_대분류?: string; 재원구분?: string }[])
+      .filter((b) => b.비목_대분류 === "PERSONNEL")
+      .map((b) => String(b.재원구분 ?? "")),
+  )
+
+  // ⚠ 금액이 0 인 재원을 **새로 만들지 않는다.** `재원별합계` 는 출연금·현금·현물 세 키를
+  //   0 으로 초기화해 돌려주므로, 그대로 쓰면 쓰지도 않는 「현금 0원」 줄이 표에 생긴다.
+  //   이미 있던 재원은 0 이라도 남긴다 — 줄어든 것이 눈에 보여야 한다.
+  const 재원들 = new Set<string>([
+    ...Object.entries(합)
+      .filter(([, v]) => v > 0)
+      .map(([k]) => k),
+    ...기존재원,
+  ])
+  const 넣을것 = [...재원들].map((재원) => ({
+    과제_id,
+    비목_대분류: "PERSONNEL",
+    재원구분: 재원,
+    배정액: Math.max(0, Math.round(합[재원] ?? 0)),
+    // 인건비에는 한도비율이 없다(연구수당·간접비만 있다). null 로 둬야 검증이 오해하지 않는다.
+    한도비율: null,
+  }))
+  if (!넣을것.length) return null
+
+  const { error: upErr } = await db
+    .from("budgets")
+    .upsert(넣을것, { onConflict: "과제_id,비목_대분류,재원구분" })
+  if (upErr) return null
+  return 합
 }
 
 /**
@@ -136,40 +210,15 @@ export async function deletePersonnelRow(과제_id: number, id: number): Promise
  * ⚠ 개인별 표에 없는 재원의 기존 인건비 줄은 **지우지 않고 0 으로 두지도 않는다.**
  *   손으로 넣어 둔 값을 조용히 없애면 「왜 줄었는지」를 아무도 모른다. 화면에 남겨 사람이 지운다.
  */
-export async function applyPersonnelToBudget(
-  과제_id: number,
-  연차?: number,
-): Promise<ActionResult> {
+export async function applyPersonnelToBudget(과제_id: number): Promise<ActionResult> {
   try {
     const 잠김 = await 계상잠김(과제_id)
     if (잠김) return { ok: false, error: 잠김 }
 
-    const { data, error } = await db
-      .from("personnel_costs")
-      .select("*")
-      .eq("과제_id", 과제_id)
-    if (error) return { ok: false, error: error.message }
-
-    const rows = (data ?? []) as unknown as PersonnelRow[]
-    if (!rows.length) return { ok: false, error: "개인별 인건비가 아직 없습니다." }
-
-    const 합 = 재원별합계(rows, 연차)
-    const 넣을것 = Object.entries(합)
-      .filter(([, v]) => v > 0)
-      .map(([재원, 액]) => ({
-        과제_id,
-        비목_대분류: "PERSONNEL",
-        재원구분: 재원,
-        배정액: 액,
-        // 인건비에는 한도비율이 없다(연구수당·간접비만 있다). null 로 둬야 검증이 오해하지 않는다.
-        한도비율: null,
-      }))
-    if (!넣을것.length) return { ok: false, error: "합계가 0 입니다. 월급여·참여율을 확인하세요." }
-
-    const { error: upErr } = await db
-      .from("budgets")
-      .upsert(넣을것, { onConflict: "과제_id,비목_대분류,재원구분" })
-    if (upErr) return { ok: false, error: upErr.message }
+    // ⚠ 예전에는 화면이 고른 **연차만** 반영했다. 그 탓에 1차년도 6,000,000 이
+    //   2년 합계 13,500,000 을 덮은 사고가 있었다. 이제 연차를 가리지 않는다.
+    const 합 = await 인건비동기화(과제_id)
+    if (!합) return { ok: false, error: "개인별 인건비가 아직 없습니다." }
 
     revalidatePath(`/projects/${과제_id}/budget`)
     revalidatePath(`/projects/${과제_id}`)

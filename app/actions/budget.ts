@@ -20,7 +20,9 @@ import { 계상잠김 } from "@/app/actions/budget-confirm"
 
 export type ActionResult = { ok: boolean; error?: string }
 
-const 재원구분_목록 = ["출연금", "현금", "현물"] as const
+// 출연금은 db/111 에서 현금으로 합쳤다. **새로 쓰지 않는다.**
+// (CHECK 제약은 supabase_admin 소유라 못 좁힌다 — 코드가 안 쓰는 것으로 막는다.)
+const 재원구분_목록 = ["현금", "현물"] as const
 
 /** budgets 의 UNIQUE(과제_id, 비목_대분류, 재원구분) 를 그대로 쓴다. 있으면 갱신, 없으면 삽입. */
 export async function saveBudgetLines(

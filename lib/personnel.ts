@@ -56,7 +56,7 @@ export function 급여총액(r: Pick<PersonnelRow, "월급여">): number {
  *   있으면 안 되기 때문이다 — 값은 항상 이 인건비 표가 아니라 그쪽에서 채워진다.
  */
 export function 재원별합계(rows: PersonnelRow[], 연차?: number) {
-  const out: Record<string, number> = { 출연금: 0, 현금: 0, 현물: 0 }
+  const out: Record<string, number> = { 현금: 0, 현물: 0 }
   for (const r of rows) {
     if (연차 != null && Number(r.연차) !== 연차) continue
     out[r.재원구분] += 총액(r)

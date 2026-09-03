@@ -115,7 +115,7 @@ export async function GET(req: Request) {
   }
 
   // ── 합계 — 재원별로 나눠 적는다. RCMS 는 현금과 현물을 따로 넣는다 ────────
-  const 합 = { 현금: 0, 현물: 0, 출연금: 0 } as Record<string, number>
+  const 합 = { 현금: 0, 현물: 0 } as Record<string, number>
   for (const p of rows) 합[p.재원구분] = (합[p.재원구분] ?? 0) + 총액(p)
   const 총합 = Object.values(합).reduce((a, b) => a + b, 0)
 

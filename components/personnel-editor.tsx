@@ -111,7 +111,7 @@ export function PersonnelEditor({
   const 보이는 = rows.filter((r) => Number(r.연차) === 연차)
   const 더러움 = JSON.stringify(rows) !== JSON.stringify(초기값.map((r) => ({ ...r })))
   const 합 = 재원별합계(rows as PersonnelRow[], 연차)
-  const 총합 = 합.출연금 + 합.현금 + 합.현물
+  const 총합 = 합.현금 + 합.현물
   const 초과 = 참여율초과(rows as PersonnelRow[], 연차)
 
   const 수정 = (row: Draft, patch: Partial<Draft>) =>

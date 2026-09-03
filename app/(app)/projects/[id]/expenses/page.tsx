@@ -129,7 +129,7 @@ export default async function ProjectExpensesPage({
       세액: e.세액 == null ? null : Number(e.세액),
       비목_대분류: (e.비목_대분류 as string) ?? null,
       비목_세부항목: (e.비목_세부항목 as string) ?? null,
-      재원구분: (e.재원구분 as string) ?? "출연금",
+      재원구분: (e.재원구분 as string) ?? "현금",
       연차: e.연차 == null ? null : Number(e.연차),
       ai_확신도: e.ai_확신도 == null ? null : Number(e.ai_확신도),
       ai_근거: (e.ai_근거 as string) ?? null,

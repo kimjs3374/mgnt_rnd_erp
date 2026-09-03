@@ -1,3 +1,24 @@
+-- ⚠⚠⚠ 이 파일을 돌리면 **집행 · 증빙 · 판단 이력이 전부 사라진다.** ⚠⚠⚠
+--
+--   2026-09-04 실제로 날아갔다 — 집행 6건 → 1건, decisions 5건 → 0건.
+--   아래 24행이 과제를 지우려고 집행을 먼저 지우는데(FK 가 NO ACTION 이라 순서상 어쩔 수 없다),
+--   집행이 지워지면 증빙·판단은 ON DELETE CASCADE 로 같이 사라진다.
+--   그런데 **이 파일은 집행을 다시 넣지 않는다.** 제목대로 과제·예산만 넣는다.
+--
+--   데모 5:00 「정정 → 확신도 상승」 장면과 6:00 「연구수당 240,000원 초과」가
+--   그 데이터에 걸려 있다. 돌리고 안 되살리면 시연이 통째로 죽는다.
+--
+--   ▶ 돌리기 전에 반드시:
+--       ./db/psql.sh -c "\copy app.expenses  to '/rnd/backup/bk_expenses.csv'  csv header"
+--       ./db/psql.sh -c "\copy app.decisions to '/rnd/backup/bk_decisions.csv' csv header"
+--       ./db/psql.sh -c "\copy app.evidence  to '/rnd/backup/bk_evidence.csv'  csv header"
+--   ▶ 돌린 뒤 반드시 되살리고, 아래 값이 맞는지 센다:
+--       집행 6건 · decisions 5건 · P01(id 2) 한도 위반은 「연구수당 240,000원 초과」 1건만
+--
+--   ▶ 과제·예산만 다시 심고 싶으면 **24행 delete 를 지우고** 돌려라.
+--     그러면 시드 과제가 안 지워져 UNIQUE 에 걸리므로, 정말 갈아엎을 때만 원래대로 쓴다.
+--
+-- ─────────────────────────────────────────────────────────────────────────────
 -- 더미 시드 ① — 과제 12건 · 예산 배정
 -- 대상: rnd 전용 Postgres, schema=app  (20_budget_schema.sql 적용 후 실행)
 -- 실행: sudo docker exec -i -e PGPASSWORD=... rnd-db psql -U supabase_admin -d postgres -f -

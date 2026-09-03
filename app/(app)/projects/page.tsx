@@ -13,6 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { getProjects, won } from "@/lib/queries"
+import { 연차수, 현재연차, 기간표기 } from "@/lib/fiscal-year"
 import { db, safeSelect } from "@/lib/db"
 
 export const dynamic = "force-dynamic"
@@ -118,7 +119,7 @@ export default async function ProjectsPage() {
                 <TableHead>부처 / 전문기관</TableHead>
                 <TableHead>유형</TableHead>
                 <TableHead>수행기간</TableHead>
-                <TableHead className="text-right">연차</TableHead>
+                <TableHead className="text-right">연차 (현재/총)</TableHead>
                 <TableHead className="text-right">총사업비</TableHead>
                 <TableHead className="text-right">정부지원금</TableHead>
                 <TableHead>상태</TableHead>
@@ -150,8 +151,16 @@ export default async function ProjectsPage() {
                   <TableCell className="tabular-nums text-muted-foreground">
                     {r.시작일 ?? "확인 필요"} ~ {r.종료일 ?? "확인 필요"}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {r.연차 ?? "—"}
+                  {/* 연차는 회계연도로 센다 — 2022-06~2024-05 는 기간 2년이어도 3개 연차다.
+                      저장된 `projects.연차` 를 그대로 찍지 않고 기간에서 계산한다.
+                      저장값은 시간이 지나면 낡지만 기간은 안 낡는다(lib/fiscal-year.ts). */}
+                  <TableCell
+                    className="text-right tabular-nums"
+                    title={기간표기(r.시작일, r.종료일)}
+                  >
+                    {연차수(r.시작일, r.종료일)
+                      ? `${현재연차(r.시작일, r.종료일)} / ${연차수(r.시작일, r.종료일)}`
+                      : (r.연차 ?? "—")}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {won(r.총사업비)}

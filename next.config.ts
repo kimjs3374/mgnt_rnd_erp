@@ -22,6 +22,13 @@ const nextConfig: NextConfig = {
     //    배포 직후 로그인이 안 되면 여기부터 본다.
     serverActions: {
       allowedOrigins: ["rnd.mgnt.kr", "100.110.60.7:3610", "localhost:3610"],
+
+      // ⚠ 서버 액션 본문 기본 상한이 **1MB** 다. 파일 업로드가 서버 액션으로 오므로
+      //    이걸 안 올리면 1MB 넘는 증빙·서류가 조용히 막힌다 —
+      //    액션 코드에 닿기 전에 거부되므로 우리 에러 메시지도 안 뜬다.
+      //    업로드 쪽 상한이 25MB 라 그보다 넉넉히 잡는다(멀티파트 오버헤드 포함).
+      //    app/actions/evidence-files.ts · app/actions/documents.ts
+      bodySizeLimit: "30mb",
     },
   },
 }

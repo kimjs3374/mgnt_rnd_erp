@@ -1,76 +1,44 @@
-import { PageShell, Card, EmptyState } from "@/components/page-shell"
-import { StatusBadge } from "@/components/status-badge"
+import { PageShell } from "@/components/page-shell"
 import { DbError } from "@/components/db-error"
+import { DocumentShelf } from "@/components/document-shelf"
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import { getDocuments } from "@/lib/queries"
+  getDocumentShelf,
+  getDocumentFiles,
+  getUnmatchedDocs,
+} from "@/lib/queries-documents"
 
 export const dynamic = "force-dynamic"
 
 /**
- * 서류함 — v_document_status 를 읽는다.
- * ⚠ 서류의 **내용은 보지 않는다.** 발급일과 종류만 쓴다 — 설계 자체가 개인정보를 안 만진다.
+ * 서류함.
+ *
+ * 「어차피 계속 낼 서류가 무엇인가」에 답한다. 목록을 손으로 관리하지 않는다 —
+ * 수집한 공고의 요구서류(app.ann_required_docs)를 **서류 종류로 묶어** 계산한다.
+ * 같은 서류를 공고마다 다른 이름으로 부르기 때문이다(실측):
+ *   사업자등록증 · 사업자등록증 사본 · 사업자 등록증 · 사업자등록증 사본(사업자등록증명원)
+ * 이름으로 세면 흩어져서 「22개 공고가 사업자등록증을 요구」가 안 나온다.
+ *
+ * 유효기간 우선순위 — **공고문 명시 > 공공문서 기본 90일**. 사업자등록증은 유효기간이 없다.
+ * 여러 공고가 서로 다르게 말하면 가장 짧은 것을 쓴다(어느 공고에도 낼 수 있어야 한다).
+ *
+ * ⚠ 서류의 **내용은 저장하지 않는다.** 발급일·발급기관·종류만 쓴다 — 개인정보를 안 만진다(§2-6).
  */
 export default async function DocumentsPage() {
-  const { rows, error } = await getDocuments()
+  const [shelf, files, unmatched] = await Promise.all([
+    getDocumentShelf(),
+    getDocumentFiles(),
+    getUnmatchedDocs(),
+  ])
+
+  const error = shelf.error ?? files.error ?? unmatched.error
 
   return (
     <PageShell
       title="서류함"
-      description="공고가 요구하는 서류를 우리가 가지고 있는지, 아직 유효한지."
+      description="공고가 반복해서 요구하는 서류를 종류로 묶어, 우리가 가지고 있는지와 아직 유효한지 본다."
     >
-      {error && <DbError what="서류 현황" error={error} />}
-
-      <Card>
-        {rows.length === 0 && !error ? (
-          <EmptyState
-            title="등록된 서류가 없습니다"
-            hint="발급일과 종류만 넣으면 만료 판정이 됩니다. 파일 내용은 보지 않습니다."
-          />
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="w-[280px]">서류명</TableHead>
-                <TableHead>발급일</TableHead>
-                <TableHead>결산연도</TableHead>
-                <TableHead>만료일</TableHead>
-                <TableHead>상태</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((d) => (
-                <TableRow key={d.코드} className="h-[38px] text-[13px]">
-                  <TableCell className="font-medium">{d.이름}</TableCell>
-                  <TableCell className="tabular-nums text-muted-foreground">
-                    {d.발급일 ?? "—"}
-                  </TableCell>
-                  <TableCell className="tabular-nums text-muted-foreground">
-                    {d.결산연도 ?? "—"}
-                  </TableCell>
-                  <TableCell className="tabular-nums text-muted-foreground">
-                    {d.만료일 ?? "—"}
-                  </TableCell>
-                  <TableCell>
-                    <StatusBadge value={d.상태} />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </Card>
-
-      <p className="text-xs text-muted-foreground">
-        유효기간은 공고가 명시하면 그것이 기본값보다 우선한다. 규칙을 못 찾으면
-        「공고확인필요」로 두고 단정하지 않는다.
-      </p>
+      {error && <DbError what="서류함" error={error} />}
+      <DocumentShelf shelf={shelf.rows} files={files.rows} unmatched={unmatched.rows} />
     </PageShell>
   )
 }

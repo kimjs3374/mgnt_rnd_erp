@@ -4,6 +4,7 @@
 // ⚠ 이 화면에는 **더미를 넣지 않았다**(사용자 결정). 그래서 이 테스트가 만든 업체는
 //   끝에서 반드시 지운다 — 남으면 그게 곧 지어낸 데이터가 되고 시연 화면에 뜬다.
 //   실패로 중단돼도 지우도록 finally 에서 정리한다.
+import { 로그인하고 } from "./lib/login.mjs"
 import { writeFileSync } from "node:fs"
 import puppeteer from "puppeteer-core"
 
@@ -36,6 +37,8 @@ const browser = await puppeteer.launch({
   defaultViewport: { width: 1440, height: 1200 },
 })
 const page = await browser.newPage()
+// 게이트가 붙어 있다(2026-09-04) — 로그인하지 않으면 모든 goto 가 /login 으로 튕긴다.
+await 로그인하고(page, BASE)
 const errors = []
 page.on("pageerror", (e) => errors.push(String(e)))
 page.on("console", (m) => m.type() === "error" && errors.push(m.text()))

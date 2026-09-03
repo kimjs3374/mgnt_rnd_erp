@@ -5,6 +5,7 @@
 //
 // ⚠ 시드 12건은 건드리지 않는다. 스크래치 과제를 만들어 쓰고 **끝에 반드시 지운다**
 //   (과제를 지우면 budgets·personnel_costs 가 cascade 로 같이 지워진다).
+import { 로그인하고 } from "./lib/login.mjs"
 import puppeteer from "puppeteer-core"
 import { env, pgSelect } from "../scripts/lib/pgrest.mjs"
 
@@ -56,6 +57,8 @@ const browser = await puppeteer.launch({
   defaultViewport: { width: 1600, height: 1400 },
 })
 const page = await browser.newPage()
+// 게이트가 붙어 있다(2026-09-04) — 로그인하지 않으면 모든 goto 가 /login 으로 튕긴다.
+await 로그인하고(page, BASE)
 const errors = []
 page.on("pageerror", (e) => errors.push(String(e)))
 page.on("console", (m) => m.type() === "error" && errors.push(m.text()))

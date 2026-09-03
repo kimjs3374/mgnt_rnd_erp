@@ -1,3 +1,5 @@
+import puppeteer from "puppeteer-core"
+import { 로그인하고 } from "./lib/login.mjs"
 // 종료된 과제에는 「연구비 계상」 진입점을 두지 않는다 — 2026-09-03 사용자 지시.
 //
 // 계상은 협약·수행 중에 하는 일이다. 끝난 과제에 계상이 열려 있으면 아직 배정을 고칠 수
@@ -17,10 +19,21 @@ const ok = (조건, 무엇, 덧말 = "") => {
   if (!조건) 실패++
 }
 
+// ⚠ 게이트가 붙은 뒤(2026-09-04)로는 **fetch 로 화면을 못 읽는다** — 307 로 /login 으로 튕긴다.
+// 읽기만 하는 테스트라 브라우저로 바꿔도 검사 내용은 그대로다.
+const browser = await puppeteer.launch({
+  executablePath: "/usr/bin/google-chrome",
+  headless: "new",
+  args: ["--no-sandbox", "--disable-gpu"],
+  defaultViewport: { width: 1600, height: 1200 },
+})
+const page = await browser.newPage()
+await 로그인하고(page, BASE)
+
 const get = async (path) => {
-  const r = await fetch(`${BASE}${path}`, { redirect: "follow" })
-  if (!r.ok) throw new Error(`${path} → HTTP ${r.status}`)
-  return r.text()
+  const res = await page.goto(`${BASE}${path}`, { waitUntil: "networkidle0", timeout: 60000 })
+  if (!res || !res.ok()) throw new Error(`${path} → HTTP ${res?.status()}`)
+  return page.content()
 }
 
 /** 탭 줄에 그 탭이 걸려 있는가. 본문의 다른 글자와 섞이지 않게 href 로 본다. */
@@ -47,7 +60,10 @@ console.log("② 수행중 과제 상세 — 계상 탭이 그대로 있다 (거
 
 console.log("③ 과제사업 대장 — 종료 줄에는 「계상」 링크를 걸지 않는다")
 {
-  const html = await get("/projects")
+  // ⚠ 단계가 화면으로 갈렸다(2026-09-04) — 종료 과제는 `/projects`(수행중)에 없고
+  //   `/projects/closed` 에 모여 있다. 예전 주소로 재면 「줄이 없어서 통과」가 되어
+  //   검사가 아무것도 안 보게 된다.
+  const html = await get("/projects/closed")
   ok(
     !html.includes(`href="/projects/${종료과제}/budget"`),
     `종료 과제(${종료과제}) 줄에 계상 링크가 없다`,
@@ -56,9 +72,18 @@ console.log("③ 과제사업 대장 — 종료 줄에는 「계상」 링크를
     html.includes(`href="/projects/${종료과제}/settlement"`),
     "그 줄의 정산 링크는 남아 있다",
   )
+}
+
+// 수행중 줄은 수행중 화면에서 본다 — 단계가 화면으로 갈렸다(2026-09-04).
+{
+  const html = await get("/projects")
   ok(
     html.includes(`href="/projects/${수행중과제}/budget"`),
     `수행중 과제(${수행중과제}) 줄에는 계상 링크가 있다`,
+  )
+  ok(
+    !html.includes(`href="/projects/${종료과제}/`),
+    "수행중 화면에는 종료 과제 줄이 아예 없다",
   )
 }
 
@@ -77,6 +102,8 @@ console.log("⑤ 데이터를 숨긴 게 아니다 — 종료 과제 정산 원�
   ok(html.includes("과제비 원장"), "정산 원장이 뜬다")
   ok(/[0-9],[0-9]{3}/.test(html), "배정·집행 금액이 찍힌다")
 }
+
+await browser.close()
 
 console.log()
 if (실패) {

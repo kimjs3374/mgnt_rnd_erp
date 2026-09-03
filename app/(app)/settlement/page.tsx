@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { PageShell, Card, EmptyState } from "@/components/page-shell"
 import { DbError } from "@/components/db-error"
 import {
@@ -22,7 +23,7 @@ export default async function SettlementPage() {
   return (
     <PageShell
       title="정산"
-      description="비목·금액·증빙이 제출 순서대로 정렬된다. 보고 그대로 옮겨 적으면 된다."
+      description="과제별 정산 진행 상황. 과제를 열면 과제비 원장과 RCMS 입력 대조표가 있다."
     >
       {error && <DbError what="정산 현황" error={error} />}
 
@@ -50,7 +51,15 @@ export default async function SettlementPage() {
             <TableBody>
               {rows.map((s) => (
                 <TableRow key={`${s.과제_id}-${s.연차}`} className="h-[38px] text-[13px]">
-                  <TableCell className="font-medium">{s.과제명}</TableCell>
+                  <TableCell className="font-medium">
+                    {/* RCMS 대조표와 사용 건은 과제 안에 있다. 여기는 어느 과제를 열지 고르는 자리다. */}
+                    <Link
+                      href={`/projects/${s.과제_id}/settlement`}
+                      className="underline-offset-2 hover:underline"
+                    >
+                      {s.과제명}
+                    </Link>
+                  </TableCell>
                   <TableCell className="text-right tabular-nums">{s.연차 ?? "—"}</TableCell>
                   <TableCell className="text-right tabular-nums">{s.집행건수}</TableCell>
                   <TableCell className="text-right tabular-nums">{s.검토대기}</TableCell>

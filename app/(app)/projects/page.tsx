@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { PageShell, Card, Stat, EmptyState } from "@/components/page-shell"
 import { StatusBadge } from "@/components/status-badge"
 import { DbError } from "@/components/db-error"
@@ -29,7 +30,8 @@ export default async function ProjectsPage() {
 
   const 총사업비 = rows.reduce((s, r) => s + (r.총사업비 ?? 0), 0)
   const 정부지원금 = rows.reduce((s, r) => s + (r.정부지원금 ?? 0), 0)
-  const 수행중 = rows.filter((r) => r.상태 === "수행").length
+  // ⚠ DB 가 쓰는 값은 「수행중」이다. "수행" 으로 비교하면 언제나 0 이 나온다.
+  const 수행중 = rows.filter((r) => r.상태 === "수행중").length
 
   return (
     <PageShell
@@ -68,12 +70,21 @@ export default async function ProjectsPage() {
                 <TableHead className="text-right">총사업비</TableHead>
                 <TableHead className="text-right">정부지원금</TableHead>
                 <TableHead>상태</TableHead>
+                <TableHead className="w-[150px]" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.map((r) => (
                 <TableRow key={r.id} className="h-[38px] text-[13px]">
-                  <TableCell className="font-medium">{r.과제명}</TableCell>
+                  <TableCell className="font-medium">
+                    {/* 계상·정산은 과제 안에서 한다. 목록은 어느 과제로 들어갈지만 고른다. */}
+                    <Link
+                      href={`/projects/${r.id}`}
+                      className="underline-offset-2 hover:underline"
+                    >
+                      {r.과제명}
+                    </Link>
+                  </TableCell>
                   <TableCell className="text-muted-foreground">
                     {r.과제코드 ?? "—"}
                   </TableCell>
@@ -98,6 +109,21 @@ export default async function ProjectsPage() {
                   </TableCell>
                   <TableCell>
                     <StatusBadge value={r.상태} />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Link
+                      href={`/projects/${r.id}/budget`}
+                      className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                    >
+                      계상
+                    </Link>
+                    <span className="px-1.5 text-xs text-muted-foreground">·</span>
+                    <Link
+                      href={`/projects/${r.id}/settlement`}
+                      className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                    >
+                      정산
+                    </Link>
                   </TableCell>
                 </TableRow>
               ))}

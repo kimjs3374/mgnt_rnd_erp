@@ -48,6 +48,10 @@ export const NAV: NavGroup[] = [
     icon: "Briefcase",
     items: [
       { title: "공고 탐색", url: "/project-announcements" },
+      // 공고 탐색과 사업 대장 **사이**에 둔다. 일의 순서가 그렇다 —
+      // 공고를 보고 → 지원해서 선정되면 → 여기서 사업비를 잡고 → 그 결과가 대장에 쌓인다.
+      // 대장 아래에 두면 「이미 끝난 것을 들여다보는 화면」으로 읽힌다.
+      { title: "과제 계상", url: "/project-budgeting" },
       { title: "사업 대장", url: "/projects" },
     ],
   },
@@ -89,6 +93,16 @@ export function crumbsFor(pathname: string): { label: string; href?: string }[] 
       { label: "과제" },
       ...(tab && tab.seg ? [{ label: tab.title }] : []),
     ]
+  }
+
+  // 공고 상세(사업명 클릭)도 공고마다 id 가 달라 NAV 에 없다 — 목록 쪽 라벨을 그대로 쓴다.
+  const ann = /^\/(announcements|project-announcements)\/\d+$/.exec(pathname)
+  if (ann) {
+    const listPath = "/" + ann[1]
+    for (const g of NAV) {
+      const leaf = g.items?.find((i) => i.url === listPath)
+      if (leaf) return [{ label: g.title, href: listPath }, { label: leaf.title, href: listPath }, { label: "공고 상세" }]
+    }
   }
 
   for (const g of NAV) {

@@ -7,7 +7,8 @@ import {
   getEvidenceDownloadUrl,
   deleteEvidenceFile,
 } from "@/app/actions/evidence-files"
-import { 증빙파일_점검 } from "@/lib/evidence-types"
+import { 문서파일_점검 } from "@/lib/upload-limits"
+import { useFileDrop, 드롭강조 } from "@/components/use-file-drop"
 import type { EvidenceRequirement, EvidenceFile } from "@/lib/evidence-types"
 
 /**
@@ -46,15 +47,6 @@ export type { EvidenceFile }
 const KB = (n: number | null) =>
   n == null ? "" : n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))}KB` : `${(n / 1024 / 1024).toFixed(1)}MB`
 
-/**
- * 끌고 온 것이 **파일**인가. 브라우저에서 글자·링크를 끌어와도 카드가 번쩍이지 않게 한다.
- * `types` 에 `Files` 가 들어 있는지가 dragover 단계에서 알 수 있는 유일한 단서다
- * (`dataTransfer.files` 는 drop 전까지 비어 있다).
- */
-function 파일드래그인가(e: React.DragEvent) {
-  return Array.from(e.dataTransfer?.types ?? []).includes("Files")
-}
-
 /** ISO 문자열 → `09-03 19:40` (KST). 서버·클라이언트가 같은 값을 내야 하므로 직접 계산한다. */
 function 시각(iso: string) {
   const t = new Date(iso)
@@ -83,88 +75,14 @@ export function EvidenceAttachments({
   const [msg, setMsg] = React.useState<{ ok: boolean; text: string } | null>(null)
   const [pending, start] = React.useTransition()
   const [전체보기, set전체보기] = React.useState(false)
-  /** 지금 파일이 떠 있는 자리. `요건:12` · `비목:MATERIAL` · `패널` 중 하나만 강조된다. */
-  const [드롭대상, set드롭대상] = React.useState<string | null>(null)
-  /**
-   * dragleave 는 **자식으로 들어갈 때도** 튄다. 그대로 쓰면 카드 안에서 글자 하나를 지날 때마다
-   * 강조가 껌뻑인다. 자리마다 들어온 횟수를 세서 0이 될 때만 끈다.
-   */
-  const 깊이 = React.useRef<Record<string, number>>({})
-
-  /**
-   * ⚠ 드롭을 빗맞히면 **브라우저가 그 파일을 열어 버린다** — 시연 중이면 `rnd.mgnt.kr` 이
-   * 통째로 사라지고 뒤로가기로 돌아와야 한다. 창 전체에서 파일 드롭의 기본 동작을 막는다.
-   * 카드·서류 줄에서 처리한 드롭은 거기서 propagation 을 끊으므로 여기까지 오지 않는다.
-   */
-  React.useEffect(() => {
-    const 기본동작막기 = (e: DragEvent) => {
-      if (!Array.from(e.dataTransfer?.types ?? []).includes("Files")) return
-      e.preventDefault()
-    }
-    const 강조되돌리기 = () => {
-      깊이.current = {}
-      set드롭대상(null)
-    }
-    window.addEventListener("dragover", 기본동작막기)
-    window.addEventListener("drop", 기본동작막기)
-    window.addEventListener("drop", 강조되돌리기)
-    window.addEventListener("dragend", 강조되돌리기)
-    return () => {
-      window.removeEventListener("dragover", 기본동작막기)
-      window.removeEventListener("drop", 기본동작막기)
-      window.removeEventListener("drop", 강조되돌리기)
-      window.removeEventListener("dragend", 강조되돌리기)
-    }
-  }, [])
+  // 드롭 자리·강조·창 전체 기본동작 차단은 `components/use-file-drop.ts` 한 벌을 쓴다
+  // (규정 문서함도 같은 것을 쓴다 — 함정 다섯 개를 두 곳에서 각각 막지 않는다).
+  const { 드롭대상, 드롭영역 } = useFileDrop({ 거부됨: (사유) => setMsg({ ok: false, text: 사유 }) })
 
   const 요건있는비목 = Array.from(new Set(요건.map((r) => r.비목_대분류)))
   const 보일비목 = 전체보기
     ? Array.from(new Set([...계상비목, ...요건있는비목]))
     : 요건있는비목.filter((c) => 계상비목.includes(c))
-
-  /**
-   * 드롭 받는 자리 하나를 만든다.
-   *
-   * `막힘` 에 문구가 있으면 **받지 않는 자리**다 — 커서를 「금지」로 바꾸고, 놓으면 그 이유를 말한다.
-   * 안쪽 자리(서류 줄)가 바깥 자리(비목 카드)를 이겨야 하므로 전부 `stopPropagation` 한다.
-   * 그래서 카드 → 줄 로 들어가면 카드 강조가 꺼지고 줄 강조만 켜진다.
-   */
-  function 드롭영역(키: string, 받기: (files: File[]) => void, 막힘?: string | null) {
-    return {
-      onDragEnter(e: React.DragEvent) {
-        if (!파일드래그인가(e)) return
-        e.preventDefault()
-        e.stopPropagation()
-        깊이.current[키] = (깊이.current[키] ?? 0) + 1
-        set드롭대상(키)
-      },
-      onDragOver(e: React.DragEvent) {
-        if (!파일드래그인가(e)) return
-        // preventDefault 를 빠뜨리면 이 자리는 드롭을 아예 못 받는다(브라우저 기본값이 「거부」다).
-        e.preventDefault()
-        e.stopPropagation()
-        e.dataTransfer.dropEffect = 막힘 ? "none" : "copy"
-      },
-      onDragLeave(e: React.DragEvent) {
-        if (!파일드래그인가(e)) return
-        e.stopPropagation()
-        깊이.current[키] = Math.max(0, (깊이.current[키] ?? 1) - 1)
-        if (깊이.current[키] === 0) set드롭대상((v) => (v === 키 ? null : v))
-      },
-      onDrop(e: React.DragEvent) {
-        if (!파일드래그인가(e)) return
-        e.preventDefault()
-        e.stopPropagation()
-        깊이.current[키] = 0
-        set드롭대상((v) => (v === 키 ? null : v))
-        if (막힘) {
-          setMsg({ ok: false, text: 막힘 })
-          return
-        }
-        받기(Array.from(e.dataTransfer.files ?? []))
-      },
-    }
-  }
 
   /**
    * 파일 여러 개를 한 자리에 올린다. 드래그드랍은 폴더에서 통째로 끌어오므로 여러 개가 기본이다.
@@ -185,7 +103,7 @@ export function EvidenceAttachments({
     const 거절: string[] = []
     const 보낼것: File[] = []
     for (const f of 고른것) {
-      const 문제 = 증빙파일_점검(f)
+      const 문제 = 문서파일_점검(f)
       if (문제) 거절.push(문제)
       else 보낼것.push(f)
     }
@@ -298,7 +216,7 @@ export function EvidenceAttachments({
                 {...드롭영역(카드키, (files) => 올리기(비목, null, files))}
                 className={
                   "rounded-md border transition-colors " +
-                  (드롭대상 === 카드키 ? "border-primary bg-primary/5" : "")
+                  (드롭대상 === 카드키 ? 드롭강조.카드 : "")
                 }
               >
                 <div className="flex flex-wrap items-baseline gap-2 border-b bg-secondary/30 px-3 py-2">
@@ -345,14 +263,8 @@ export function EvidenceAttachments({
                                 key={r.id}
                                 {...드롭영역(줄키, (files) => 올리기(비목, r.id, files), 줄막힘)}
                                 className={
-                                  // outline 은 자리를 차지하지 않는다 — border 로 하면 강조될 때마다
-                                  // 목록이 1px 씩 밀려서 어느 줄에 놓는 중인지 오히려 헷갈린다.
                                   "rounded-sm text-[12.5px] transition-colors " +
-                                  (드롭대상 !== 줄키
-                                    ? ""
-                                    : 줄막힘
-                                      ? "bg-destructive/10 outline outline-1 outline-destructive"
-                                      : "bg-primary/10 outline outline-1 outline-primary")
+                                  (드롭대상 !== 줄키 ? "" : 줄막힘 ? 드롭강조.막힘 : 드롭강조.받음)
                                 }
                               >
                                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">

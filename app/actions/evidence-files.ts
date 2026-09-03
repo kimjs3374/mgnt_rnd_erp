@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
 import { getCurrentUser } from "@/lib/current-user"
-import { 증빙_확장자, 증빙파일_점검 } from "@/lib/evidence-types"
+import { 문서_확장자, 문서파일_점검 } from "@/lib/upload-limits"
 
 /**
  * 비목별 RCMS 증빙 파일 — 업로드 · 다운로드 · 삭제.
@@ -20,8 +20,8 @@ import { 증빙_확장자, 증빙파일_점검 } from "@/lib/evidence-types"
 
 export type ActionResult = { ok: boolean; error?: string; url?: string }
 
-// 크기·확장자 제한은 `lib/evidence-types.ts` 한 곳에 있다. 화면도 같은 것을 보고 미리 거르지만
-// **최종 판정은 여기서 한다** — 화면 검사는 우회할 수 있다.
+// 크기·확장자 제한은 `lib/upload-limits.ts` 한 곳에 있다(규정 문서함도 같은 것을 쓴다).
+// 화면도 같은 것을 보고 미리 거르지만 **최종 판정은 여기서 한다** — 화면 검사는 우회할 수 있다.
 
 export async function uploadEvidenceFile(formData: FormData): Promise<ActionResult> {
   try {
@@ -37,9 +37,9 @@ export async function uploadEvidenceFile(formData: FormData): Promise<ActionResu
     if (!Number.isInteger(과제_id) || 과제_id <= 0) return { ok: false, error: "과제를 찾을 수 없다." }
     if (!비목_대분류) return { ok: false, error: "비목이 없다." }
     if (!(file instanceof File) || file.size === 0) return { ok: false, error: "파일을 고르세요." }
-    const 문제 = 증빙파일_점검(file)
+    const 문제 = 문서파일_점검(file)
     if (문제) return { ok: false, error: 문제 }
-    const ext = 증빙_확장자(file.name)
+    const ext = 문서_확장자(file.name)
 
     // 요건이 지정됐으면 개인정보 여부를 DB 에서 확인한다. 화면 값을 믿지 않는다.
     let 요건명: string | null = null

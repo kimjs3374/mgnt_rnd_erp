@@ -276,6 +276,13 @@ def batch(limit: int | None = None, save: bool = True) -> dict:
     anns = [a for a in anns if a not in 마감스킵]
     if 마감스킵:
         print(f"  마감 지나 판정 제외: {len(마감스킵)}건")
+        # ⚠ 실측: 이 필터를 넣기 전에 이미 저장된 같은 엔진버전 행이 남아 재실행해도
+        #   안 지워졌다(save_one() 은 "이번에 처리한 것"만 delete+insert 한다 — 마감돼
+        #   빠진 건 애초에 처리 대상이 아니라서 안 건드려진다). 마감된 건 이 엔진버전
+        #   행을 명시적으로 지운다 — 재실행이 항상 같은 결과가 되게 한다.
+        for a in 마감스킵:
+            rest.delete("ann_rule_scores", {"announcement_id": a["id"], "엔진버전": F.ENGINE_VERSION})
+            rest.delete("ann_features", {"announcement_id": a["id"], "엔진버전": F.ENGINE_VERSION})
 
     통계: dict[str, int] = {}
     실패: list[str] = []

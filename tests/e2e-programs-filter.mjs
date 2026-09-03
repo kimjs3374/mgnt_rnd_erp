@@ -98,14 +98,9 @@ try {
     }
   }
 
-  // ⚠ `ProgramsStageView`(다른 세션 파일)의 Base UI 경고는 별건이다 —
-  //   Button 이 native <button> 으로 안 렌더되는 접근성 경고이고 이 필터 줄과 무관하다.
-  //   담당에게 넘겼다. 여기서 잡으면 이 테스트가 남의 파일 상태에 묶여 늘 빨개진다.
-  const 내경고 = errors.filter((e) => !e.includes("nativeButton"))
-  확인(내경고.length === 0, "콘솔 오류 없음(남의 알려진 경고 제외)", 내경고.slice(0, 2).join(" | "))
-  if (errors.length !== 내경고.length) {
-    log(`※ ProgramsStageView 의 Base UI nativeButton 경고 ${errors.length - 내경고.length}건 — 담당 확인 필요`)
-  }
+  // 예외를 두지 않는다. `ProgramsStageView` 의 Base UI `nativeButton` 경고는 담당이 고쳤고(c460681)
+  // 지금 0건이다 — 예외를 남겨 두면 **같은 경고가 새로 생겨도 조용히 지나간다.**
+  확인(errors.length === 0, "콘솔 오류 없음", errors.slice(0, 2).join(" | "))
 } catch (e) {
   console.log(`  ✗ 예외 — ${e.message}`)
   실패++

@@ -343,7 +343,8 @@ def eligibility_check(announcement_id: int) -> str:
         return (
             f"'{ann[0]['사업명']}' — 자격 요건이 아직 추출되지 않았다.\n"
             "판정: 요건 미확인. **「확인 필요」보다 아래 등급이다.**\n"
-            "접수기간만 보고 「신청 가능」이라고 하면 안 된다 — 실측에서 1,479건 중 729건이 그렇게 잘못 찍혔다."
+            "접수기간만 보고 「신청 가능」이라고 하면 안 된다 — 실측에서 1,479건 중 729건이 그렇게 잘못 찍혔다.\n"
+            f"→ 판정하려면 먼저 parse_announcement({announcement_id}) 로 공고문에서 요건을 뽑는다."
         )
 
     prof = q("select * from app.company_profile order by 결산연도 desc limit 1")
@@ -613,6 +614,105 @@ def collect_announcements(
     return _수집요약(meta)
 
 
+def _쓰기환경():
+    """announce.py 는 쓰기(service_role)를 하므로 SERVICE_ROLE_KEY 가 필요하다.
+
+    ⚠ 맨 위에서 import 하면 안 된다. mcp.json 은 RND_DSN 만 넘기므로 키가 없는 자리에서
+      import 하는 순간 KeyError 로 **서버가 통째로 죽는다 — 그런데 에러는 안 보이고**
+      모델이 "연결에 실패한 것 같다"고만 말한다(§4.5 함정 4번과 같은 증상).
+      그래서 도구를 부를 때 환경을 먼저 채우고 그 다음에 import 한다.
+    """
+    if "SERVICE_ROLE_KEY" not in os.environ:
+        path = os.environ.get("RND_ENV_FILE", "/rnd/docker/.env")
+        try:
+            with open(path, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    k, v = line.split("=", 1)
+                    os.environ.setdefault(k.strip(), v.strip())
+        except OSError as e:
+            return f"쓰기 자격증명을 못 읽었다({path}): {e}"
+    if "SERVICE_ROLE_KEY" not in os.environ:
+        return "SERVICE_ROLE_KEY 가 없다. 이 도구는 DB 에 써야 해서 읽기 전용 자격증명만으로는 못 돈다."
+    return ""
+
+
+@mcp.tool()
+def parse_announcement(announcement_id: int, force: bool = False) -> str:
+    """공고문에서 자격 요건을 뽑아 DB 에 넣는다. 판정(eligibility_check)의 앞 단계다.
+
+    「요건 미확인」이라고 나온 공고에 이걸 쓴다. 요건이 이미 있으면 다시 뽑지 않는다
+    (force=true 로만 재판독한다 — 헤드리스 호출 한 번이 그대로 한도다).
+
+    공고문 첨부가 없는 공고는 오픈API 요약으로 판독하고, 무엇을 읽었는지 답에 밝힌다.
+    요약에서 뽑은 요건은 공고문에서 뽑은 것보다 성기다 — 그걸 감추지 않는다.
+    확신도 0.70 미만은 저장하되 필수여부를 끈다. 애매한 것으로 「지원 불가」를 만들지 않는다.
+    """
+    ann = q(
+        "select 사업명, coalesce(nullif(본문,''),'') as 본문, coalesce(nullif(요약,''),'') as 요약,"
+        " 공고문_url from app.announcements where id = %s",
+        (announcement_id,),
+    )
+    if not ann:
+        return none(f"공고 {announcement_id} 가 없다.")
+    a = ann[0]
+
+    있는것 = q(
+        "select count(*) as n from app.ann_requirements where announcement_id = %s", (announcement_id,)
+    )[0]["n"]
+    if 있는것 and not force:
+        return (
+            f"'{a['사업명']}' — 자격 요건이 이미 {있는것}건 들어 있다. 다시 뽑지 않는다.\n"
+            f"판정은 eligibility_check({announcement_id}) 로 한다. 다시 읽히려면 force=true."
+        )
+
+    if not a["본문"] and not a["요약"]:
+        붙임 = f"\n공고문 파일은 있다({a['공고문_url']}) — 수집 단계에서 첨부를 못 읽은 것이다." if a["공고문_url"] else ""
+        return (
+            f"'{a['사업명']}' — 읽을 공고문도 요약도 없다. 요건을 지어내지 않는다."
+            f"{붙임}\n→ collect_announcements 로 이 출처를 다시 받아오면 본문이 채워질 수 있다."
+        )
+
+    err = _쓰기환경()
+    if err:
+        return err
+    import announce  # noqa: PLC0415 — 위 주석 참조. 반드시 환경을 채운 뒤에 부른다.
+
+    try:
+        res = announce.extract_and_save(announcement_id)
+    except Exception as e:  # 헤드리스 실패·PostgREST 실패를 모델에게 그대로 알린다
+        return f"'{a['사업명']}' 요건 판독 실패: {type(e).__name__}: {e}"
+
+    요건, 기타 = res.get("요건") or [], res.get("기타") or []
+    if not 요건 and not 기타:
+        return (
+            f"'{a['사업명']}' — {res.get('판독원본')}에서 자격 요건을 못 찾았다"
+            f"{' (' + res['사유'] + ')' if res.get('사유') else ''}.\n"
+            "판정: 요건 미확인. 없는 요건을 만들어내지 않는다."
+        )
+
+    out = [
+        f"'{a['사업명']}' 요건 {len(요건)}건 저장 ({res.get('판독원본')} 판독"
+        + (", 본문이 길어 자격 구간만 잘라 읽음" if res.get("잘림") else "")
+        + ")"
+    ]
+    for r in 요건:
+        기준 = " ".join(str(x) for x in (r.get("연산자"), r.get("기준값"), r.get("단위")) if x)
+        out.append(
+            f"- [{'필수' if r.get('필수여부') else '조건'}] {r.get('항목')}"
+            + (f" {기준}" if 기준 else "")
+            + (f"\n  근거: {str(r.get('원문'))[:120]}" if r.get("원문") else "")
+        )
+    if 기타:
+        out.append(f"\n어휘에 없는 요건 {len(기타)}건 — 자동 판정에 안 쓰고 사람이 본다")
+        for r in 기타[:5]:
+            out.append(f"- {str(r.get('내용') or r)[:100]}")
+    out.append(f"\n→ 이제 eligibility_check({announcement_id}) 로 회사 프로필과 대조한다.")
+    return "\n".join(out)
+
+
 @mcp.tool()
 def collect_progress(run_id: str = "") -> str:
     """돌고 있는(또는 방금 끝난) 공고 수집이 어디까지 갔는지 본다. 비워두면 가장 최근 수집."""
@@ -651,6 +751,169 @@ def collection_status() -> str:
     도는중 = collect.진행중()
     if 도는중:
         out.append(f"\n지금 {도는중['source']} 수집이 돌고 있다 — collect_progress('{도는중['run_id']}')")
+    return "\n".join(out)
+
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 규칙 판정 — LLM 을 부르지 않는다 (bot/ann_score.py)
+#
+# eligibility_check 와 다른 층이다: eligibility_check 는 parse_announcement 가
+# LLM 으로 뽑은 ann_requirements 를 대조한다(요건 추출에 헤드리스 1회가 든다).
+# 여기는 요건 추출도 정규식으로 한다 — 판정 전 과정에 LLM 호출이 0 이다.
+# 그래서 836건 전체를 미리 돌려둘 수 있고, 아래 도구들은 그 결과를 읽기만 한다.
+# ─────────────────────────────────────────────────────────────────────────────
+@mcp.tool()
+def rule_eligibility_scan(region: str = "", 판정: str = "") -> str:
+    """규칙 엔진이 이미 매긴 자격판정을 훑어본다. LLM 을 부르지 않는다 — 즉시 답한다.
+
+    판정을 "가능"·"불가"·"확인필요"·"요건미확인" 중 하나로 좁힐 수 있다.
+    아직 한 번도 안 돌렸으면(v_ann_rule_coverage 가 비어 있으면) rule_eligibility_check 로
+    한 건을 먼저 테스트하거나, 배치는 서버에서 `bot/ann_rules.py 배치` 로 돌린다.
+    """
+    cov = q("select * from app.v_ann_rule_coverage order by 엔진버전 desc limit 1")
+    if not cov:
+        return none("규칙 판정을 아직 한 번도 안 돌렸다. rule_eligibility_check(공고id) 로 한 건을 먼저 본다.")
+    c = cov[0]
+
+    sql = (
+        "select r.announcement_id, a.사업명, a.지역, r.판정, r.점수, r.확신도, r.커버리지, r.판정경로"
+        "  from app.ann_rule_scores r join app.announcements a on a.id = r.announcement_id"
+        " where r.엔진버전 = %s"
+    )
+    params: tuple = (c["엔진버전"],)
+    if 판정:
+        sql += " and r.판정 = %s"
+        params += (판정,)
+    if region:
+        sql += " and coalesce(a.지역,'') ilike %s"
+        params += (f"%{region}%",)
+    sql += " order by r.점수 desc, r.확신도 desc limit 30"
+    rows = q(sql, params)
+
+    out = [
+        f"규칙 엔진 {c['엔진버전']} · 전체 공고 {c['전체공고']}건 중 {c['판정건수']}건 판정"
+        f" · LLM 호출 0회(전부)"
+        f"\n가능 {c['가능']} · 불가 {c['불가']} · 확인필요 {c['확인필요']} · 요건미확인 {c['요건미확인']}"
+        f" · 평균 커버리지 {c['평균커버리지']}"
+    ]
+    if not rows:
+        out.append(f"\n조건(판정={판정 or '전체'}, 지역={region or '전체'})에 맞는 공고가 없다.")
+        return "\n".join(out)
+
+    out.append(f"\n표본 {len(rows)}건 (점수·확신도 순):")
+    for r in rows:
+        out.append(
+            f"- [{r['announcement_id']}] {r['판정']} {r['점수']}점 (확신도 {r['확신도']}, "
+            f"커버리지 {r['커버리지']}) · {r['사업명']}"
+        )
+    out.append(
+        "\n※ 「요건미확인」은 본문을 못 읽었거나 조항을 다 못 갈랐다는 뜻이다 — 「불가」가 아니다."
+        "\n※ 한 건을 자세히 보려면 rule_eligibility_check(공고id)."
+    )
+    return "\n".join(out)
+
+
+@mcp.tool()
+def rule_eligibility_check(announcement_id: int) -> str:
+    """공고 한 건을 규칙 엔진으로 판정한다. LLM 호출 0회, 보통 20ms 안에 끝난다.
+
+    eligibility_check 와 출력 형식이 비슷하지만 이건 즉석에서 다시 계산한다(항상 최신
+    company_profile·사람 답변을 반영). 게이트마다 근거문장을 원문 그대로 붙인다 —
+    확신도 0.70 미만은 이미 코드가 확정을 막아뒀다(§6 설계 원칙 2번).
+    """
+    err = _쓰기환경()
+    if err:
+        return err
+    import ann_rules  # noqa: PLC0415 — 환경을 채운 뒤에만 import 한다(§4.5 함정 4번과 같은 이유)
+
+    try:
+        r = ann_rules.score_announcement(announcement_id, save=True)
+    except LookupError as e:
+        return none(str(e))
+    except Exception as e:
+        return f"규칙 판정 실패: {type(e).__name__}: {e}"
+
+    out = [
+        f"'{r['사업명']}'",
+        f"판정: {r['판정']} · {r['점수']}점 · 확신도 {r['확신도']} · 커버리지 {r['커버리지']}"
+        f" (메타 {r['커버리지_상세']['메타']} / 본문 {r['커버리지_상세']['본문']})"
+        f" · LLM 호출 0회 · {r.get('ms')}ms",
+    ]
+    if not r["본문사용"]:
+        out.append(f"⚠ 본문을 못 읽었다({r['본문길이']}자) — 커버리지가 낮아 판정이 메타 정보에만 기댄다.")
+
+    out.append("\n게이트:")
+    for g in r["게이트_결과"]:
+        표 = "통과" if g["통과"] else ("보류" if g.get("보류") else "위반")
+        out.append(f"  [{표}] {g['키']}: {g['사유']}\n    근거: {g['근거'][:140]}")
+
+    if r["특징_기여"]:
+        out.append("\n가산:")
+        for c in r["특징_기여"]:
+            out.append(f"  +{c['점수']:g}점 {c['키']} — {c['근거'][:100]}")
+
+    if r["확인필요항목"]:
+        out.append(f"\n확인 필요: {', '.join(r['확인필요항목'])}")
+        for qn in r.get("질문", []):
+            out.append(f"  Q. {qn['질문']}")
+        out.append(
+            "  → answer_eligibility_question 으로 답을 넣으면 즉시 다시 판정되고,"
+            " 일반화되는 답은 다음 공고에서 다시 안 묻는다."
+        )
+
+    if r["제출서류"]:
+        out.append(f"\n제출서류(정규식으로 읽음, {len(r['제출서류'])}종): {', '.join(r['제출서류'])}")
+
+    out.append(
+        "\n※ 「불가」인 게이트는 계산으로 확정된 것이다(마감일·지역·지원대상 등)."
+        " 「확인필요」는 회사 정보나 서류가 더 필요하다는 뜻이지 판정이 아니다."
+    )
+    return "\n".join(out)
+
+
+@mcp.tool()
+def answer_eligibility_question(
+    announcement_id: int,
+    특징키: str,
+    사람_값: str,
+    답변자: str,
+    일반화: bool = False,
+    짚은문구: str = "",
+) -> str:
+    """규칙 엔진이 「확인 필요」로 올린 질문에 답한다. 답은 그대로 쌓이고, 그 공고를 즉시 다시 판정한다.
+
+    특징키는 rule_eligibility_check 가 「확인 필요」 목록에 준 것을 그대로 쓴다
+    (예: "부채비율_상한", "체납_제외", "기업부설연구소_필수").
+    일반화=true 면 이 답이 회사 사실로 굳어져 **다른 공고에서도 같은 질문이 다시 안 뜬다**
+    (예: 체납 여부·연구소 보유 여부). 공고마다 달라지는 것(지역 보류 등)은 일반화하지 않는다.
+
+    짚은문구를 주면 — 공고 원문에서 그 조건을 말한 문장 일부를 그대로 옮기면 — 다음부터
+    같은 문구가 나오는 다른 공고도 정규식 없이 이 값으로 자동 인식된다(extraction_lexicon).
+    이게 이 시스템이 「학습해서 LLM 의존도를 낮춘다」고 말하는 것의 실제 동작이다.
+    """
+    err = _쓰기환경()
+    if err:
+        return err
+    import ann_rules  # noqa: PLC0415
+
+    try:
+        r = ann_rules.record_answer(
+            announcement_id=announcement_id, 특징키=특징키, 사람_값=사람_값,
+            답변자=답변자, 일반화=일반화, 짚은문구=(짚은문구 or None),
+        )
+    except ValueError as e:
+        return f"입력을 확인할 것: {e}"
+    except Exception as e:
+        return f"답변 저장 실패: {type(e).__name__}: {e}"
+
+    out = [f"답 저장됨: {특징키} = {사람_값}" + (" (일반화 — 회사 사실로 굳음)" if 일반화 else " (이 공고 한정)")]
+    if r.get("lexicon"):
+        out.append(f"패턴도 학습됨: {r['lexicon']['패턴']!r} → 다음부터 이 문구가 보이면 자동 인식된다")
+    if r.get("판정"):
+        p = r["판정"]
+        out.append(f"\n재판정: {p['판정']} · {p['점수']}점 · 확신도 {p['확신도']}"
+                   + (f"\n남은 확인필요: {', '.join(p['확인필요항목'])}" if p["확인필요항목"] else "\n확인필요 항목 없음"))
     return "\n".join(out)
 
 

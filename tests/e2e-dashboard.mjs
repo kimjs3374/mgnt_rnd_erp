@@ -48,7 +48,7 @@ try {
   console.log("카드 :", 제목들.join(" · "))
   확인("공고 확인이 첫 카드", 제목들[0] === "공고 확인")
   확인("일정 카드 있음", 제목들.includes("일정"))
-  확인("과제 관리 카드 있음 (수행 과제·사업 아님)", 제목들.includes("과제 관리"))
+  확인("통합 관리 카드 있음 (수행 과제·사업 아님)", 제목들.includes("통합 관리"))
   확인("오늘 처리할 것 카드로 합쳐짐 (셋으로 안 쪼개짐)", 제목들.includes("오늘 처리할 것"))
 
   const 본문 = await p.evaluate(() => document.body.innerText)
@@ -249,9 +249,9 @@ try {
   })
   await 잠깐(300)
 
-  // 과제 관리 — 상세 링크 + 오른쪽 날짜(연도 포함, D-day 없음) + 사업유형 배지
+  // 통합 관리 — 상세 링크 + 오른쪽 날짜(연도 포함, D-day 없음) + 사업유형 배지
   const 과제카드 = await p.evaluate(() => {
-    const h2 = [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === "과제 관리")
+    const h2 = [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === "통합 관리")
     const card = h2?.closest("div.rounded-lg")
     const links = [...(card?.querySelectorAll('a[href^="/projects/"]') ?? [])]
     return {
@@ -263,9 +263,9 @@ try {
         .map((a) => a.getAttribute("href")),
     }
   })
-  확인("과제 관리 목록이 상세로 링크", 과제카드.개수 > 0, `${과제카드.개수}개`)
+  확인("통합 관리 목록이 상세로 링크", 과제카드.개수 > 0, `${과제카드.개수}개`)
   console.log(`  (첫 줄: ${과제카드.첫줄})`)
-  확인("과제 관리에 D-day 없음", !/D-\d/.test(과제카드.본문))
+  확인("통합 관리에 D-day 없음", !/D-\d/.test(과제카드.본문))
   확인(
     "종료일이 연도까지 전체 표기(월.일만 아님)",
     /\d{4}-\d{2}-\d{2}/.test(과제카드.본문),
@@ -286,14 +286,14 @@ try {
   // 하면 안 된다 — 그래서 탭을 바꾼 전후로 카드 높이가 같은지까지 같이 본다.
   const 과제카드높이 = () =>
     p.evaluate(() => {
-      const h2 = [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === "과제 관리")
+      const h2 = [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === "통합 관리")
       const card = h2?.closest("div.rounded-lg")
       const pager = [...(card?.querySelectorAll("span") ?? [])].find((s) => /^\d+ \/ \d+$/.test(s.textContent.trim()))
       return { 높이: card?.getBoundingClientRect().height ?? null, 페이지표기: pager?.textContent.trim() ?? null }
     })
   const 수행중상태 = await 과제카드높이()
   await p.evaluate(() => {
-    const h2 = [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === "과제 관리")
+    const h2 = [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === "통합 관리")
     const card = h2?.closest("div.rounded-lg")
     ;[...(card?.querySelectorAll('[role="tab"]') ?? [])].find((b) => b.textContent.trim().startsWith("신청중"))?.click()
   })
@@ -305,18 +305,18 @@ try {
   //   사실 자체지, 지금 이 순간의 건수가 아니다.
   확인("페이지 넘김 줄이 항상 뜸(건수 무관)", /^\d+ \/ \d+$/.test(신청중상태.페이지표기 ?? ""))
   확인(
-    "탭을 바꿔도 과제 관리 카드 높이가 그대로",
+    "탭을 바꿔도 통합 관리 카드 높이가 그대로",
     수행중상태.높이 != null && 신청중상태.높이 != null && Math.abs(수행중상태.높이 - 신청중상태.높이) < 1,
     `수행중 ${수행중상태.높이}px → 신청중 ${신청중상태.높이}px`,
   )
 
-  // 왼쪽 달력 카드 세로 길이 == 오른쪽(과제 관리 + 오늘 처리할 것) 합계.
+  // 왼쪽 달력 카드 세로 길이 == 오른쪽(통합 관리 + 오늘 처리할 것) 합계.
   // CSS Grid 의 items-stretch + flex-1 로 맞춘 것이라 픽셀이 완전히 같아야 한다 —
   // 몇 px 오차(테두리 반올림)는 봐주되 눈에 띄게 어긋나면 잡아낸다.
   const 높이대조 = await p.evaluate(() => {
     const h2 = (t) => [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === t)
     const 달력 = h2("일정")?.closest("div.rounded-lg")
-    const 과제 = h2("과제 관리")?.closest("div.rounded-lg")
+    const 과제 = h2("통합 관리")?.closest("div.rounded-lg")
     const 오늘 = h2("오늘 처리할 것")?.closest("div.rounded-lg")
     if (!달력 || !과제 || !오늘) return null
     const 달력높이 = 달력.getBoundingClientRect().height
@@ -324,7 +324,7 @@ try {
     return { 달력높이, 오른쪽높이, 차이: Math.abs(달력높이 - 오른쪽높이) }
   })
   확인(
-    "왼쪽 달력과 오른쪽(과제 관리+오늘 처리할 것) 세로 길이가 같음",
+    "왼쪽 달력과 오른쪽(통합 관리+오늘 처리할 것) 세로 길이가 같음",
     높이대조 != null && 높이대조.차이 <= 2,
     높이대조 ? `달력 ${높이대조.달력높이}px / 오른쪽 ${높이대조.오른쪽높이}px (차이 ${높이대조.차이}px)` : "카드 못 찾음",
   )

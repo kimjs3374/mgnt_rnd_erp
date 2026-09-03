@@ -202,10 +202,12 @@ export function AnnouncementBoard({
                   <TableHead className="w-8" title="관심 표시하면 마감일이 달력에 뜬다">
                     <span className="sr-only">관심</span>★
                   </TableHead>
-                  <TableHead>사업명</TableHead>
-                  <TableHead className="w-[170px]">기관</TableHead>
-                  <TableHead className="w-[200px]">접수기간</TableHead>
-                  <TableHead className="w-[80px]">출처</TableHead>
+                  {/* ⚠ 제목만 가운데다. 값(특히 사업명처럼 긴 텍스트)까지 가운데로 두면
+                      말줄임표가 양쪽에서 들쭉날쭉해져 오히려 읽기 나빠진다(2026-09-04 확인). */}
+                  <TableHead className="text-center">사업명</TableHead>
+                  <TableHead className="w-[178px] pl-4 text-center">기관</TableHead>
+                  <TableHead className="w-[212px] pl-4 text-center">접수기간</TableHead>
+                  <TableHead className="w-[92px] pl-4 text-center">출처</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -225,13 +227,15 @@ export function AnnouncementBoard({
                         <span className="truncate">{r.사업명}</span>
                       </Link>
                     </TableCell>
-                    <TableCell className="max-w-[1px] truncate text-muted-foreground">
+                    {/* ⚠ 오른쪽 세 칸(기관·접수기간·출처)이 사업명 뒤에 다닥다닥 붙어 보였다
+                        (2026-09-04 지적) — pl-4 로 칸 사이 숨 쉴 틈을 늘린다. */}
+                    <TableCell className="max-w-[1px] truncate pl-4 text-muted-foreground">
                       {r.기관 ?? "—"}
                     </TableCell>
-                    <TableCell className="tabular-nums text-muted-foreground">
+                    <TableCell className="tabular-nums pl-4 text-muted-foreground">
                       <Period row={r} />
                     </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{r.출처}</TableCell>
+                    <TableCell className="pl-4 text-xs text-muted-foreground">{r.출처}</TableCell>
                   </TableRow>
                 ))}
                 {/* 줄 수를 고정한다. 마지막 페이지가 짧다고 카드 키가 흔들리면 아래 카드가 움직인다. */}

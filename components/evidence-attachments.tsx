@@ -7,6 +7,7 @@ import {
   getEvidenceDownloadUrl,
   deleteEvidenceFile,
 } from "@/app/actions/evidence-files"
+import { 증빙파일_점검 } from "@/lib/evidence-types"
 import type { EvidenceRequirement, EvidenceFile } from "@/lib/evidence-types"
 
 /**
@@ -19,6 +20,22 @@ import type { EvidenceRequirement, EvidenceFile } from "@/lib/evidence-types"
  *
  * ⚠ 개인정보 서류(급여이체증·4대보험 명부·지급대장)는 **요건으로만 표시하고 업로드 칸을 주지 않는다.**
  *   목록에서 지우면 「빠진 서류」를 셀 수 없고, 올리게 하면 절대 규칙을 깬다.
+ *
+ * ## 드래그드랍 (2026-09-04)
+ * 실제 증빙은 탐색기 폴더에 `1 견적의뢰 · 2 견적서 · 3 지출결의서 …` 로 한 벌씩 모여 있다.
+ * 한 건씩 [파일 첨부] → 대화상자 → 찾기를 일곱 번 반복하는 게 이 화면에서 제일 느린 구간이라,
+ * **폴더에서 통째로 끌어다 놓는 길**을 낸다. 놓는 자리가 곧 분류다:
+ *
+ * - **서류 줄 위** → 그 요건으로 붙는다(가장 정확)
+ * - **비목 카드 여백** → 그 비목의 「기타 첨부」로 붙는다
+ * - **그 밖** → 아무 데도 안 붙고, 어디에 놓아야 하는지 말해 준다
+ *
+ * 파일명으로 요건을 **추측해서 자동 배치하지 않는다.** 「3. 천보_지출결의서.pdf」가 지출결의서일
+ * 확률이 높아도 그건 추측이고, 잘못 붙으면 「필수 확보」 숫자가 조용히 거짓말을 한다
+ * (CLAUDE.md §6-5 「모르면 모른다고 한다」). 놓은 자리는 사람이 정한 사실이다.
+ *
+ * 기존 [파일 첨부] 버튼은 **그대로 남긴다** — 키보드 사용자와 드래그가 안 되는 환경의 경로이고,
+ * 드래그드랍은 그 위에 얹은 지름길이다.
  */
 
 // 행 타입은 `lib/evidence-types.ts` 에 있다 — 서버 조회(queries-project)와 같은 타입을 써야
@@ -28,6 +45,15 @@ export type { EvidenceFile }
 
 const KB = (n: number | null) =>
   n == null ? "" : n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))}KB` : `${(n / 1024 / 1024).toFixed(1)}MB`
+
+/**
+ * 끌고 온 것이 **파일**인가. 브라우저에서 글자·링크를 끌어와도 카드가 번쩍이지 않게 한다.
+ * `types` 에 `Files` 가 들어 있는지가 dragover 단계에서 알 수 있는 유일한 단서다
+ * (`dataTransfer.files` 는 drop 전까지 비어 있다).
+ */
+function 파일드래그인가(e: React.DragEvent) {
+  return Array.from(e.dataTransfer?.types ?? []).includes("Files")
+}
 
 /** ISO 문자열 → `09-03 19:40` (KST). 서버·클라이언트가 같은 값을 내야 하므로 직접 계산한다. */
 function 시각(iso: string) {
@@ -57,27 +83,143 @@ export function EvidenceAttachments({
   const [msg, setMsg] = React.useState<{ ok: boolean; text: string } | null>(null)
   const [pending, start] = React.useTransition()
   const [전체보기, set전체보기] = React.useState(false)
+  /** 지금 파일이 떠 있는 자리. `요건:12` · `비목:MATERIAL` · `패널` 중 하나만 강조된다. */
+  const [드롭대상, set드롭대상] = React.useState<string | null>(null)
+  /**
+   * dragleave 는 **자식으로 들어갈 때도** 튄다. 그대로 쓰면 카드 안에서 글자 하나를 지날 때마다
+   * 강조가 껌뻑인다. 자리마다 들어온 횟수를 세서 0이 될 때만 끈다.
+   */
+  const 깊이 = React.useRef<Record<string, number>>({})
+
+  /**
+   * ⚠ 드롭을 빗맞히면 **브라우저가 그 파일을 열어 버린다** — 시연 중이면 `rnd.mgnt.kr` 이
+   * 통째로 사라지고 뒤로가기로 돌아와야 한다. 창 전체에서 파일 드롭의 기본 동작을 막는다.
+   * 카드·서류 줄에서 처리한 드롭은 거기서 propagation 을 끊으므로 여기까지 오지 않는다.
+   */
+  React.useEffect(() => {
+    const 기본동작막기 = (e: DragEvent) => {
+      if (!Array.from(e.dataTransfer?.types ?? []).includes("Files")) return
+      e.preventDefault()
+    }
+    const 강조되돌리기 = () => {
+      깊이.current = {}
+      set드롭대상(null)
+    }
+    window.addEventListener("dragover", 기본동작막기)
+    window.addEventListener("drop", 기본동작막기)
+    window.addEventListener("drop", 강조되돌리기)
+    window.addEventListener("dragend", 강조되돌리기)
+    return () => {
+      window.removeEventListener("dragover", 기본동작막기)
+      window.removeEventListener("drop", 기본동작막기)
+      window.removeEventListener("drop", 강조되돌리기)
+      window.removeEventListener("dragend", 강조되돌리기)
+    }
+  }, [])
 
   const 요건있는비목 = Array.from(new Set(요건.map((r) => r.비목_대분류)))
   const 보일비목 = 전체보기
     ? Array.from(new Set([...계상비목, ...요건있는비목]))
     : 요건있는비목.filter((c) => 계상비목.includes(c))
 
-  function 올리기(비목: string, 요건_id: number | null, f: File | null) {
-    if (!f) return
+  /**
+   * 드롭 받는 자리 하나를 만든다.
+   *
+   * `막힘` 에 문구가 있으면 **받지 않는 자리**다 — 커서를 「금지」로 바꾸고, 놓으면 그 이유를 말한다.
+   * 안쪽 자리(서류 줄)가 바깥 자리(비목 카드)를 이겨야 하므로 전부 `stopPropagation` 한다.
+   * 그래서 카드 → 줄 로 들어가면 카드 강조가 꺼지고 줄 강조만 켜진다.
+   */
+  function 드롭영역(키: string, 받기: (files: File[]) => void, 막힘?: string | null) {
+    return {
+      onDragEnter(e: React.DragEvent) {
+        if (!파일드래그인가(e)) return
+        e.preventDefault()
+        e.stopPropagation()
+        깊이.current[키] = (깊이.current[키] ?? 0) + 1
+        set드롭대상(키)
+      },
+      onDragOver(e: React.DragEvent) {
+        if (!파일드래그인가(e)) return
+        // preventDefault 를 빠뜨리면 이 자리는 드롭을 아예 못 받는다(브라우저 기본값이 「거부」다).
+        e.preventDefault()
+        e.stopPropagation()
+        e.dataTransfer.dropEffect = 막힘 ? "none" : "copy"
+      },
+      onDragLeave(e: React.DragEvent) {
+        if (!파일드래그인가(e)) return
+        e.stopPropagation()
+        깊이.current[키] = Math.max(0, (깊이.current[키] ?? 1) - 1)
+        if (깊이.current[키] === 0) set드롭대상((v) => (v === 키 ? null : v))
+      },
+      onDrop(e: React.DragEvent) {
+        if (!파일드래그인가(e)) return
+        e.preventDefault()
+        e.stopPropagation()
+        깊이.current[키] = 0
+        set드롭대상((v) => (v === 키 ? null : v))
+        if (막힘) {
+          setMsg({ ok: false, text: 막힘 })
+          return
+        }
+        받기(Array.from(e.dataTransfer.files ?? []))
+      },
+    }
+  }
+
+  /**
+   * 파일 여러 개를 한 자리에 올린다. 드래그드랍은 폴더에서 통째로 끌어오므로 여러 개가 기본이다.
+   * 결과는 **건별로** 말한다 — 「3개 중 1개 실패」에서 어느 것이 왜 실패했는지 안 보이면
+   * 사람이 같은 걸 또 끌어다 놓는다.
+   */
+  function 올리기(비목: string, 요건_id: number | null, files: File[]) {
+    const 고른것 = files.filter(Boolean)
+    if (!고른것.length) return
+    if (pending) {
+      setMsg({ ok: false, text: "앞의 파일을 올리는 중입니다. 끝난 뒤에 놓으세요." })
+      return
+    }
     setMsg(null)
-    const fd = new FormData()
-    fd.set("과제_id", String(과제_id))
-    fd.set("비목_대분류", 비목)
-    if (요건_id != null) fd.set("요건_id", String(요건_id))
-    fd.set("file", f)
+
+    // 크기·확장자는 서버가 최종 판정하지만 여기서 먼저 거른다(같은 규칙을 `lib/evidence-types.ts`
+    // 한 곳에서 읽는다). 25MB 넘는 걸 끝까지 올려보낸 뒤 거절하면 시연 중 몇십 초가 그냥 날아간다.
+    const 거절: string[] = []
+    const 보낼것: File[] = []
+    for (const f of 고른것) {
+      const 문제 = 증빙파일_점검(f)
+      if (문제) 거절.push(문제)
+      else 보낼것.push(f)
+    }
+    if (!보낼것.length) {
+      setMsg({ ok: false, text: 거절.join(" / ") })
+      return
+    }
+
     start(async () => {
-      const r = await uploadEvidenceFile(fd)
-      setMsg(
-        r.ok
-          ? { ok: true, text: `${f.name} 올렸습니다.` }
-          : { ok: false, text: r.error ?? "올리지 못했습니다." },
-      )
+      const 성공: string[] = []
+      const 실패: string[] = [...거절]
+      // 한 건씩 차례로 보낸다. 한꺼번에 던지면 어느 파일이 실패했는지 못 짚고,
+      // revalidatePath 가 겹쳐 목록이 중간 상태로 그려진다.
+      for (const f of 보낼것) {
+        const fd = new FormData()
+        fd.set("과제_id", String(과제_id))
+        fd.set("비목_대분류", 비목)
+        if (요건_id != null) fd.set("요건_id", String(요건_id))
+        fd.set("file", f)
+        const r = await uploadEvidenceFile(fd)
+        if (r.ok) 성공.push(f.name)
+        else 실패.push(`${f.name} — ${r.error ?? "올리지 못했습니다."}`)
+      }
+      if (!실패.length) {
+        setMsg({
+          ok: true,
+          text: 성공.length === 1 ? `${성공[0]} 올렸습니다.` : `${성공.length}개 올렸습니다.`,
+        })
+      } else {
+        setMsg({
+          ok: false,
+          text: `${성공.length ? `${성공.length}개 올렸습니다. ` : ""}${실패.length}개 실패 — ${실패.join(" / ")}`,
+        })
+      }
     })
   }
 
@@ -102,8 +244,15 @@ export function EvidenceAttachments({
   const 전체필수 = 요건.filter((r) => 보일비목.includes(r.비목_대분류) && r.필수여부 && !r.개인정보포함)
   const 확보된필수 = 전체필수.filter((r) => 파일.some((f) => f.요건_id === r.id)).length
 
+  // 카드 바깥 여백에 떨어진 드롭. 붙일 비목을 알 수 없으니 **아무 데도 붙이지 않고** 어디에 놓아야
+  // 하는지 말한다. 조용히 삼키면 사람은 올라간 줄 안다.
+  const 패널막힘 =
+    보일비목.length === 0
+      ? "계상한 비목이 없어 아직 올릴 곳이 없습니다. 위에서 비목별 배정액을 먼저 넣으세요."
+      : "여기는 붙일 비목을 알 수 없습니다. 서류 줄 위에 놓으면 그 서류로, 비목 카드 여백에 놓으면 「기타 첨부」로 들어갑니다."
+
   return (
-    <div className="rounded-lg border bg-card p-4">
+    <div className="rounded-lg border bg-card p-4" {...드롭영역("패널", () => {}, 패널막힘)}>
       <div className="mb-3 flex flex-wrap items-baseline gap-2">
         <span className="text-[13px] font-medium">비목별 증빙 파일 (RCMS 제출용)</span>
         <span className="text-xs text-muted-foreground">
@@ -141,9 +290,17 @@ export function EvidenceAttachments({
             const 확보 = 필수.filter((r) => fs.some((f) => f.요건_id === r.id)).length
             const 기타 = fs.filter((f) => f.요건_id == null || !rs.some((r) => r.id === f.요건_id))
             const 구분들 = Array.from(new Set(rs.map((r) => r.구분 ?? "")))
+            const 카드키 = `비목:${비목}`
 
             return (
-              <div key={비목} className="rounded-md border">
+              <div
+                key={비목}
+                {...드롭영역(카드키, (files) => 올리기(비목, null, files))}
+                className={
+                  "rounded-md border transition-colors " +
+                  (드롭대상 === 카드키 ? "border-primary bg-primary/5" : "")
+                }
+              >
                 <div className="flex flex-wrap items-baseline gap-2 border-b bg-secondary/30 px-3 py-2">
                   <span className="text-[12.5px] font-medium">{비목이름[비목] ?? 비목}</span>
                   <span className="text-[11.5px] text-muted-foreground">
@@ -156,6 +313,11 @@ export function EvidenceAttachments({
                   )}
                   {!계상비목.includes(비목) && (
                     <span className="text-[11.5px] text-muted-foreground">계상 없음</span>
+                  )}
+                  {드롭대상 === 카드키 && (
+                    <span className="ml-auto text-[11.5px] text-primary">
+                      놓으면 「기타 첨부」로 들어갑니다 · 서류 줄 위에 놓으면 그 서류로
+                    </span>
                   )}
                 </div>
 
@@ -172,8 +334,27 @@ export function EvidenceAttachments({
                           .filter((r) => (r.구분 ?? "") === 구분)
                           .map((r) => {
                             const 붙은것 = fs.filter((f) => f.요건_id === r.id)
+                            const 줄키 = `요건:${r.id}`
+                            // 개인정보 서류는 드롭도 받지 않는다. 서버도 거부하지만(그쪽이 최종 판정),
+                            // 여기서 커서부터 「금지」로 바꿔야 파일이 회선을 타지 않는다.
+                            const 줄막힘 = r.개인정보포함
+                              ? `「${r.서류명}」은 개인 급여가 드러나는 서류라 이 시스템에 올리지 않습니다. RCMS 에 직접 제출하세요.`
+                              : null
                             return (
-                              <li key={r.id} className="text-[12.5px]">
+                              <li
+                                key={r.id}
+                                {...드롭영역(줄키, (files) => 올리기(비목, r.id, files), 줄막힘)}
+                                className={
+                                  // outline 은 자리를 차지하지 않는다 — border 로 하면 강조될 때마다
+                                  // 목록이 1px 씩 밀려서 어느 줄에 놓는 중인지 오히려 헷갈린다.
+                                  "rounded-sm text-[12.5px] transition-colors " +
+                                  (드롭대상 !== 줄키
+                                    ? ""
+                                    : 줄막힘
+                                      ? "bg-destructive/10 outline outline-1 outline-destructive"
+                                      : "bg-primary/10 outline outline-1 outline-primary")
+                                }
+                              >
                                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                                   <span className="w-5 text-right text-[11px] text-muted-foreground tabular-nums">
                                     {r.순번 || ""}
@@ -208,10 +389,11 @@ export function EvidenceAttachments({
                                       {붙은것.length ? "파일 추가" : "파일 첨부"}
                                       <input
                                         type="file"
+                                        multiple
                                         className="hidden"
                                         disabled={pending}
                                         onChange={(e) => {
-                                          올리기(비목, r.id, e.target.files?.[0] ?? null)
+                                          올리기(비목, r.id, Array.from(e.target.files ?? []))
                                           e.target.value = ""
                                         }}
                                       />
@@ -270,10 +452,11 @@ export function EvidenceAttachments({
                         파일 첨부
                         <input
                           type="file"
+                          multiple
                           className="hidden"
                           disabled={pending}
                           onChange={(e) => {
-                            올리기(비목, null, e.target.files?.[0] ?? null)
+                            올리기(비목, null, Array.from(e.target.files ?? []))
                             e.target.value = ""
                           }}
                         />
@@ -317,14 +500,15 @@ export function EvidenceAttachments({
       )}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        {pending && <span className="text-[12.5px] text-muted-foreground">처리 중…</span>}
+        {pending && <span className="text-[12.5px] text-muted-foreground">올리는 중…</span>}
         {msg && (
           <span className={msg.ok ? "text-[12.5px] text-muted-foreground" : "text-[12.5px] text-destructive"}>
             {msg.text}
           </span>
         )}
         <span className="ml-auto text-[11px] text-muted-foreground">
-          pdf·hwp·xlsx·이미지·zip · 25MB 까지 · 비공개 버킷에 저장되고 다운로드는 60초 서명 주소로 나간다
+          폴더에서 끌어다 놓아도 됩니다(여러 개 한꺼번에) · pdf·hwp·xlsx·이미지·zip · 25MB 까지 ·
+          비공개 버킷에 저장되고 다운로드는 60초 서명 주소로 나간다
         </span>
       </div>
     </div>

@@ -1,4 +1,4 @@
-// 계상 확정 → 관리 위치 이동 → 읽기 전용, 그리고 서식(문서 통일화).
+// 예산 확정 → 읽기 전용, 그리고 서식(문서 통일화).
 //
 // 봐야 할 것은 「버튼이 눌린다」가 아니라 **잠금이 실제로 잠기는가**다:
 //   ① 합계가 안 맞으면 확정할 수 없다
@@ -11,6 +11,7 @@
 // ⚠ P01(id=2)은 시연 과제다. **여기서 확정했다 풀면 이력이 남는다** — 그래서 쓰지 않고
 //   총사업비·계상까지 갖춘 테스트 과제를 따로 만든다. 끝나면 지운다.
 import puppeteer from "puppeteer-core"
+import { 로그인하고 } from "./lib/login.mjs"
 import { env, pgSelect } from "../scripts/lib/pgrest.mjs"
 
 const BASE = "http://127.0.0.1:3610"
@@ -104,6 +105,10 @@ let 과제id = null
 const 시작과제수 = (await pgSelect("projects", "select=id")).length
 let 양식ids = []
 
+// 로그인 게이트(2026-09-04) 뒤로 화면이 전부 들어갔다. 아이디·비밀번호는
+// **환경변수로만** 받는다 — 저장소가 공개다(tests/lib/login.mjs).
+await 로그인하고(page, BASE)
+
 try {
   // 총사업비 1억 · 계상 9천만(합계 불일치 상태)으로 시작한다 — ①을 보려고 일부러 어긋나게 둔다.
   과제id = (
@@ -136,8 +141,8 @@ try {
   확인(text.includes("계상 진행 중"), "확정 전에는 「계상 진행 중」으로 뜬다")
   확인(text.includes("10,000,000원 남음"), "얼마가 남았는지 말해 준다")
   확인(
-    await page.evaluate(() => window.__c.버튼("계상 확정")?.disabled === true),
-    "① 합계가 안 맞으면 [계상 확정]이 잠겨 있다",
+    await page.evaluate(() => window.__c.버튼("예산 확정")?.disabled === true),
+    "① 합계가 안 맞으면 [예산 확정]이 잠겨 있다",
   )
   확인(!text.includes("비목별 증빙 파일"), "「비목별 증빙 파일」 항목이 빠졌다")
   확인(text.includes("서식 (문서 통일화)"), "그 자리에 서식 카드가 들어왔다")
@@ -149,7 +154,7 @@ try {
   await page.reload({ waitUntil: "networkidle0" })
   await page.evaluate(심을것)
   확인(
-    await page.evaluate(() => window.__c.버튼("계상 확정")?.disabled === false),
+    await page.evaluate(() => window.__c.버튼("예산 확정")?.disabled === false),
     "합계가 맞으면 확정할 수 있다",
   )
 
@@ -179,22 +184,26 @@ try {
   }
 
   // ② 확정 → 사업 대장으로 데려간다
-  await page.evaluate(() => window.__c.누르기("계상 확정"))
+  await page.evaluate(() => window.__c.누르기("예산 확정"))
   for (let i = 0; i < 40; i++) {
     await 잠깐(500)
     if (page.url().endsWith("/projects")) break
   }
-  확인(page.url().endsWith("/projects"), `② 확정하면 사업 대장으로 간다 — ${page.url()}`)
+  확인(page.url().endsWith("/projects"), `② 확정하면 과제 목록으로 간다 — ${page.url()}`)
 
   // ③ 계상 탭은 읽기 전용
   await page.goto(`${BASE}/projects/${과제id}/budget`, { waitUntil: "networkidle0", timeout: 60000 })
   await page.evaluate(심을것)
   text = await 본문()
-  확인(text.includes("계상 확정됨"), "③ 확정 배너가 뜬다")
-  확인(text.includes("관리 위치는"), "관리 위치가 사업 대장이라고 말한다")
+  확인(text.includes("예산 확정됨"), "③ 확정 배너가 뜬다")
+  // 문구가 바뀌었다(2026-09-04) — 「사업 대장」은 사이드바가 갈린 뒤 지원사업 쪽 이름이 됐다.
   확인(
-    await page.evaluate(() => window.__c.버튼("계상 저장") == null),
-    "[계상 저장] 버튼이 사라졌다",
+    text.includes("예산이 확정되어") || text.includes("볼 수만 있습니다"),
+    "읽기 전용이 됐다고 말한다",
+  )
+  확인(
+    await page.evaluate(() => window.__c.버튼("저장") == null),
+    "[저장] 버튼이 사라졌다",
   )
   확인(
     await page.evaluate(() => window.__c.버튼("협약 금액으로 저장") == null),
@@ -264,7 +273,12 @@ const 끝과제수 = (await pgSelect("projects", "select=id")).length
   `과제 수가 시작과 같다 (${시작과제수} → ${끝과제수}) — 이 테스트가 남긴 것이 없다`,
 )
 확인((await pgSelect("form_templates", "select=id")).length === 0, "테스트가 남긴 양식 0건")
-확인((await pgSelect("budget_confirmations", "select=id")).length === 0, "테스트가 남긴 확정 이력 0건")
+// ⚠ 표 전체가 비었는지 보지 않는다 — 사람이 이 기능을 쓰면 그 순간 빨개지고,
+//   다음 사람이 남의 실제 데이터를 잔여물로 오해해 지운다. **이 테스트가 만든 과제 것만** 본다.
+확인(
+  (await pgSelect("budget_confirmations", `과제_id=eq.${과제id}&select=id`)).length === 0,
+  "테스트가 만든 확정 이력이 남지 않았다",
+)
 
 console.log(실패 ? `\n✗ ${실패}건 실패` : "\n✓ 전 항목 통과")
 process.exit(실패 ? 1 : 0)

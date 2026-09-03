@@ -9,9 +9,9 @@ import { 계상확정, 계상확정해제 } from "@/app/actions/budget-confirm"
 import type { ConfirmRow } from "@/lib/queries-confirm"
 
 /**
- * 계상 확정 막대 — 계상 탭 맨 위.
+ * 예산 확정 막대 — 계상 탭 맨 위(버튼 이름은 2026-09-04 사용자 지시로 「예산 확정」).
  *
- * **계상 탭은 계상하는 자리다.** 다 잡고 [계상 확정]을 누르면 그 과제의 관리 위치가
+ * **계상 탭은 계상하는 자리다.** 다 잡고 [예산 확정]을 누르면 그 과제의 관리 위치가
  * 사업 대장으로 넘어가고, 이 탭은 볼 수만 있게 된다(그래서 확정 직후 대장으로 보낸다).
  *
  * 왜 잠그나: 정산 탭의 과제비 원장이 **배정액을 기준으로** 집행과 대조한다.
@@ -94,7 +94,7 @@ export function BudgetConfirmBar({
     return (
       <div className="rounded-lg border border-primary bg-primary/5 p-4">
         <div className="flex flex-wrap items-baseline gap-2">
-          <span className="text-[13px] font-medium">계상 확정됨</span>
+          <span className="text-[13px] font-medium">예산 확정됨</span>
           <span className="text-[12px] text-muted-foreground">
             {/* 로그인이 아직 없다 — 확인된 행위자만 적는다. 시각은 언제나 사실이다. */}
             {최신 ? 시각(최신.일시) : ""}
@@ -206,8 +206,9 @@ export function BudgetConfirmBar({
           (2026-09-04 사용자 지적). 사이드바의 「사업 대장」은 지원사업 쪽 대장(`/programs`)이고
           과제는 「과제 계상」·「과제 관리」로 갈렸다. 확정 뒤에 실제로 일어나는 일만 적는다. */}
       <p className="mt-1 text-[12.5px] text-muted-foreground">
-        다 잡았으면 <b className="text-foreground">[계상 확정]</b>을 누르세요. 확정하면 이 탭은 볼
-        수만 있게 됩니다 — 다시 고치려면 [확정 해제]를 누르고, 그때 사유가 남습니다. 그다음 할 일은{" "}
+        다 잡았으면 <b className="text-foreground">[예산 확정]</b>을 누르세요. 확정하면 이 탭은 볼
+        수만 있게 되고 <b className="text-foreground">과제 목록으로 돌아갑니다.</b> 다시 고치려면{" "}
+        [확정 해제]를 누르고, 그때 사유가 남습니다. 그다음 할 일은{" "}
         <b className="text-foreground">집행</b>과 <b className="text-foreground">정산</b>이고 둘 다 이
         과제 안의 탭입니다.
         {위반수 > 0 && " 한도 경고가 있어도 확정할 수 있습니다 — 협약이 그렇게 된 과제가 있어서 막지 않습니다."}
@@ -220,7 +221,7 @@ export function BudgetConfirmBar({
           disabled={pending || !맞음}
           onClick={확정하기}
         >
-          {pending ? "확정 중…" : "계상 확정"}
+          {pending ? "확정 중…" : "예산 확정"}
         </Button>
         {!맞음 && (
           <span className="text-[12px] text-muted-foreground">

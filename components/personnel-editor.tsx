@@ -658,7 +658,7 @@ export function PersonnelEditor({
         )}
         {읽기전용 ? (
           <span className="text-[12.5px] text-muted-foreground">
-            계상 확정 — 볼 수만 있습니다 (엑셀은 그대로 받을 수 있습니다)
+            예산 확정 — 볼 수만 있습니다 (엑셀은 그대로 받을 수 있습니다)
           </span>
         ) : (
           <Button

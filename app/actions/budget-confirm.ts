@@ -1,4 +1,4 @@
-"use server"
+﻿"use server"
 
 import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
@@ -6,7 +6,7 @@ import { getCurrentUser } from "@/lib/current-user"
 import { getConfirmState } from "@/lib/queries-confirm"
 
 /**
- * 계상 확정 · 해제.
+ * 예산 확정 · 해제(버튼 이름은 「예산 확정」 — 2026-09-04 사용자 지시).
  *
  * 확정하면 **계상 탭이 읽기 전용이 된다.** (예전 주석은 「관리 위치가 사업 대장으로 넘어간다」였는데
  * 사이드바가 갈린 뒤로 사실이 아니다 — 「사업 대장」은 지원사업 쪽 화면이다. 2026-09-04 정정)
@@ -33,7 +33,7 @@ export async function 계상잠김(과제_id: number): Promise<string | null> {
   const s = await getConfirmState(과제_id)
   if (!s.확정) return null
   const 언제 = s.최신?.일시?.slice(0, 10) ?? ""
-  return `계상이 확정된 과제입니다(${언제} · ${s.최신?.행위자 ?? "확정자 미상"}). 고치려면 계상 탭에서 [확정 해제]를 먼저 하세요 — 사유가 남습니다.`
+  return `예산이 확정된 과제입니다(${언제} · ${s.최신?.행위자 ?? "확정자 미상"}). 고치려면 계상 탭에서 [확정 해제]를 먼저 하세요 — 사유가 남습니다.`
 }
 
 async function 합계(과제_id: number) {
@@ -61,7 +61,7 @@ export async function 계상확정(과제_id: number): Promise<ConfirmResult> {
     if (총사업비 <= 0) {
       return {
         ok: false,
-        error: "총사업비가 정해지지 않았습니다. 과제 계상 화면에서 협약금액을 먼저 확정하세요.",
+        error: "총사업비가 정해지지 않았습니다. 연구비 계상 탭에서 재원 구성부터 먼저 채우세요.",
       }
     }
     if (배정합 === 0) {
@@ -89,7 +89,6 @@ export async function 계상확정(과제_id: number): Promise<ConfirmResult> {
     revalidatePath(`/projects/${id}/budget`)
     revalidatePath(`/projects/${id}`)
     revalidatePath("/projects")
-    revalidatePath("/project-budgeting")
     return { ok: true }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -133,7 +132,6 @@ export async function 계상확정해제(과제_id: number, 사유: string): Pro
     revalidatePath(`/projects/${id}/budget`)
     revalidatePath(`/projects/${id}`)
     revalidatePath("/projects")
-    revalidatePath("/project-budgeting")
     return { ok: true, 주의 }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }

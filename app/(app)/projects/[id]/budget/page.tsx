@@ -186,7 +186,7 @@ export default async function ProjectBudgetPage({
       {proj.error && <DbError what="과제" error={proj.error} />}
       {budget.error && <DbError what="예산" error={budget.error} />}
       {cats.error && <DbError what="비목" error={cats.error} />}
-      {confirm.error && <DbError what="계상 확정 상태" error={confirm.error} />}
+      {confirm.error && <DbError what="예산 확정 상태" error={confirm.error} />}
 
       {/* 계상 탭은 계상하는 자리다. 다 잡으면 여기서 확정하고 관리 위치가 대장으로 넘어간다. */}
       <BudgetConfirmBar

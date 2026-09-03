@@ -117,6 +117,35 @@ export const getProjectEvidenceFiles = (id: number) =>
       .order("업로드일시", { ascending: false }),
   )
 
+/**
+ * 공고 기본 정보 — 지원 등록 폼의 기본값(사업명·접수마감)만 쓴다.
+ * 공고 상세 본문은 `lib/queries.ts` 의 `getAnnouncementDetail` 이 이미 읽는다(그 파일은 안 건드린다).
+ */
+export const getAnnouncementBasics = (id: number) =>
+  safeSelect<{
+    id: number
+    사업명: string | null
+    접수시작: string | null
+    접수종료: string | null
+    사업유형: string | null
+  }>("announcements", () => db.from("announcements").select("*").eq("id", id))
+
+/** 이 공고로 등록한 지원 건. 대장(app.projects)과 공고를 잇는 유일한 연결이 공고_id 다. */
+export type ApplicationRow = {
+  id: number
+  과제명: string
+  과제코드: string | null
+  선정결과: string | null
+  신청일: string | null
+  발표심사일: string | null
+  선정결과일: string | null
+  상태: string
+}
+export const getApplicationsByAnnouncement = (공고_id: number) =>
+  safeSelect<ApplicationRow>("projects", () =>
+    db.from("projects").select("*").eq("공고_id", 공고_id).order("id"),
+  )
+
 /** 개인별 인건비 계상. 연차 → 정렬 순서로 온다(화면이 연차 탭으로 나눈다). */
 export const getPersonnelCosts = (id: number) =>
   safeSelect<PersonnelRow>("personnel_costs", () =>

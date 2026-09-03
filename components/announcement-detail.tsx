@@ -1,3 +1,4 @@
+import type { ReactNode } from "react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { PageShell, Card, EmptyState } from "@/components/page-shell"
@@ -25,9 +26,16 @@ import { getAnnouncementDetail, getRequiredDocs } from "@/lib/queries"
 export async function AnnouncementDetail({
   id,
   backHref,
+  footer,
 }: {
   id: string
   backHref: string
+  /**
+   * 이 화면 맨 아래에 붙일 것. 지금은 「지원 · 선정 · 대장」 패널이 들어온다
+   * (`components/apply-panel.tsx`). 이 컴포넌트가 PageShell 을 들고 있어서
+   * 페이지에서 형제로 붙이면 여백 규격 밖으로 나간다 — 그래서 프롭으로 받는다.
+   */
+  footer?: ReactNode
 }) {
   const announcementId = Number(id)
   if (!Number.isFinite(announcementId)) notFound()
@@ -113,6 +121,8 @@ export async function AnnouncementDetail({
           </Table>
         )}
       </Card>
+
+      {footer}
     </PageShell>
   )
 }

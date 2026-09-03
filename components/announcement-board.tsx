@@ -12,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { toggleWatch } from "@/app/actions/watchlist"
 import type { BoardRow } from "@/lib/queries"
 
 /**
@@ -127,7 +128,10 @@ export function AnnouncementBoard({ rows }: { rows: BoardRow[] }) {
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className="w-[380px]">사업명</TableHead>
+              <TableHead className="w-8" title="관심 표시하면 마감일이 달력에 뜬다">
+                <span className="sr-only">관심</span>★
+              </TableHead>
+              <TableHead className="w-[360px]">사업명</TableHead>
               <TableHead>기관</TableHead>
               <TableHead>지역</TableHead>
               <TableHead>접수기간</TableHead>
@@ -137,6 +141,9 @@ export function AnnouncementBoard({ rows }: { rows: BoardRow[] }) {
           <TableBody>
             {보이는행.map((r) => (
               <TableRow key={r.id} className="h-[38px] text-[13px]">
+                <TableCell className="pr-0">
+                  <WatchStar id={r.id} on={r.관심} />
+                </TableCell>
                 <TableCell className="font-medium">
                   <div className="flex items-center gap-1.5">
                     {r.신규 && <NewBadge 날짜출처={r.날짜출처} />}
@@ -159,6 +166,42 @@ export function AnnouncementBoard({ rows }: { rows: BoardRow[] }) {
         </Table>
       )}
     </div>
+  )
+}
+
+/**
+ * 관심 표시 별.
+ * 누르면 그 공고의 마감일이 달력에 파란색으로 올라간다 — 이 화면과 달력을 잇는 유일한 고리다.
+ * ⚠ 실패하면 조용히 넘어가지 않는다. 별이 붉게 남고 이유가 툴팁에 붙는다.
+ */
+function WatchStar({ id, on }: { id: number; on: boolean }) {
+  const [대기, 시작] = React.useTransition()
+  const [오류, set오류] = React.useState<string | null>(null)
+
+  return (
+    <button
+      type="button"
+      disabled={대기}
+      aria-pressed={on}
+      aria-label={on ? "관심 해제" : "관심 표시"}
+      title={오류 ?? (on ? "관심 해제" : "관심 표시 — 마감일이 달력에 뜬다")}
+      onClick={() =>
+        시작(async () => {
+          const r = await toggleWatch("공고", id, !on)
+          set오류(r.ok ? null : (r.error ?? "관심 표시를 저장하지 못했습니다"))
+        })
+      }
+      className={cn(
+        "rounded px-0.5 text-base leading-none transition-colors disabled:opacity-50",
+        오류
+          ? "text-destructive"
+          : on
+            ? "text-blue-500 hover:text-blue-600"
+            : "text-muted-foreground/40 hover:text-muted-foreground",
+      )}
+    >
+      {오류 ? "!" : on ? "★" : "☆"}
+    </button>
   )
 }
 

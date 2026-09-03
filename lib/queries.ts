@@ -182,6 +182,7 @@ export type BoardRow = {
   d_day: number | null
   파싱상태: string
   공고문_url: string | null
+  관심: boolean
 }
 
 export const getAnnouncementBoard = () =>
@@ -228,6 +229,48 @@ export const getProjects = () =>
       .select("*")
       .not("시작일", "is", null)
       .order("시작일", { ascending: false }),
+  )
+
+/**
+ * 일정 달력 — 대시보드의 달력·이번주 패널이 읽는다.
+ * app.v_calendar 가 마감·협약종료·보고예정·서류만료를 한 모양으로 모아 준다.
+ *
+ * 「행동이 필요한 것만」이 기준이라 뷰에서 이미 걸러져 나온다 —
+ * 유효한 서류와 이미 종료된 사업은 안 온다. 봐도 할 일이 없기 때문이다.
+ * 색은 여기 없다. 종류만 오고 화면이 색을 고른다.
+ */
+export type CalendarRow = {
+  날짜: string
+  종류: string // 관심공고 | 사업종료 | 보고예정 | 서류만료
+  제목: string
+  부제: string | null
+  참조종류: string // 공고 | 사업 | 서류
+  참조키: string
+  링크: string
+  d_day: number | null
+}
+
+export const getCalendar = () =>
+  safeSelect<CalendarRow>("v_calendar", () =>
+    db.from("v_calendar").select("*").order("날짜"),
+  )
+
+/**
+ * 달력에 못 올리는 것 — 관심 공고 중 마감이 날짜가 아닌 건(상시·소진시·선착순).
+ * 실측으로 접수기간의 56%가 이렇다. 안 보여주면 관심 표시한 공고가 조용히 사라진다.
+ */
+export type UndatedRow = {
+  참조키: string
+  참조종류: string
+  제목: string
+  부제: string | null
+  사유: string
+  링크: string
+}
+
+export const getCalendarUndated = () =>
+  safeSelect<UndatedRow>("v_calendar_undated", () =>
+    db.from("v_calendar_undated").select("*"),
   )
 
 /** 원화 표기. null 은 「—」로 둔다. 0 과 「모름」을 구분한다. */

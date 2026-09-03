@@ -1,29 +1,13 @@
-import Link from "next/link"
-import { PageShell, Card, Stat, EmptyState } from "@/components/page-shell"
-import { StatusBadge } from "@/components/status-badge"
+﻿import Link from "next/link"
+import { PageShell, Stat } from "@/components/page-shell"
 import { DbError } from "@/components/db-error"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import { getProjects, won } from "@/lib/queries"
-import { 연차수, 현재연차, 기간표기 } from "@/lib/fiscal-year"
 import { ProjectCreateButton } from "@/components/project-create-button"
+import { ProjectsLedger } from "@/components/projects-ledger"
 import { db, safeSelect } from "@/lib/db"
 
 export const dynamic = "force-dynamic"
-
-// funding_schemes.이름 을 그대로 옮긴다 — 화면에서 지어내지 않는다.
-const 사업유형_라벨: Record<string, string> = {
-  NATIONAL_RND: "국가 R&D",
-  LOCAL_TP: "지자체·TP 지원사업",
-}
 
 /**
  * 과제사업 — 선정되어 협약·수행된 과제의 수행 정보.
@@ -77,19 +61,9 @@ export default async function ProjectsPage() {
           </Button>
         </>
       }
-      filters={
-        <>
-          <Input placeholder="과제명·부처 검색" className="h-7 w-56 text-[13px]" />
-          <span className="text-xs text-muted-foreground">상태</span>
-          <Button type="button" variant="outline" className="h-7 text-[12.8px]">
-            전체
-          </Button>
-          <Button type="button" variant="ghost" className="ml-auto h-7 text-[12.8px]">
-            ↺ 초기화
-          </Button>
-        </>
-      }
     >
+      {/* 걸러내기·연도·쪽 나누기는 `ProjectsLedger`(클라이언트)가 표와 함께 들고 있다.
+          PageShell 의 filters 자리에 두면 표와 상태를 나눠 갖게 되어 둘을 잇는 배선이 생긴다. */}
       {error && <DbError what="과제사업" error={error} />}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -103,130 +77,7 @@ export default async function ProjectsPage() {
         />
       </div>
 
-      <Card>
-        {rows.length === 0 && !error ? (
-          <EmptyState
-            title="선정된 과제가 없습니다"
-            hint={
-              숨긴수 > 0
-                ? `신청·심사 중인 건 ${숨긴수}건은 지원사업 대장에 있습니다. 선정되면 여기로 넘어옵니다.`
-                : "공고에서 지원을 등록하고 선정되면 여기에 쌓입니다."
-            }
-          />
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="w-[280px]">과제명</TableHead>
-                <TableHead>과제코드</TableHead>
-                <TableHead>부처 / 전문기관</TableHead>
-                <TableHead>유형</TableHead>
-                <TableHead>수행기간</TableHead>
-                <TableHead className="text-right">연차 (현재/총)</TableHead>
-                <TableHead className="text-right">총사업비</TableHead>
-                <TableHead className="text-right">정부지원금</TableHead>
-                <TableHead>상태</TableHead>
-                <TableHead className="w-[150px]" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((r) => {
-                // 끝난 과제는 줄 전체를 **연빨강**으로 칠한다(사용자 지시).
-                // 배지 하나로는 열 줄 중 어느 게 끝난 건지 훑어서 안 잡힌다 — 색이 줄 단위여야 한 눈에 갈린다.
-                // ⚠ 색 토큰(`--warning` 등)은 `app/globals.css` 에 있는데 그 파일은 권태호 담당이고
-                //    지금 미커밋 변경이 있어 건드리지 않았다. Tailwind 기본 red 단계를 쓴다.
-                //    `TableRow` 가 `cn()`(tailwind-merge)을 거쳐서 기본 `hover:bg-muted/50` 은 이쪽이 이긴다.
-                const 끝남 = r.상태 === "종료"
-                return (
-                <TableRow
-                  key={r.id}
-                  className={
-                    "h-[38px] text-[13px] " +
-                    (끝남
-                      ? "bg-red-100 hover:bg-red-200 dark:bg-red-950 dark:hover:bg-red-900"
-                      : "")
-                  }
-                >
-                  <TableCell className="font-medium">
-                    {/* 계상·정산은 과제 안에서 한다. 목록은 어느 과제로 들어갈지만 고른다. */}
-                    <Link
-                      href={`/projects/${r.id}`}
-                      className="underline-offset-2 hover:underline"
-                    >
-                      {r.과제명}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {r.과제코드 ?? "—"}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {r.부처 ?? "—"}
-                    {r.전문기관 ? ` · ${r.전문기관}` : ""}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {r.사업유형 ? (사업유형_라벨[r.사업유형] ?? r.사업유형) : "—"}
-                  </TableCell>
-                  <TableCell className="tabular-nums text-muted-foreground">
-                    {r.시작일 ?? "확인 필요"} ~ {r.종료일 ?? "확인 필요"}
-                  </TableCell>
-                  {/* 연차는 회계연도로 센다 — 2022-06~2024-05 는 기간 2년이어도 3개 연차다.
-                      저장된 `projects.연차` 를 그대로 찍지 않고 기간에서 계산한다.
-                      저장값은 시간이 지나면 낡지만 기간은 안 낡는다(lib/fiscal-year.ts). */}
-                  <TableCell
-                    className="text-right tabular-nums"
-                    title={기간표기(r.시작일, r.종료일)}
-                  >
-                    {연차수(r.시작일, r.종료일)
-                      ? `${현재연차(r.시작일, r.종료일)} / ${연차수(r.시작일, r.종료일)}`
-                      : (r.연차 ?? "—")}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {won(r.총사업비)}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {won(r.정부지원금)}
-                  </TableCell>
-                  <TableCell>
-                    <StatusBadge value={r.상태} />
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {/* 종료된 과제에는 「계상」을 걸지 않는다 — 계상은 협약·수행 중에 하는 일이다.
-                        과제 안의 탭·개요 링크에서도 같이 뺐다(components/project-tabs.tsx).
-                        지난 계상은 정산 탭의 과제비 원장에서 그대로 본다. */}
-                    {r.상태 !== "종료" && (
-                      <>
-                        <Link
-                          href={`/projects/${r.id}/budget`}
-                          className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                        >
-                          계상
-                        </Link>
-                        <span className="px-1.5 text-xs text-muted-foreground">·</span>
-                      </>
-                    )}
-                    <Link
-                      href={`/projects/${r.id}/settlement`}
-                      className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                    >
-                      정산
-                    </Link>
-                  </TableCell>
-                </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-        )}
-      </Card>
-
-      {/* 색이 무엇을 뜻하는지 화면에 적어 둔다. 안 적으면 빨강을 「문제 있는 과제」로 읽는다. */}
-      {rows.some((r) => r.상태 === "종료") && (
-        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <span className="inline-block h-3 w-5 rounded-sm border bg-red-100 dark:bg-red-950" />
-          <span className="text-foreground">종료된 과제</span>입니다 — 나머지는 수행 중입니다.
-          문제가 있다는 뜻이 아니라 끝났다는 뜻입니다.
-        </p>
-      )}
+      <ProjectsLedger rows={rows} />
 
       {숨긴수 > 0 && (
         <p className="text-xs text-muted-foreground">

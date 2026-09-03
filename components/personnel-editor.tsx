@@ -7,7 +7,6 @@ import { MoneyInput } from "@/components/money-input"
 import {
   savePersonnelRows,
   deletePersonnelRow,
-  applyPersonnelToBudget,
 } from "@/app/actions/personnel"
 import { 총액, 급여총액, 기본재원, 재원별합계, 참여율초과, type PersonnelRow } from "@/lib/personnel"
 
@@ -106,7 +105,21 @@ export function PersonnelEditor({
     setMsg(null)
     start(async () => {
       const r = await savePersonnelRows(과제_id, rows as never)
-      setMsg(r.ok ? { ok: true, text: "저장했습니다." } : { ok: false, text: r.error ?? "저장하지 못했습니다." })
+      // 저장이 곧 반영이다(2026-09-04). 얼마가 내려갔는지 말해 줘야 아래 표를 확인하러 간다.
+      const 요약 = Object.entries(r.반영 ?? {})
+        .filter(([, v]) => v > 0)
+        .map(([k, v]) => `${k} ${v.toLocaleString("ko-KR")}원`)
+        .join(" · ")
+      setMsg(
+        r.ok
+          ? {
+              ok: true,
+              text: 요약
+                ? `저장했습니다. 아래 비목 인건비를 ${요약} 으로 맞췄습니다.`
+                : "저장했습니다.",
+            }
+          : { ok: false, text: r.error ?? "저장하지 못했습니다." },
+      )
     })
   }
 
@@ -123,23 +136,8 @@ export function PersonnelEditor({
     })
   }
 
-  function 반영() {
-    setMsg(null)
-    start(async () => {
-      const r = await applyPersonnelToBudget(과제_id, 연차)
-      setMsg(
-        r.ok
-          ? {
-              ok: true,
-              text: `인건비 비목에 반영했습니다 — ${Object.entries(r.반영 ?? {})
-                .filter(([, v]) => v > 0)
-                .map(([k, v]) => `${k} ${won(v)}원`)
-                .join(" · ")}`,
-            }
-          : { ok: false, text: r.error ?? "반영하지 못했습니다." },
-      )
-    })
-  }
+  // 손으로 부르던 `반영()` 은 없앴다 — `savePersonnelRows` 가 저장하면서 같이 맞춘다.
+  // 서버의 `applyPersonnelToBudget` 은 남겨 뒀다(스크립트·복구용). 화면에서는 안 부른다.
 
   const cell = "h-7 text-[12.5px]"
   const num = "h-7 text-right text-[12.5px] tabular-nums"
@@ -441,17 +439,14 @@ export function PersonnelEditor({
         >
           전체 연차
         </a>
+        {/* ⚠ 「인건비 비목으로 반영」 버튼이 여기 있었는데 **뺐다**(2026-09-04 사용자 지시).
+            저장하면 저절로 반영된다. 버튼을 남겨 두면 「눌러야 반영되나」로 읽혀서
+            안 누른 사람의 비목 인건비가 개인별과 어긋난 채 남는다.
+            그 버튼은 **고른 연차만** 반영해서 2년 합계를 1년치로 덮은 사고도 있었다. */}
         {!읽기전용 && (
-          <Button
-            type="button"
-            variant="outline"
-            className="h-7 text-[12.8px]"
-            disabled={pending || 더러움 || 총합 === 0}
-            onClick={반영}
-            title={더러움 ? "먼저 저장하세요" : "이 연차 합계를 인건비 비목으로 보냅니다"}
-          >
-            인건비 비목으로 반영
-          </Button>
+          <span className="text-[11.5px] text-muted-foreground">
+            저장하면 비목 인건비가 자동으로 맞춰집니다
+          </span>
         )}
         <span className="ml-auto" />
         {msg && (
@@ -477,8 +472,9 @@ export function PersonnelEditor({
 
       <p className="mt-2 text-[11px] text-muted-foreground">
         총액 = 월급여 × 참여율 × 참여개월수 · 급여총액 = 월급여 × 12 · 지급은 현금, 미지급은 현물로
-        잡힙니다. 「인건비 비목으로 반영」을 누르면 연구비 계상의 인건비 줄이 재원별로 덮어써집니다.
-        엑셀은 실제 계상표 양식(한 사람 두 줄 · 자격·지급구분·총액 세로 병합)으로 나갑니다.
+        잡힙니다. <b>저장하면 아래 연구비 계상의 인건비 줄이 재원별로 자동으로 맞춰집니다</b>
+        (연차를 가리지 않고 전 연차 합계입니다). 그래서 아래 표의 인건비 칸은 직접 못 고칩니다 —
+        여기서 고칩니다. 엑셀은 실제 계상표 양식(한 사람 두 줄 · 자격·지급구분·총액 세로 병합)으로 나갑니다.
       </p>
     </div>
   )

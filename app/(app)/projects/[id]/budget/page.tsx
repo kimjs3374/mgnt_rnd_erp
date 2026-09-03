@@ -5,6 +5,7 @@ import { FundingShareCard } from "@/components/funding-share-card"
 import { FormTemplates } from "@/components/form-templates"
 import { BudgetConfirmBar } from "@/components/budget-confirm-bar"
 import { PersonnelEditor } from "@/components/personnel-editor"
+import { 재원별합계 } from "@/lib/personnel"
 import {
   getProject,
   getProjectBudget,
@@ -68,6 +69,9 @@ export default async function ProjectBudgetPage({
   //    기간이 2년이어도 2022·2023·2024 **3개 연차**다. 자세한 근거는 lib/fiscal-year.ts.
   const 연도목록 = 연차연도(p?.시작일, p?.종료일)
   const 연수 = 연도목록.length || Math.max(1, Number(p?.연차 ?? 1))
+
+  // 개인별 인건비 합계(전 연차). 0 보다 클 때만 비목 인건비가 자동으로 맞춰진다.
+  const 인건비합계 = Object.values(재원별합계(people.rows)).reduce((s, v) => s + (v || 0), 0)
 
   const 정렬 = new Map(cats.rows.map((c) => [c.코드, c.정렬 ?? 999]))
   const lines: Line[] = budget.rows
@@ -201,16 +205,10 @@ export default async function ProjectBudgetPage({
         읽기전용={읽기전용}
       />
 
-      <BudgetEditor
-        과제_id={id}
-        초기값={lines}
-        협약={협약정보}
-        비목목록={cats.rows.map((c) => ({ 코드: c.코드, 이름: c.이름 }))}
-        읽기전용={읽기전용}
-      />
-
-      {/* 인건비는 사람마다 참여율·월급여가 달라 비목 합계 하나로는 만들 수 없다.
-          여기서 개인별로 만들어 위 계상 표의 인건비 줄로 보낸다. */}
+      {/* ★ 개인별 인건비가 **비목 표보다 위**에 있다(2026-09-04 사용자 지시).
+          인건비는 사람마다 참여율·월급여가 달라 비목 합계 하나로는 만들 수 없고,
+          **개인별 표가 근거이고 비목 인건비는 그 합계**다. 근거가 결과보다 아래 있으면
+          읽는 순서가 거꾸로다 — 사람을 넣으면 아래 비목 인건비가 저절로 바뀐다. */}
       {people.error && <DbError what="개인별 인건비" error={people.error} />}
       <PersonnelEditor
         과제_id={id}
@@ -218,6 +216,18 @@ export default async function ProjectBudgetPage({
         협약연수={연수}
         연차연도={연도목록}
         읽기전용={읽기전용}
+      />
+
+      <BudgetEditor
+        과제_id={id}
+        초기값={lines}
+        협약={협약정보}
+        비목목록={cats.rows.map((c) => ({ 코드: c.코드, 이름: c.이름 }))}
+        읽기전용={읽기전용}
+        // 개인별 줄이 **금액을 갖고** 있으면 인건비는 그쪽이 진실이다. 여기서 고치면 다음 저장에 덮인다.
+        // ⚠ 이름만 적어 둔 0원짜리 줄로는 잠그지 않는다 — 서버도 그때는 비목을 안 건드리므로
+        //   (`app/actions/personnel.ts` 의 인건비동기화), 잠그면 고칠 길이 아예 없어진다.
+        인건비자동={인건비합계 > 0}
       />
 
       {/* 계상한 비목이 요구하는 **서류 목록**과 그 서류의 회사 표준 양식.

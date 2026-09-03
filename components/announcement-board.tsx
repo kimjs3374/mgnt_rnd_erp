@@ -30,7 +30,14 @@ import type { BoardRow } from "@/lib/queries"
 
 const 기본탭 = ["과제", "지원사업"] as const
 
-export function AnnouncementBoard({ rows }: { rows: BoardRow[] }) {
+export function AnnouncementBoard({
+  rows,
+  최대,
+}: {
+  rows: BoardRow[]
+  /** 대시보드처럼 좁은 자리에서는 앞의 몇 건만. 안 주면 전부 그린다. */
+  최대?: number
+}) {
   // 기본 두 탭은 비어 있어도 항상 세운다. 「지원사업이 0건」과 「지원사업 탭이 없음」은 다르다.
   const 탭 = React.useMemo(() => {
     const 있는구분 = new Set(rows.map((r) => r.구분))
@@ -54,8 +61,16 @@ export function AnnouncementBoard({ rows }: { rows: BoardRow[] }) {
     return m
   }, [rows, 탭])
 
-  const 보이는행 = rows.filter((r) => r.구분 === active)
+  const 전체행 = rows.filter((r) => r.구분 === active)
+  // 대시보드는 「오늘 손댈 것」을 보는 자리다. 27줄짜리 표를 그리면 그 아래 큐가 화면 밖으로 밀린다.
+  const 보이는행 = 최대 ? 전체행.slice(0, 최대) : 전체행
   const 신규합 = rows.filter((r) => r.신규).length
+
+  // NEW 가 몇 줄만 있으면 배지가 눈에 띄지만, 줄마다 붙으면 아무것도 구분하지 못한다.
+  // 3건부터는 배지를 떼고 구분선 하나로 묶는다. 행이 기준일 내림차순이라 신규가 위에 모인다.
+  // ⚠ 건수는 잘라내기 전(전체행) 기준이다. 보이는 8줄만 세면 「16건 중 8건」을 8건이라 말하게 된다.
+  const 신규수 = 전체행.filter((r) => r.신규).length
+  const 묶기 = 신규수 >= 3
 
   return (
     <div className="rounded-lg border bg-card">
@@ -131,41 +146,74 @@ export function AnnouncementBoard({ rows }: { rows: BoardRow[] }) {
               <TableHead className="w-8" title="관심 표시하면 마감일이 달력에 뜬다">
                 <span className="sr-only">관심</span>★
               </TableHead>
-              <TableHead className="w-[360px]">사업명</TableHead>
-              <TableHead>기관</TableHead>
-              <TableHead>지역</TableHead>
-              <TableHead>접수기간</TableHead>
-              <TableHead>출처</TableHead>
+              <TableHead>사업명</TableHead>
+              <TableHead className="w-[180px]">기관</TableHead>
+              <TableHead className="w-[210px]">접수기간</TableHead>
+              <TableHead className="w-[84px]">출처</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {보이는행.map((r) => (
-              <TableRow key={r.id} className="h-[38px] text-[13px]">
-                <TableCell className="pr-0">
-                  <WatchStar id={r.id} on={r.관심} />
-                </TableCell>
-                <TableCell className="font-medium">
-                  <div className="flex items-center gap-1.5">
-                    {r.신규 && <NewBadge 날짜출처={r.날짜출처} />}
-                    <span className="truncate">{r.사업명}</span>
-                  </div>
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {r.기관 ?? "—"}
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {r.지역 ?? "—"}
-                </TableCell>
-                <TableCell className="tabular-nums text-muted-foreground">
-                  <Period row={r} />
-                </TableCell>
-                <TableCell className="text-muted-foreground">{r.출처}</TableCell>
-              </TableRow>
+            {보이는행.map((r, i) => (
+              <React.Fragment key={r.id}>
+                {묶기 && i === 0 && r.신규 && (
+                  <GroupRow label={`오늘 새로 올라온 공고 ${신규수}건`} 강조 />
+                )}
+                {묶기 && i > 0 && 보이는행[i - 1].신규 && !r.신규 && (
+                  <GroupRow label="이전" />
+                )}
+                <TableRow className="h-[38px] text-[13px]">
+                  <TableCell className="pr-0">
+                    <WatchStar id={r.id} on={r.관심} />
+                  </TableCell>
+                  {/* max-w + min-w-0 이 없으면 truncate 가 안 먹고 표가 가로로 밀린다 */}
+                  <TableCell className="max-w-[1px] font-medium">
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      {!묶기 && r.신규 && <NewBadge 날짜출처={r.날짜출처} />}
+                      <span className="truncate" title={r.사업명}>
+                        {r.사업명}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="max-w-[1px] truncate text-muted-foreground">
+                    {r.기관 ?? "—"}
+                  </TableCell>
+                  <TableCell className="tabular-nums text-muted-foreground">
+                    <Period row={r} />
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{r.출처}</TableCell>
+                </TableRow>
+              </React.Fragment>
             ))}
           </TableBody>
         </Table>
       )}
+
+      {전체행.length > 보이는행.length && (
+        <div className="border-t px-4 py-2 text-xs text-muted-foreground">
+          외 {전체행.length - 보이는행.length}건 ·{" "}
+          <Link href="/announcements" className="text-primary hover:underline">
+            공고 탐색에서 전체 보기
+          </Link>
+        </div>
+      )}
     </div>
+  )
+}
+
+/** 구분선 행. NEW 배지를 줄마다 붙이는 대신 한 번만 말한다. */
+function GroupRow({ label, 강조 }: { label: string; 강조?: boolean }) {
+  return (
+    <TableRow className="hover:bg-transparent">
+      <TableCell
+        colSpan={5}
+        className={cn(
+          "h-6 py-1 text-xs",
+          강조 ? "text-[var(--warning-fg)]" : "text-muted-foreground",
+        )}
+      >
+        {label}
+      </TableCell>
+    </TableRow>
   )
 }
 
@@ -237,8 +285,9 @@ function NewBadge({ 날짜출처 }: { 날짜출처: string }) {
  */
 function Period({ row }: { row: BoardRow }) {
   if (!row.접수종료) {
+    // 「상시」·「정보성」 같은 값은 날짜가 아니다. 날짜와 같은 무게로 보이면 표가 시끄러워진다.
     return (
-      <span className="text-xs">
+      <span className="text-xs opacity-60">
         {row.마감유형 === "dated" ? "확인 필요" : row.마감유형}
       </span>
     )

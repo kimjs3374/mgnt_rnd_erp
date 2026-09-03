@@ -12,6 +12,7 @@ import {
   getCalendar,
   getCalendarUndated,
 } from "@/lib/queries"
+import { getLabels, categoryLabel } from "@/lib/labels"
 
 export const dynamic = "force-dynamic"
 
@@ -37,14 +38,16 @@ function 서울의_오늘() {
 }
 
 export default async function DashboardPage() {
-  // 여섯 갈래를 동시에 부른다. 하나가 실패해도 나머지는 그려진다.
-  const [ledger, expenses, docs, board, calendar, undated] = await Promise.all([
+  // 동시에 부른다. 하나가 실패해도 나머지는 그려진다.
+  const [ledger, expenses, docs, board, calendar, undated, labels] = await Promise.all([
     getLedger(),
     getExpenses(),
     getDocuments(),
     getAnnouncementBoard(),
     getCalendar(),
     getCalendarUndated(),
+    // 비목은 DB 에 FACILITY 같은 코드로 들어 있다. 화면에 코드가 보이면 사용자가 읽을 수 없다.
+    getLabels(),
   ])
 
   const today = 서울의_오늘()
@@ -98,8 +101,8 @@ export default async function DashboardPage() {
         error={calendar.error}
       />
 
-      {/* ① 새로 올라온 공고 — 생애주기의 입구 */}
-      <AnnouncementBoard rows={board.rows} />
+      {/* ① 새로 올라온 공고 — 생애주기의 입구. 여기선 앞 8건만, 전체는 공고 탐색에서. */}
+      <AnnouncementBoard rows={board.rows} 최대={8} />
 
       {/* ③ 손봐야 할 것 — 걸리는 게 없으면 이 카드는 통째로 사라진다 */}
       {손볼것 > 0 && (
@@ -115,7 +118,9 @@ export default async function DashboardPage() {
               items={확정대기.slice(0, 5).map((e) => ({
                 key: String(e.id),
                 left: e.거래처 ?? "거래처 미상",
-                right: e.비목_대분류 ?? "비목 미지정",
+                right: e.비목_대분류
+                  ? categoryLabel(labels, e.비목_대분류, e.비목_세부항목).main
+                  : "비목 미지정",
               }))}
               total={확정대기.length}
             />
@@ -165,7 +170,8 @@ function Queue({
   if (total === 0) return null
 
   return (
-    <div className="px-4 py-3">
+    // 넓은 화면에서 값을 끝까지 밀지 않는다. 항목명과 1,500px 떨어지면 눈이 짝을 못 맞춘다.
+    <div className="max-w-3xl px-4 py-3">
       <div className="mb-1.5 flex items-baseline gap-2">
         <h3 className="text-[13px] font-medium">{title}</h3>
         <span className="tabular-nums text-xs text-muted-foreground">{total}</span>

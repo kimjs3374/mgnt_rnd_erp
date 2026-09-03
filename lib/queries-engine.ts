@@ -258,6 +258,155 @@ export async function getEngineReport(): Promise<EngineReport> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// LLM 대조 — "규칙으로도 된다"는 주장의 유일한 근거
+//
+// 사용자 요청(2026-09-04): "llm으로 수정했을때 어떻게 되는지와 우리가 만든 엔진으로
+// 어떻게 되는지 서로 비교해서 수치를 눈으로 볼수있으면 좋겠음".
+//
+// ⚠ **일치율은 「얼마나 닮았나」이지 「얼마나 맞나」가 아니다.** LLM 도 틀린다 —
+//   실측으로 LLM 이 마감 지난 공고를 「확인필요」로 둔 건, 지역이 안 맞는데 60점을 준 건이
+//   있었다. 그래서 불일치 목록을 같이 내보내 **사람이 어느 쪽이 맞는지 판단**하게 한다.
+//   숫자 하나로 "엔진이 LLM 만큼 좋다"고 말하지 않는다.
+// ─────────────────────────────────────────────────────────────────────────────
+type CompareRow = {
+  announcement_id: number
+  사업명: string
+  출처: string
+  엔진버전: string
+  규칙_판정: string
+  규칙_점수: number | null
+  규칙_확신도: number | null
+  커버리지: number | null
+  llm_판정: string
+  llm_점수: number | null
+  llm_확신도: number | null
+  판정일치: boolean
+  점수차: number | null
+  사람정정: boolean
+}
+
+/**
+ * 등급으로 묶어서 본 판정 — 「확인필요」와 「요건미확인」은 **둘 다 확정을 못 한 상태**다.
+ * 글자가 다르다고 불일치로 세면 두 방식의 차이가 실제보다 크게 보인다(실측: 불일치 10건
+ * 중 5건이 이 조합이었다). bot/ann_rules.compare() 가 쓰던 「등급일치율」과 같은 개념이다.
+ */
+function 등급(판정: string): string {
+  return 판정 === "확인필요" || 판정 === "요건미확인" ? "미확정" : 판정
+}
+
+export type LlmCompare = {
+  표본: number
+  현재버전: string
+  일치: number
+  일치율: number
+  /** 확인필요·요건미확인을 「미확정」 한 등급으로 묶었을 때의 일치율. */
+  등급일치: number
+  등급일치율: number
+  버전별: {
+    엔진버전: string; 대조: number; 동일: number; 일치율: number
+    등급동일: number; 등급일치율: number
+  }[]
+  혼동행렬: { llm: string; 규칙: string; 건수: number }[]
+  판정라벨: string[]
+  불일치: {
+    id: number
+    사업명: string
+    llm_판정: string
+    llm_점수: number | null
+    규칙_판정: string
+    규칙_점수: number | null
+    커버리지: number | null
+    사람정정: boolean
+  }[]
+  처리량: { 엔진_판정건수: number; llm_판정건수: number; 엔진_llm호출: number }
+  error: string | null
+}
+
+export async function getLlmCompare(): Promise<LlmCompare> {
+  const { rows, error } = await safeSelect<CompareRow>("v_ann_rule_vs_llm", () =>
+    db.from("v_ann_rule_vs_llm").select("*").limit(2000),
+  )
+  const { rows: 점수 } = await safeSelect<{ 엔진버전: string; announcement_id: number }>(
+    "ann_rule_scores",
+    () => db.from("ann_rule_scores").select("*").limit(10000),
+  )
+
+  const 빈값: LlmCompare = {
+    표본: 0, 현재버전: "-", 일치: 0, 일치율: 0, 등급일치: 0, 등급일치율: 0,
+    버전별: [], 혼동행렬: [], 판정라벨: [], 불일치: [],
+    처리량: { 엔진_판정건수: 0, llm_판정건수: 0, 엔진_llm호출: 0 },
+    error: error ?? "LLM 과 대조할 판정이 아직 없다 — LLM 판정이 있는 공고에서만 대조된다.",
+  }
+  if (!rows.length) return 빈값
+
+  const 현재버전 = rows.map((r) => r.엔진버전)
+    .reduce((a, b) => (버전번호(b) > 버전번호(a) ? b : a))
+  const 현재 = rows.filter((r) => r.엔진버전 === 현재버전)
+
+  const 버전맵 = new Map<string, { 대조: number; 동일: number; 등급동일: number }>()
+  for (const r of rows) {
+    const cur = 버전맵.get(r.엔진버전) ?? { 대조: 0, 동일: 0, 등급동일: 0 }
+    cur.대조 += 1
+    if (r.판정일치) cur.동일 += 1
+    if (등급(r.llm_판정) === 등급(r.규칙_판정)) cur.등급동일 += 1
+    버전맵.set(r.엔진버전, cur)
+  }
+
+  // 혼동 행렬 — 두 판정이 어디서 갈리는지. 축은 실제로 나타난 값만 쓴다(빈 칸을 만들지 않는다).
+  const 라벨순서 = ["가능", "확인필요", "요건미확인", "불가", "해당없음"]
+  const 나타난 = new Set<string>()
+  for (const r of 현재) { 나타난.add(r.llm_판정); 나타난.add(r.규칙_판정) }
+  const 판정라벨 = 라벨순서.filter((v) => 나타난.has(v))
+  const 셀 = new Map<string, number>()
+  for (const r of 현재) {
+    const k = `${r.llm_판정}|${r.규칙_판정}`
+    셀.set(k, (셀.get(k) ?? 0) + 1)
+  }
+
+  const 엔진_판정건수 = new Set(
+    점수.filter((s) => s.엔진버전 === 현재버전).map((s) => s.announcement_id),
+  ).size
+
+  return {
+    표본: 현재.length,
+    현재버전,
+    일치: 현재.filter((r) => r.판정일치).length,
+    일치율: 현재.length ? (현재.filter((r) => r.판정일치).length / 현재.length) * 100 : 0,
+    등급일치: 현재.filter((r) => 등급(r.llm_판정) === 등급(r.규칙_판정)).length,
+    등급일치율: 현재.length
+      ? (현재.filter((r) => 등급(r.llm_판정) === 등급(r.규칙_판정)).length / 현재.length) * 100
+      : 0,
+    버전별: [...버전맵.entries()]
+      .sort((a, b) => 버전번호(a[0]) - 버전번호(b[0]))
+      .map(([엔진버전, v]) => ({
+        엔진버전, 대조: v.대조, 동일: v.동일, 등급동일: v.등급동일,
+        일치율: v.대조 ? (v.동일 / v.대조) * 100 : 0,
+        등급일치율: v.대조 ? (v.등급동일 / v.대조) * 100 : 0,
+      })),
+    혼동행렬: 판정라벨.flatMap((llm) =>
+      판정라벨.map((규칙) => ({ llm, 규칙, 건수: 셀.get(`${llm}|${규칙}`) ?? 0 })),
+    ),
+    판정라벨,
+    불일치: 현재
+      .filter((r) => !r.판정일치)
+      .sort((a, b) => (b.점수차 ?? 0) - (a.점수차 ?? 0))
+      .slice(0, 12)
+      .map((r) => ({
+        id: r.announcement_id, 사업명: r.사업명,
+        llm_판정: r.llm_판정, llm_점수: r.llm_점수,
+        규칙_판정: r.규칙_판정, 규칙_점수: r.규칙_점수,
+        커버리지: r.커버리지, 사람정정: r.사람정정,
+      })),
+    처리량: {
+      엔진_판정건수,
+      llm_판정건수: new Set(rows.map((r) => r.announcement_id)).size,
+      엔진_llm호출: 0,
+    },
+    error: null,
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 역방향 — 엔진이 「불가」·「해당없음」으로 접은 것을 사람이 다시 연다
 //
 // 사용자 요청(2026-09-04): "불가 판정이나 해당없음 판정 받았던 건들 중에 사람이 직접

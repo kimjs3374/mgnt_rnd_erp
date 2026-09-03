@@ -1,8 +1,9 @@
 import { PageShell, Card } from "@/components/page-shell"
 import { DbError } from "@/components/db-error"
 import { EngineReportView } from "@/components/engine-report"
+import { EngineLlmCompare } from "@/components/engine-llm-compare"
 import { ReversePanel } from "@/components/reverse-panel"
-import { getEngineReport, getReversible } from "@/lib/queries-engine"
+import { getEngineReport, getReversible, getLlmCompare } from "@/lib/queries-engine"
 import { getReversalHistory } from "@/app/actions/engine"
 
 export const dynamic = "force-dynamic"
@@ -22,10 +23,11 @@ export const dynamic = "force-dynamic"
  * 같은 화면에서 규칙의 결과와 그 근거를 보고, 납득이 안 되는 건을 바로 되돌린다.
  */
 export default async function EnginePage() {
-  const [report, 되돌림후보, 되돌림이력] = await Promise.all([
+  const [report, 되돌림후보, 되돌림이력, llm대조] = await Promise.all([
     getEngineReport(),
     getReversible(),
     getReversalHistory(),
+    getLlmCompare(),
   ])
 
   return (
@@ -34,6 +36,8 @@ export default async function EnginePage() {
       description="수집한 공고를 규칙 엔진이 어떤 근거로 걸러냈는지 — 그리고 접힌 것을 사람이 다시 여는 자리."
     >
       <EngineReportView report={report} />
+
+      <EngineLlmCompare cmp={llm대조} />
 
       <Card className="p-4">
         <h2 className="text-sm font-semibold">엔진이 접은 것을 다시 열기</h2>

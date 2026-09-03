@@ -5,6 +5,7 @@ import { approveUser, rejectUser } from "@/app/actions/admin-users"
 import { AdminResetRequests } from "@/components/admin-reset-requests"
 import { AdminAccounts } from "@/components/admin-accounts"
 import { Button } from "@/components/ui/button"
+import { formatKstDate } from "@/lib/kst"
 
 export const dynamic = "force-dynamic"
 
@@ -118,7 +119,7 @@ export default async function AdminUsersPage() {
                   <td className="px-3 py-2">{u.email ?? "-"}</td>
                   <td className="px-3 py-2">{u.department ? DEPARTMENT_LABEL[u.department] : "-"}</td>
                   <td className="px-3 py-2">
-                    {new Date(u.created_at).toLocaleDateString("ko-KR")}
+                    {formatKstDate(u.created_at)}
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex justify-end gap-2">

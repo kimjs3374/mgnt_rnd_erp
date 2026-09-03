@@ -138,7 +138,10 @@ export async function changeUserRole(formData: FormData): Promise<ActionResult> 
     changed_by: Number(admin.id),
   })
 
-  revalidatePath("/admin/users")
+  // ⚠ 여기서 revalidatePath 를 부르지 않는다 — 부르면 방금 쓴 값을 아직 못 읽은 채로
+  //   재조회가 돌아와 화면이 옛 값으로 되돌아간다(2026-09-04 실측, issueTempPassword와 같은 문제).
+  //   화면은 낙관적 업데이트(components/admin-accounts.tsx)로 이미 맞다 — DB도 이미 맞아서
+  //   다음에 페이지를 새로 열면 그대로 정확하게 나온다.
   return { ok: true }
 }
 
@@ -167,7 +170,7 @@ export async function suspendUser(formData: FormData): Promise<ActionResult> {
     return { ok: false, error: "계정 정지에 실패했습니다." }
   }
 
-  revalidatePath("/admin/users")
+  // revalidatePath를 안 부르는 이유는 changeUserRole 위 주석과 같다.
   return { ok: true }
 }
 
@@ -187,7 +190,7 @@ export async function changeUserDepartment(formData: FormData): Promise<ActionRe
     return { ok: false, error: "부서 변경에 실패했습니다." }
   }
 
-  revalidatePath("/admin/users")
+  // revalidatePath를 안 부르는 이유는 changeUserRole 위 주석과 같다.
   return { ok: true }
 }
 
@@ -203,6 +206,6 @@ export async function reactivateUser(formData: FormData): Promise<ActionResult> 
     return { ok: false, error: "정지 해제에 실패했습니다." }
   }
 
-  revalidatePath("/admin/users")
+  // revalidatePath를 안 부르는 이유는 changeUserRole 위 주석과 같다.
   return { ok: true }
 }

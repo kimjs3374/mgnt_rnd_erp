@@ -3,6 +3,7 @@
 import { useActionState } from "react"
 import { issueTempPassword, type IssueTempPasswordResult } from "@/app/actions/admin-users"
 import { Button } from "@/components/ui/button"
+import { formatKstDateTime } from "@/lib/kst"
 
 type ResetRequest = {
   id: number
@@ -25,7 +26,7 @@ function IssueRow({ req }: { req: ResetRequest }) {
       <td className="px-3 py-2">{req.username}</td>
       <td className="px-3 py-2">{req.name}</td>
       <td className="px-3 py-2">{req.email ?? "-"}</td>
-      <td className="px-3 py-2">{new Date(req.reset_requested_at).toLocaleString("ko-KR")}</td>
+      <td className="px-3 py-2">{formatKstDateTime(req.reset_requested_at)}</td>
       <td className="px-3 py-2">
         {state?.ok ? (
           <div className="text-sm">

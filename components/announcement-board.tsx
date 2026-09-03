@@ -24,10 +24,7 @@ import type { BoardRow, UndatedRow } from "@/lib/queries"
  *     (`판정` prop, 서버 컴포넌트가 두 함수를 불러 만든 Record). 새 판정 로직을
  *     만들면 판정이 두 벌이 되고 한쪽만 고쳐지는 사고가 시연장에서 드러난다(§3.6).
  *   ⚠ 탭은 `구분`(funding_schemes.대분류, 대부분 비어 있다) 대신 **`출처`**로 가른다.
- *     기업마당·K-Startup → 지원사업, IRIS·NTIS → 과제. 사업유형 컬럼을 안 건드려도
- *     탭이 바로 채워진다.
- *   ⚠ 탭은 **0건이어도 항상 보인다.** 눌러 보면 「없습니다」가 뜬다 — 탭이 사라지면
- *     「없다」가 아니라 「고장났다」로 읽힌다.
+ *     기업마당·K-Startup → 지원사업, IRIS·NTIS → 과제.
  *   ⚠ 「외 N건 링크」 대신 **페이지 넘김**을 쓴다. 이 카드가 「오늘 새로 올라온 것을
  *     확인하는 자리」인데 5줄만 보여주고 나머지는 다른 화면으로 떠넘기면 카드의
  *     목적 자체가 성립하지 않는다. 페이지당 줄 수는 고정해 빈 줄로 채운다 —
@@ -35,17 +32,31 @@ import type { BoardRow, UndatedRow } from "@/lib/queries"
  *   ⚠ 이미 마감된 공고는 뺀다. `신규`(오늘 게시·수집)는 접수기간이 지난 공고도
  *     새로 잡는다 — 실제로 마감된 공고가 첫 줄에 뜬 적이 있다.
  *   ⚠ 오늘 0건이면 최근 3일로 넓히고, 넓혔다는 사실을 화면에 적는다. 속이지 않는다.
+ *
+ * 2026-09-04 개편(4차)
+ *   ⚠ 「기타」 탭을 없앴다. 자동 수집 스크립트 4개(collect-bizinfo·collect-kstartup·
+ *     collect-iris·collect-ntis)가 만드는 출처는 기업마당·K-Startup·IRIS·NTIS 뿐이다.
+ *     `출처='공고문'` 인 예외가 DB에 하나 있었는데, 그건 어제 규칙 엔진 시연용으로
+ *     수동 삽입된 단일 레코드였고 오늘은 신규로도 안 잡힌다(실측). 자동 수집만으로는
+ *     이 탭이 채워질 길이 없어 걷어냈다.
+ *   ⚠ 「가능만」 필터를 없애고 **탭별 「전체 공고 확인」** 링크로 바꿨다. 탐색 화면에
+ *     이미 자격판정 필터·자사기준만 필터가 있다 — 대시보드에 또 만들면 같은 기능이
+ *     두 곳에 생긴다. 판정은 줄마다 배지로 보여주고, 자세히 거르고 싶으면 탐색으로
+ *     보낸다. 탭에 따라 목적지가 갈린다(과제→과제 탐색, 지원사업→지원사업 탐색).
+ *   ⚠ 하단의 건수 텍스트를 지웠다 — 탭 옆 숫자와 같은 걸 두 번 말하고 있었다.
+ *     페이지 위치(‹ n/m ›)만 남긴다.
  */
 
 const 페이지당 = 5
 
-const 탭목록 = ["과제", "지원사업", "기타"] as const
+const 탭목록 = ["과제", "지원사업"] as const
 type Tab = (typeof 탭목록)[number]
 
-const 탭구분 = (출처: string): Tab => {
+/** 두 탭 중 어디에도 안 걸리는 출처는 자동 수집 경로 밖이라 어느 탭에도 안 세운다. */
+const 탭구분 = (출처: string): Tab | null => {
   if (출처 === "기업마당" || 출처 === "K-Startup") return "지원사업"
   if (출처 === "IRIS" || 출처 === "NTIS") return "과제"
-  return "기타"
+  return null
 }
 
 /** 과제 공고는 공고 탐색이 따로 있다. 탭에 따라 상세 경로가 갈린다. */
@@ -88,7 +99,6 @@ export function AnnouncementBoard({
 
   const [active, set액티브] = React.useState<Tab>("지원사업")
   const [page, set페이지] = React.useState(0)
-  const [가능만, set가능만] = React.useState(false)
 
   const 탭전환 = (t: Tab) => {
     set액티브(t)
@@ -98,30 +108,20 @@ export function AnnouncementBoard({
   const 개수 = React.useMemo(() => {
     const m = new Map<Tab, number>()
     for (const t of 탭목록) m.set(t, 0)
-    for (const r of 대상) m.set(탭구분(r.출처), (m.get(탭구분(r.출처)) ?? 0) + 1)
-    return m
-  }, [대상])
-
-  const 가능개수 = React.useMemo(() => {
-    const m = new Map<Tab, number>()
-    for (const t of 탭목록) m.set(t, 0)
     for (const r of 대상) {
-      if (판정[r.id] === "가능") {
-        const t = 탭구분(r.출처)
-        m.set(t, (m.get(t) ?? 0) + 1)
-      }
+      const t = 탭구분(r.출처)
+      if (t) m.set(t, (m.get(t) ?? 0) + 1)
     }
     return m
-  }, [대상, 판정])
+  }, [대상])
 
   const 탭전체행 = React.useMemo(
     () => 대상.filter((r) => 탭구분(r.출처) === active),
     [대상, active],
   )
-  const 필터행 = 가능만 ? 탭전체행.filter((r) => 판정[r.id] === "가능") : 탭전체행
-  const 총페이지 = Math.max(1, Math.ceil(필터행.length / 페이지당))
+  const 총페이지 = Math.max(1, Math.ceil(탭전체행.length / 페이지당))
   const 현재페이지 = Math.min(page, 총페이지 - 1)
-  const 보이는행 = 필터행.slice(현재페이지 * 페이지당, 현재페이지 * 페이지당 + 페이지당)
+  const 보이는행 = 탭전체행.slice(현재페이지 * 페이지당, 현재페이지 * 페이지당 + 페이지당)
 
   return (
     <div className="rounded-lg border bg-card">
@@ -136,9 +136,6 @@ export function AnnouncementBoard({
                 ? `최근 3일에 올라온 공고 ${대상.length}건 — 오늘 새로 올라온 것은 없습니다`
                 : `오늘 새로 올라온 공고 ${대상.length}건`}
         </span>
-        <Link href="/announcements" className="ml-auto text-xs text-primary hover:underline">
-          공고 탐색 전체
-        </Link>
       </div>
 
       {error ? (
@@ -172,24 +169,14 @@ export function AnnouncementBoard({
               ))}
             </div>
 
-            {/* 자격판정 「가능」만 걸러 본다. 새 판정 로직이 아니라 있는 값을 거를 뿐이다. */}
-            <button
-              type="button"
-              aria-pressed={가능만}
-              onClick={() => {
-                set가능만((v) => !v)
-                set페이지(0)
-              }}
-              className={cn(
-                "flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors",
-                가능만
-                  ? "border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                  : "border-border text-muted-foreground hover:bg-muted",
-              )}
+            {/* 탭에 따라 갈 곳이 다르다 — 과제는 과제 탐색, 지원사업은 지원사업 탐색.
+                판정을 더 자세히 거르고 싶으면(자사기준만·자격판정 필터) 여기가 아니라 탐색에서 한다. */}
+            <Link
+              href={목록경로(active)}
+              className="flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
             >
-              가능만
-              <span className="tabular-nums">{가능개수.get(active) ?? 0}</span>
-            </button>
+              전체 공고 확인 →
+            </Link>
           </div>
 
           {탭전체행.length === 0 ? (
@@ -210,47 +197,37 @@ export function AnnouncementBoard({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {보이는행.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="h-[190px] text-center text-[13px] text-muted-foreground">
-                      「가능」 판정 공고가 없습니다
+                {보이는행.map((r) => (
+                  <TableRow key={r.id} className="h-[38px] text-[13px]">
+                    <TableCell className="pr-0">
+                      <WatchStar id={r.id} on={r.관심} />
                     </TableCell>
+                    {/* max-w + min-w-0 이 없으면 truncate 가 안 먹고 표가 가로로 밀린다 */}
+                    <TableCell className="max-w-[1px] font-medium">
+                      <Link
+                        href={상세경로(active, r.id)}
+                        className="flex min-w-0 items-center gap-1.5 hover:underline"
+                        title={r.사업명}
+                      >
+                        <판정배지 값={판정[r.id]} />
+                        <span className="truncate">{r.사업명}</span>
+                      </Link>
+                    </TableCell>
+                    <TableCell className="max-w-[1px] truncate text-muted-foreground">
+                      {r.기관 ?? "—"}
+                    </TableCell>
+                    <TableCell className="tabular-nums text-muted-foreground">
+                      <Period row={r} />
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{r.출처}</TableCell>
                   </TableRow>
-                ) : (
-                  <>
-                    {보이는행.map((r) => (
-                      <TableRow key={r.id} className="h-[38px] text-[13px]">
-                        <TableCell className="pr-0">
-                          <WatchStar id={r.id} on={r.관심} />
-                        </TableCell>
-                        {/* max-w + min-w-0 이 없으면 truncate 가 안 먹고 표가 가로로 밀린다 */}
-                        <TableCell className="max-w-[1px] font-medium">
-                          <Link
-                            href={상세경로(active, r.id)}
-                            className="flex min-w-0 items-center gap-1.5 hover:underline"
-                            title={r.사업명}
-                          >
-                            <판정배지 값={판정[r.id]} />
-                            <span className="truncate">{r.사업명}</span>
-                          </Link>
-                        </TableCell>
-                        <TableCell className="max-w-[1px] truncate text-muted-foreground">
-                          {r.기관 ?? "—"}
-                        </TableCell>
-                        <TableCell className="tabular-nums text-muted-foreground">
-                          <Period row={r} />
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">{r.출처}</TableCell>
-                      </TableRow>
-                    ))}
-                    {/* 줄 수를 고정한다. 마지막 페이지가 짧다고 카드 키가 흔들리면 아래 카드가 움직인다. */}
-                    {Array.from({ length: 페이지당 - 보이는행.length }).map((_, i) => (
-                      <TableRow key={`filler-${i}`} aria-hidden className="h-[38px]">
-                        <TableCell colSpan={5} />
-                      </TableRow>
-                    ))}
-                  </>
-                )}
+                ))}
+                {/* 줄 수를 고정한다. 마지막 페이지가 짧다고 카드 키가 흔들리면 아래 카드가 움직인다. */}
+                {Array.from({ length: 페이지당 - 보이는행.length }).map((_, i) => (
+                  <TableRow key={`filler-${i}`} aria-hidden className="h-[38px]">
+                    <TableCell colSpan={5} />
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           )}
@@ -280,36 +257,30 @@ export function AnnouncementBoard({
             </div>
           )}
 
-          {탭전체행.length > 0 && (
-            <div className="flex items-center justify-between border-t px-4 py-2 text-xs text-muted-foreground">
+          {/* 건수는 탭 옆 숫자와 겹친다 — 여기서는 페이지 위치만 말한다. */}
+          {총페이지 > 1 && (
+            <div className="flex items-center justify-end gap-2 border-t px-4 py-2 text-xs text-muted-foreground">
+              <button
+                type="button"
+                disabled={현재페이지 === 0}
+                onClick={() => set페이지((p) => p - 1)}
+                aria-label="이전 페이지"
+                className="flex size-6 items-center justify-center rounded-full border text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
+              >
+                ‹
+              </button>
               <span className="tabular-nums">
-                {가능만 ? `가능 ${필터행.length}건` : `${탭전체행.length}건`}
+                {현재페이지 + 1} / {총페이지}
               </span>
-              {총페이지 > 1 && (
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={현재페이지 === 0}
-                    onClick={() => set페이지((p) => p - 1)}
-                    aria-label="이전 페이지"
-                    className="flex size-6 items-center justify-center rounded-full border text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
-                  >
-                    ‹
-                  </button>
-                  <span className="tabular-nums">
-                    {현재페이지 + 1} / {총페이지}
-                  </span>
-                  <button
-                    type="button"
-                    disabled={현재페이지 >= 총페이지 - 1}
-                    onClick={() => set페이지((p) => p + 1)}
-                    aria-label="다음 페이지"
-                    className="flex size-6 items-center justify-center rounded-full border text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
-                  >
-                    ›
-                  </button>
-                </div>
-              )}
+              <button
+                type="button"
+                disabled={현재페이지 >= 총페이지 - 1}
+                onClick={() => set페이지((p) => p + 1)}
+                aria-label="다음 페이지"
+                className="flex size-6 items-center justify-center rounded-full border text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
+              >
+                ›
+              </button>
             </div>
           )}
         </>

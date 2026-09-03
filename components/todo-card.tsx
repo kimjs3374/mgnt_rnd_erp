@@ -28,6 +28,14 @@ import { StatusBadge } from "@/components/status-badge"
  *     안 그러면 페이지를 넘겨도 두 번째 페이지에 보여줄 게 없다.
  *   ⚠ 페이지 상태는 **갈래별로 따로** 둔다(`Record<라벨, 페이지번호>`). 한 상태를
  *     공유하면 「서류」를 2페이지로 넘겼는데 「점검」도 같이 2페이지로 넘어가 버린다.
+ *
+ * 2026-09-04 개편(8차) — 마지막 페이지가 항목 수보다 적으면(1페이지 4줄, 2페이지
+ *   2줄) 카드 안 내용량이 페이지마다 달라졌고, 이 카드가 오른쪽 열에서 `flex-1`
+ *   로 남는 공간을 채우는 역할이라 **카드 테두리 자체가 228.5px → 170.5px로
+ *   움직였다**(실측). 과제 관리·공고 확인이 이미 쓰는 방법과 같게, **페이지가
+ *   여러 장인 그룹만** 마지막 페이지를 빈 줄로 채워 항상 페이지당 줄 수를
+ *   유지한다. 페이지가 한 장뿐인 그룹(예: 대기 1건)은 안 건드린다 — 며칠에 한 번
+ *   있는 항목 하나를 억지로 4줄로 부풀리면 없는 걸 있어 보이게 만드는 셈이다.
  */
 export type 큐항목 = {
   키: string
@@ -100,7 +108,7 @@ export function TodoCard({ 갈래들 }: { 갈래들: 큐갈래[] }) {
                   <Link
                     key={it.키}
                     href={g.링크}
-                    className="flex items-center gap-2 rounded px-1 py-1 hover:bg-muted"
+                    className="flex h-7 items-center gap-2 rounded px-1 hover:bg-muted"
                   >
                     <span
                       className={cn(
@@ -120,6 +128,12 @@ export function TodoCard({ 갈래들 }: { 갈래들: 큐갈래[] }) {
                     </span>
                   </Link>
                 ))}
+                {/* 페이지가 여러 장인 그룹만 빈 줄로 채운다 — 마지막 페이지가 짧다고
+                    카드 내용량이 줄면 flex-1 계산이 흔들려 카드 테두리가 움직인다. */}
+                {총페이지 > 1 &&
+                  Array.from({ length: 페이지당 - 보이는.length }).map((_, i) => (
+                    <div key={`filler-${i}`} aria-hidden className="h-7" />
+                  ))}
 
                 {/* 갈래 하나에 항목이 페이지당 수보다 많을 때만 뜬다. 「외 N건」 대신 이게 전체를 보여준다. */}
                 {총페이지 > 1 && (

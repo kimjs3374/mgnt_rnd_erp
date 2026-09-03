@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/table"
 import type { ProjectRow } from "@/lib/queries"
 import { 연차수, 현재연차, 기간표기, 연차연도 } from "@/lib/fiscal-year"
+import { ProjectLeadCell } from "@/components/project-lead-cell"
 
 // lib/queries.ts 는 service_role 로 여는 lib/db 를 갖고 있어 클라이언트 번들에 넣지 않는다
 // (CLAUDE.md §3.5). 타입만 가져오고 won() 은 여기서 다시 만든다 — programs-table.tsx 와 같은 이유.
@@ -50,7 +51,19 @@ const 전체보기 = 0
  * (`lib/fiscal-year.ts`). 2022-06~2024-05 과제는 2022 · 2023 · 2024 셋 다에서 잡힌다 —
  * 시작연도만 보면 「2023년에 뭘 하고 있었나」에 답할 수 없다.
  */
-export function ProjectsLedger({ rows }: { rows: ProjectRow[] }) {
+export function ProjectsLedger({
+  rows,
+  책임자,
+  로그인,
+}: {
+  rows: ProjectRow[]
+  /**
+   * 과제 id → 연구책임자 표시명. `app.projects` 가 `supabase_admin` 소유라 컬럼을 못 붙여
+   * 옆 테이블(`app.project_leads`)에 있다(`db/104_project_lead.sql`). 그래서 따로 받는다.
+   */
+  책임자: Record<number, string>
+  로그인?: boolean
+}) {
   const [search, setSearch] = React.useState("")
   const [연도, set연도] = React.useState<string>(전체연도)
   const [종료숨김, set종료숨김] = React.useState(false)
@@ -71,10 +84,11 @@ export function ProjectsLedger({ rows }: { rows: ProjectRow[] }) {
       if (종료숨김 && r.상태 === "종료") return false
       if (y != null && !연차연도(r.시작일, r.종료일).includes(y)) return false
       if (!q) return true
-      return [r.과제명, r.과제코드, r.부처, r.전문기관, r.사업명]
+      // 연구책임자도 검색에 넣는다 — 「홍길동이 맡은 과제」를 찾는 게 이 열을 붙인 이유다.
+      return [r.과제명, r.과제코드, r.부처, r.전문기관, r.사업명, 책임자[r.id]]
         .some((v) => (v ?? "").toLowerCase().includes(q))
     })
-  }, [rows, search, 연도, 종료숨김])
+  }, [rows, search, 연도, 종료숨김, 책임자])
 
   // 조건이 바뀌면 1쪽으로 돌아간다. 3쪽을 보다 걸러서 1쪽밖에 없으면 빈 화면이 뜬다.
   React.useEffect(() => {
@@ -187,6 +201,7 @@ export function ProjectsLedger({ rows }: { rows: ProjectRow[] }) {
               <TableRow className="hover:bg-transparent">
                 <TableHead className="w-[280px]">과제명</TableHead>
                 <TableHead>과제코드</TableHead>
+                <TableHead className="w-[150px]">연구책임자</TableHead>
                 <TableHead>부처 / 전문기관</TableHead>
                 <TableHead>유형</TableHead>
                 <TableHead>수행기간</TableHead>
@@ -222,6 +237,14 @@ export function ProjectsLedger({ rows }: { rows: ProjectRow[] }) {
                       </Link>
                     </TableCell>
                     <TableCell className="text-muted-foreground">{r.과제코드 ?? "—"}</TableCell>
+                    {/* 눌러서 바로 고친다. 막는 판정은 서버 액션의 `수정권한()` 한 곳에서만 한다. */}
+                    <TableCell className="text-[12.5px]">
+                      <ProjectLeadCell
+                        과제_id={r.id}
+                        표시명={책임자[r.id] ?? null}
+                        로그인={로그인}
+                      />
+                    </TableCell>
                     <TableCell className="text-muted-foreground">
                       {r.부처 ?? "—"}
                       {r.전문기관 ? ` · ${r.전문기관}` : ""}

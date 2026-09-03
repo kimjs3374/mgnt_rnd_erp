@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { getProjects, won } from "@/lib/queries"
 import { ProjectCreateButton } from "@/components/project-create-button"
 import { ProjectsLedger } from "@/components/projects-ledger"
+import { getCurrentUser } from "@/lib/current-user"
 import { db, safeSelect } from "@/lib/db"
 
 export const dynamic = "force-dynamic"
@@ -15,7 +16,7 @@ export const dynamic = "force-dynamic"
  * 협약을 맺고 실제로 돈을 쓰고 있(었)는 과제 자체의 마스터 정보다.
  */
 export default async function ProjectsPage() {
-  const [{ rows: 전체, error }, 미배정, 단계] = await Promise.all([
+  const [{ rows: 전체, error }, 미배정, 단계, 책임자행, who] = await Promise.all([
     getProjects(),
     // 과제가 아직 정해지지 않은 집행. 사이드바에서 「집행」을 뺐으므로 여기서 알려주지 않으면
     // Slack 으로 막 들어온 건이 아무 화면에도 안 뜬다.
@@ -29,6 +30,12 @@ export default async function ProjectsPage() {
     safeSelect<{ id: number; 선정결과: string | null }>("projects", () =>
       db.from("projects").select("*"),
     ),
+    // 연구책임자. `app.projects` 는 supabase_admin 소유라 컬럼을 못 붙여 옆 테이블에 있다
+    // (`db/104_project_lead.sql`). 못 읽어도 대장은 떠야 하므로 safeSelect 로 받는다.
+    safeSelect<{ 과제_id: number; 표시명: string }>("project_leads", () =>
+      db.from("project_leads").select("*"),
+    ),
+    getCurrentUser(),
   ])
 
   // 과제사업 대장에는 **선정된 건만** 둔다. 신청·심사 중인 건은 지원사업 대장에서 본다.
@@ -42,6 +49,10 @@ export default async function ProjectsPage() {
   )
   const rows = 전체.filter((r) => r.상태 !== "신청중" && !제외.has(r.id))
   const 숨긴수 = 전체.length - rows.length
+
+  const 책임자 = Object.fromEntries(
+    책임자행.rows.map((r) => [Number(r.과제_id), String(r.표시명 ?? "")]),
+  ) as Record<number, string>
 
   const 총사업비 = rows.reduce((s, r) => s + (r.총사업비 ?? 0), 0)
   const 정부지원금 = rows.reduce((s, r) => s + (r.정부지원금 ?? 0), 0)
@@ -77,7 +88,7 @@ export default async function ProjectsPage() {
         />
       </div>
 
-      <ProjectsLedger rows={rows} />
+      <ProjectsLedger rows={rows} 책임자={책임자} 로그인={who.인증} />
 
       {숨긴수 > 0 && (
         <p className="text-xs text-muted-foreground">

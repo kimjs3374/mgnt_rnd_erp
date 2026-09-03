@@ -27,6 +27,8 @@ import subprocess
 import sys
 from typing import Any
 
+import requests
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import rest  # noqa: E402
 
@@ -35,18 +37,38 @@ EMBED_CLI = "/web/rnd/bot/embed_cli.py"       # ⚠ 스크립트는 /web/rnd/bot
 # /rnd/bot/ 은 별개 디렉터리다(symlink 아님, 실측 확인). 오늘 실제로 쓰는 코드
 # (mcp_server.py·ann_rules.py 등)는 전부 /web/rnd/bot/ 에 있고 git 이 그것만 본다.
 # 처음에 embed_cli.py 를 /rnd/bot/ 에 둬서 커밋이 안 됐다 — 여기로 옮겼다.
-EMBED_TIMEOUT = 60  # 모델 로딩(첫 호출 몇 초) + 인코딩. 배치로 묶어도 넉넉히 둔다
+EMBED_TIMEOUT = 60  # subprocess 폴백용. 모델 로딩(콜드스타트 8~12초) + 인코딩.
 # embed_cli.py 와 반드시 같은 값이어야 한다. DB 컬럼 기본값에만 기대지 않고 매번
 # 명시적으로 적는다 — 모델이 나중에 또 바뀌면(오늘 이미 한 번 바뀌었다: 다국어
 # MiniLM → 한국어 STS 전용 ko-sroberta-multitask, 실측 오탐 때문에) 어떤 행이 어느
 # 모델로 만들어졌는지 데이터에 그대로 남아야 한다.
 MODEL_NAME = "jhgan/ko-sroberta-multitask"
 
+# ⚠ 실측(2026-09-04): 화면에서 "저장 중…"이 멈춘다는 신고가 왔다 — subprocess 콜드
+# 스타트가 8~12초 걸려 nginx 앞단 타임아웃보다 길어질 수 있었다(뒤에서는 결국
+# 저장까지 됐지만 화면은 응답을 못 받아 영영 멈춰 있었다). 그래서 모델을 상주시켜
+# 두는 서버(bot/embed_server.py, systemd rnd-embed)를 먼저 쓰고, 그게 죽어 있으면
+# 예전 subprocess 방식으로 **폴백**한다 — 느리지만 기능은 산다.
+EMBED_SERVER = os.environ.get("RND_EMBED_URL", "http://127.0.0.1:3612")
+EMBED_SERVER_TIMEOUT = 15  # 이미 상주해 있으면 문장 하나에 수백 ms 다 — 넉넉히 15초
 
-def _embed(texts: list[str]) -> list[list[float]]:
-    """텍스트 목록을 벡터 목록으로. 실패하면 예외를 던진다 — 호출부가 잡는다."""
-    if not texts:
-        return []
+
+def _embed_via_server(texts: list[str]) -> list[list[float]] | None:
+    """상주 서버로 시도한다. 서버가 없거나 응답이 없으면 None — 예외를 던지지 않는다
+    (호출부가 subprocess 폴백으로 넘어가게)."""
+    try:
+        res = requests.post(f"{EMBED_SERVER}/embed", json={"texts": texts},
+                            timeout=EMBED_SERVER_TIMEOUT)
+        res.raise_for_status()
+        d = res.json()
+        if not d.get("ok"):
+            return None
+        return d["vectors"]
+    except requests.RequestException:
+        return None
+
+
+def _embed_via_subprocess(texts: list[str]) -> list[list[float]]:
     if not os.path.exists(EMBED_PY):
         raise RuntimeError(
             f"임베딩 venv 가 없다({EMBED_PY}). "
@@ -66,6 +88,19 @@ def _embed(texts: list[str]) -> list[list[float]]:
     return d["vectors"]
 
 
+def _embed(texts: list[str]) -> list[list[float]]:
+    """텍스트 목록을 벡터 목록으로. 실패하면 예외를 던진다 — 호출부가 잡는다.
+
+    상주 서버(빠름) 먼저 시도하고, 없으면 subprocess(느리지만 항상 된다)로 폴백한다.
+    """
+    if not texts:
+        return []
+    v = _embed_via_server(texts)
+    if v is not None:
+        return v
+    return _embed_via_subprocess(texts)
+
+
 def _cosine(a: list[float], b: list[float]) -> float:
     """정규화된 벡터라 내적이 곧 코사인 유사도다."""
     return sum(x * y for x, y in zip(a, b))
@@ -73,11 +108,17 @@ def _cosine(a: list[float], b: list[float]) -> float:
 
 def record_judgment(text: str, 판정: str, 답변자: str, *, announcement_id: int | None = None,
                     특징키: str | None = None, 사유: str | None = None) -> dict[str, Any]:
-    """사람의 판정+코멘트를 임베딩해서 쌓는다.
+    """사람의 판정+코멘트를 **즉시** 저장한다. 임베딩은 여기서 계산하지 않는다.
+
+    사용자 지적(2026-09-04): "DB에 올리고 모델은 백그라운드에서 작업하면 되지
+    저장할때마다 모델호출하면 서버리소스가 남아나겠냐" — 맞다. 저장 요청 하나가
+    임베딩 계산 시간에 묶이면 안 된다. 저장은 텍스트만 넣고 바로 끝낸다 —
+    호출부(bot/gateway.py)가 응답을 돌려준 **뒤에** fill_embedding() 을 백그라운드
+    스레드로 부른다.
 
     text 는 보통 그 판정의 근거가 된 공고문 문장(근거문장)이다 — 판정 자체
-    ("불가")가 아니라 **왜 그런지를 말하는 문장**을 임베딩해야 다음에 비슷한
-    문장이 나왔을 때 걸린다.
+    ("불가")가 아니라 **왜 그런지를 말하는 문장**이어야 다음에 비슷한 문장이 나왔을
+    때 걸린다.
     """
     text = (text or "").strip()
     if not text:
@@ -85,11 +126,10 @@ def record_judgment(text: str, 판정: str, 답변자: str, *, announcement_id: 
     if not 답변자:
         raise ValueError("답변자 가 비었다 — 누가 판단했는지 없으면 이력이 아니다")
 
-    vec = _embed([text])[0]
     row = rest.insert("judgment_semantic", {
         "announcement_id": announcement_id,
         "텍스트": text,
-        "임베딩": vec,
+        "임베딩": None,          # 백그라운드에서 채운다 — find_similar() 가 null 은 건너뛴다
         "임베딩모델": MODEL_NAME,
         "판정": 판정,
         "특징키": 특징키,
@@ -97,6 +137,20 @@ def record_judgment(text: str, 판정: str, 답변자: str, *, announcement_id: 
         "답변자": 답변자,
     })
     return row
+
+
+def fill_embedding(row_id: int, text: str) -> None:
+    """저장된 행에 임베딩을 채운다 — record_judgment() 이후 백그라운드에서 부른다.
+
+    실패해도 예외를 삼킨다(호출부가 백그라운드 스레드라 예외를 받아줄 곳이 없다) —
+    대신 stderr 로 남긴다. 원문·판정 자체는 이미 안전하게 DB 에 있으니 급하지 않다.
+    """
+    try:
+        vec = _embed([text])[0]
+        rest.update("judgment_semantic", {"id": row_id}, {"임베딩": vec, "임베딩모델": MODEL_NAME})
+    except Exception as e:
+        print(f"[semantic_learn] fill_embedding(#{row_id}) 실패: {type(e).__name__}: {e}",
+              file=sys.stderr)
 
 
 def find_similar(text: str, top_k: int = 5, min_sim: float = 0.40) -> list[dict[str, Any]]:

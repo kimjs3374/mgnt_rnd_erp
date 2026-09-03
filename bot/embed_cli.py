@@ -25,7 +25,18 @@
     | /rnd/bot/venv-embed/bin/python /web/rnd/bot/embed_cli.py
 """
 import json
+import os
 import sys
+
+# ⚠ 실측(2026-09-04): 화면에서 "저장 중…"이 멈춰 있다는 신고가 왔다. 콜드 스타트
+# 한 번에 11.8초 걸리는데, 그중 상당수가 "sending unauthenticated requests to the
+# HF Hub" 경고와 함께 **매 호출마다 huggingface.co 에 접속을 시도**하는 데서 온다 —
+# 모델은 이미 로컬에 캐시돼 있는데도 매번 원격에 갱신 여부를 확인한다. 이게 느린
+# 것도 문제지만, 더 큰 문제는 **네트워크에 의존하게 된다는 것**이다 — 이 기능은
+# 로컬 모델만 쓰면 되는데 HF Hub 연결이 느리거나 막히면 응답 전체가 멈춘다.
+# offline 모드로 강제해 로컬 캐시만 쓰게 한다.
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
 
 def main() -> None:

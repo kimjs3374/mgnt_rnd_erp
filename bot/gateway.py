@@ -37,6 +37,7 @@ import logging
 import os
 import sys
 import tempfile
+import threading
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -366,6 +367,16 @@ class Handler(BaseHTTPRequestHandler):
             self._send(500, {"ok": False, "error": f"{type(e).__name__}: {e}"})
             return
         self._send(200, {"ok": True, "row": {k: v for k, v in row.items() if k != "임베딩"}})
+
+        # 응답을 이미 보냈다 — 이제부터는 사용자를 안 기다리게 한다. 임베딩은
+        # 백그라운드 스레드에서 채운다(사용자 지적 2026-09-04: 저장이 모델 호출에
+        # 묶이면 안 된다). 실패해도 fill_embedding() 내부에서 삼킨다 — 여기서
+        # 또 터지면 그건 이미 응답이 나간 뒤라 아무도 못 받는다.
+        threading.Thread(
+            target=semantic_learn.fill_embedding,
+            args=(row["id"], 텍스트),
+            daemon=True,
+        ).start()
 
     def _judgment_similar(self, body: dict) -> None:
         import semantic_learn  # noqa: PLC0415

@@ -223,7 +223,7 @@ export default async function ProjectsPage() {
       {rows.some((r) => r.상태 === "종료") && (
         <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <span className="inline-block h-3 w-5 rounded-sm border bg-red-100 dark:bg-red-950" />
-          연빨강 줄은 <span className="text-foreground">종료된 과제</span>입니다 — 나머지는 수행 중입니다.
+          <span className="text-foreground">종료된 과제</span>입니다 — 나머지는 수행 중입니다.
           문제가 있다는 뜻이 아니라 끝났다는 뜻입니다.
         </p>
       )}

@@ -4,7 +4,7 @@ import { AnnouncementBoard } from "@/components/announcement-board"
 import type { 자격판정값 } from "@/components/announcement-board"
 import { CalendarBoard } from "@/components/calendar-board"
 import { ProjectBoard } from "@/components/project-board"
-import { QueueCard } from "@/components/queue-card"
+import { TodoCard } from "@/components/todo-card"
 import {
   getLedger,
   getExpenses,
@@ -27,22 +27,23 @@ export const dynamic = "force-dynamic"
  *   보고 나서 할 일이 생기면 올리고, 그냥 알고 넘어가는 숫자면 안 올린다.
  *
  * ```
- * 공고 확인                     ← 새로 온 기회
- * 일정(달력) | 과제 관리         ← 언제 / 무엇을 하고 있나
- * 비목 확정 | 챙길 서류 | 점검   ← 내가 눌러야 넘어가는 것
+ * 공고 확인                          ← 새로 온 기회
+ * 일정(달력)  |  과제 관리            ← 언제 / 무엇을 하고 있나
+ *             |  오늘 처리할 것       ← 내가 눌러야 넘어가는 것
  * ```
  *
- * 2026-09-03 개편(3차)
- *   ① **부제와 요약 줄을 없앴다.** 「오늘 새 공고 50 · 확정 대기 1」이 바로 아래 카드가
- *      더 자세히 말하는 것과 같은 내용이었다.
- *   ② **큐 카드 셋으로 쪼갰고, 0건이어도 카드는 그대로 둔다.** 자리가 고정돼야
- *      「저기 보면 된다」가 생긴다 — 사라지면 격자에 구멍이 나서 고장난 것처럼 보인다.
- *   ③ **과제 관리 카드.** 메뉴를 두 번 눌러 들어가지 않아도 되게. 사이드바의
- *      「과제 관리」(신청중·수행중·사업종료)와 이름·단계를 맞춘다(2026-09-04).
- *   ④ **공고 확인이 자격판정을 함께 보여준다.** `/announcements`·`/project-announcements`
- *      가 이미 쓰는 판정(가능·불가·확인필요·요건미확인, `getProgramAnnouncements`·
- *      `getRndAnnouncements`)을 id 로 붙여서 넘긴다. 새 판정 로직을 만들지 않는다 —
- *      만들면 판정이 두 벌이 되고 한쪽만 고쳐지는 사고가 시연장에서 드러난다(§3.6).
+ * 2026-09-04 개편(5차) — 「한눈에 들어와야 한다」는 지적으로 판을 다시 짰다.
+ *   ① **아래 세 칸(비목 확정·챙길 서류·제출 전 점검)을 없애고 카드 하나로 합쳤다**
+ *      (`TodoCard`). 세 장을 가로로 늘어놓으니 테두리·헤더가 세 번 반복돼 맨 아래
+ *      한 행이 시끄러웠다. 정보를 지우는 게 아니라 **자리를 옮긴 것**이다 — 완전히
+ *      지우면 확정 대기가 쌓이는 걸 아무도 모르게 된다.
+ *   ② **과제 관리를 3줄로 줄이고, 오늘 처리할 것을 그 밑에 이어 붙였다.** 오른쪽
+ *      열을 `flex flex-col` 로 묶고 오늘 처리할 것에 `flex-1` 을 준다 — 왼쪽 달력
+ *      카드가 길든 짧든 오른쪽 두 카드 합이 자동으로 따라간다(CSS Grid 의 기본
+ *      `items-stretch` 가 두 칸을 같은 높이로 맞추고, `flex-1` 이 남는 높이를 흡수).
+ *   ③ 공고 확인이 자격판정을 함께 보여준다(가능 판정만 이 카드에 올라온다,
+ *      §3.6 — 새 판정 로직을 만들지 않고 `getProgramAnnouncements`·
+ *      `getRndAnnouncements` 를 그대로 가져다 쓴다).
  *
  * ⚠ 확정 대기를 빠뜨리면 안 된다. 확신도 0.70 미만은 코드가 자동 확정을 막게 해 뒀으므로
  *   사람을 기다리는 줄이 반드시 생기는데, 화면에서 사라지면 그게 쌓이는 걸 아무도 모른다.
@@ -104,48 +105,51 @@ export default async function DashboardPage() {
         error={board.error}
       />
 
-      {/* ② 언제 / 무엇을 하고 있나 */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      {/* ② 언제 / 무엇을 하고 있나 + 내가 눌러야 넘어가는 것.
+          오른쪽 열을 flex-col 로 묶는다 — 과제 관리(3줄, 내용만큼)+오늘 처리할 것(flex-1, 나머지)
+          을 합친 세로 길이가 왼쪽 달력 카드와 자동으로 같아진다. */}
+      <div className="grid items-stretch gap-4 lg:grid-cols-2">
         <CalendarBoard rows={calendar.rows} today={today} error={calendar.error} />
-        <ProjectBoard rows={projects.rows} today={today} error={projects.error} />
-      </div>
-
-      {/* ③ 내가 눌러야 넘어가는 것 — 0건이어도 카드는 그대로 있고 안이 조용해진다.
-          items-start 가 없으면 1줄짜리 카드가 옆 카드 높이만큼 늘어난다. */}
-      <div className="grid items-start gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <QueueCard
-          라벨="비목 확정"
-          링크="/expenses"
-          건수={확정대기.length}
-          항목={확정대기.slice(0, 4).map((e) => ({
-            키: `e${e.id}`,
-            이름: e.거래처 ?? "거래처 미상",
-            꼬리: e.비목_대분류
-              ? categoryLabel(labels, e.비목_대분류, e.비목_세부항목).main
-              : "비목 미지정",
-          }))}
-        />
-        <QueueCard
-          라벨="챙길 서류"
-          링크="/documents"
-          건수={미확보서류.length}
-          항목={미확보서류.slice(0, 4).map((d) => ({
-            키: `d${d.코드}`,
-            이름: d.이름,
-            꼬리: d.상태,
-            배지: true,
-          }))}
-        />
-        <QueueCard
-          라벨="제출 전 점검"
-          링크="/programs"
-          건수={점검.length}
-          항목={점검.slice(0, 4).map((r) => ({
-            키: `p${r.id}`,
-            이름: r.사업명,
-            꼬리: `${r.미처리점검}건`,
-          }))}
-        />
+        <div className="flex flex-col gap-4">
+          <ProjectBoard rows={projects.rows} today={today} error={projects.error} />
+          <TodoCard
+            갈래들={[
+              {
+                라벨: "비목 확정",
+                링크: "/expenses",
+                건수: 확정대기.length,
+                항목: 확정대기.slice(0, 4).map((e) => ({
+                  키: `e${e.id}`,
+                  이름: e.거래처 ?? "거래처 미상",
+                  꼬리: e.비목_대분류
+                    ? categoryLabel(labels, e.비목_대분류, e.비목_세부항목).main
+                    : "비목 미지정",
+                })),
+              },
+              {
+                라벨: "챙길 서류",
+                링크: "/documents",
+                건수: 미확보서류.length,
+                항목: 미확보서류.slice(0, 4).map((d) => ({
+                  키: `d${d.코드}`,
+                  이름: d.이름,
+                  꼬리: d.상태,
+                  배지: true,
+                })),
+              },
+              {
+                라벨: "제출 전 점검",
+                링크: "/programs",
+                건수: 점검.length,
+                항목: 점검.slice(0, 4).map((r) => ({
+                  키: `p${r.id}`,
+                  이름: r.사업명,
+                  꼬리: `${r.미처리점검}건`,
+                })),
+              },
+            ]}
+          />
+        </div>
       </div>
     </PageShell>
   )

@@ -11,7 +11,8 @@ import { db, safeSelect } from "@/lib/db"
 import { getEvidenceGaps } from "@/lib/queries-evidence-gap"
 import { EvidenceGapCard } from "@/components/evidence-gap-card"
 import { getCategories } from "@/lib/queries-project"
-import { 다음정산일 } from "@/lib/settlement-day"
+import { getNextSettlement } from "@/lib/queries-settlement-day"
+import { SettlementDeadlineCard } from "@/components/settlement-deadline-card"
 import {
   단계판정,
   단계정의,
@@ -101,8 +102,9 @@ export async function ProjectsStageView({ 단계 }: { 단계: 보기범위 }) {
   const 빈집행건 = 증빙미비과제.reduce((s, r) => s + (증빙.gaps[r.id]?.빈집행건 ?? 0), 0)
   const 빈칸 = 증빙미비과제.reduce((s, r) => s + (증빙.gaps[r.id]?.빈칸 ?? 0), 0)
 
-  // 매월 정산 마감. 25일이 기준이고 주말·공휴일이면 앞 영업일로 당긴다(`lib/settlement-day.ts`).
-  const 정산 = 다음정산일()
+  // 매월 정산 마감. **규칙·공휴일·그 달만 다른 날을 전부 DB 에서 읽는다**(`db/114`) —
+  // 회계 일정은 매번 달라져서 코드에 박으면 고칠 때마다 배포해야 한다(2026-09-04 사용자 지시).
+  const 정산 = await getNextSettlement()
 
   const 올해 = new Date().toISOString().slice(0, 4)
   const 심사중 = rows.filter((r) => (판정재료.get(r.id)?.선정결과 ?? "") === "발표심사").length
@@ -199,17 +201,8 @@ export async function ProjectsStageView({ 단계 }: { 단계: 보기범위 }) {
             ⚠ 음력 공휴일(설·부처님오신날·추석)은 달력을 확인하고 넣은 값이 아니라
                `lib/settlement-day.ts` 의 목록을 사람이 검산해야 한다.
                그래서 **날짜를 그대로 적어** 눈으로 대조할 수 있게 하고, 확인이 필요하면 말한다. */}
-        <Stat
-          icon={CalendarClock}
-          label="이번 정산 마감"
-          value={정산.남은일 === 0 ? "오늘" : `D-${정산.남은일}`}
-          sub={
-            `${정산.날}(${정산.요일}) · 매월 25일` +
-            (정산.당겨짐 ? ` — 25일이 ${정산.이유}이라 앞 영업일로` : "") +
-            (정산.확인필요 ? " · 음력 공휴일 확인 필요" : "")
-          }
-          tone={정산.남은일 <= 7 ? "warn" : "default"}
-        />
+        {/* 확인하는 자리가 곧 고치는 자리다 — 설정 화면을 따로 두면 매번 찾게 된다. */}
+        <SettlementDeadlineCard 정산={정산} />
       </div>
 
       <ProjectsLedger

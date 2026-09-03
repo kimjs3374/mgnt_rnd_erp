@@ -1,10 +1,11 @@
 "use client"
 
 import * as React from "react"
-import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { MoneyInput } from "@/components/money-input"
 import { saveContractShare } from "@/app/actions/funding-share"
+import { 협약금액_확정 } from "@/app/actions/project-budgeting"
 import { compareWithContract, type Share } from "@/lib/funding-share"
 
 /**
@@ -141,20 +142,18 @@ export function FundingShareCard({
 
       {/* 근거가 없을 때가 가장 중요한 화면이다. 빈 상태를 만들지 않으면 「모른다」를 말할 수 없다. */}
       {자동 == null ? (
-        <p className="text-[13px] text-muted-foreground">
-          {없는이유 ??
-            "이 과제에 적용할 재원 분담 규칙을 찾지 못했다. 공고 규칙이나 기관유형 규정이 등록되면 자동으로 계산한다."}
-          {/* 총사업비가 비어서 못 나온 것이면 채울 수 있는 화면으로 바로 보낸다 —
-              글로만 말하고 갈 곳을 안 주면 사람이 다시 메뉴를 뒤져야 한다. */}
-          {(총사업비 == null || 총사업비 <= 0) && (
-            <>
-              {" "}
-              <Link href="/project-budgeting" className="underline underline-offset-2">
-                과제 계상에서 넣기
-              </Link>
-            </>
+        <div className="flex flex-col gap-2">
+          <p className="text-[13px] text-muted-foreground">
+            {없는이유 ??
+              "이 과제에 적용할 재원 분담 규칙을 찾지 못했다. 공고 규칙이나 기관유형 규정이 등록되면 자동으로 계산한다."}
+          </p>
+          {/* 총사업비가 비어서 계산을 못 한 것이면, 예전엔 별도 화면(「과제 계상」)으로
+              보냈다. 그 화면을 없앴다(2026-09-04 사용자 지시) — 총사업비를 넣는 일도
+              여기서 바로 한다. 서버 액션(`협약금액_확정`)은 그대로다. */}
+          {!읽기전용 && (총사업비 == null || 총사업비 <= 0) && (
+            <TotalBudgetInline 과제_id={과제_id} />
           )}
-        </p>
+        </div>
       ) : (
         <>
           <div className="grid gap-2 sm:grid-cols-3">
@@ -268,6 +267,144 @@ export function FundingShareCard({
           )}
         </>
       )}
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------------- */
+
+/** 숫자칸 — 사람은 137,000,000 으로 친다. 콤마를 지우고 읽는다. */
+function 수(v: string): number | null {
+  const s = v.replace(/[,\s]/g, "")
+  if (!s) return null
+  const n = Number(s)
+  return Number.isFinite(n) ? n : null
+}
+
+/**
+ * 총사업비 채우기 — **원래 「과제 계상」 화면에 있던 입력창을 그대로 여기로 옮긴 것**이다
+ * (2026-09-04). 계산은 여전히 서버가 한다(`협약금액_확정`, `미리보기: true`) — 화면이
+ * 따로 계산하면 저장되는 값과 보여준 값이 갈릴 수 있다. 저장하면 `revalidatePath` 로 이
+ * 페이지가 새로 그려지면서 위쪽 재원 카드가 계산값으로 바뀐다.
+ */
+function TotalBudgetInline({ 과제_id }: { 과제_id: number }) {
+  const [금액, set금액] = React.useState("")
+  const [pending, start] = React.useTransition()
+  const [err, setErr] = React.useState<string | null>(null)
+  const [미리보기, set미리보기] = React.useState<{
+    근거: string[]
+    주의: string[]
+    채운값: { 정부지원금: number | null; 기관부담_현금: number | null; 기관부담_현물: number | null }
+  } | null>(null)
+
+  const 값 = 수(금액)
+  const 낼수있나 = 값 != null && 값 > 0 && !pending
+
+  React.useEffect(() => {
+    set미리보기(null)
+    setErr(null)
+  }, [금액])
+
+  function 계산() {
+    if (값 == null) return
+    start(async () => {
+      const r = await 협약금액_확정({ 과제_id, 총사업비: 값, 미리보기: true })
+      if (!r.ok) {
+        setErr(r.error ?? "계산하지 못했습니다.")
+        return
+      }
+      set미리보기({
+        근거: r.근거 ?? [],
+        주의: r.주의 ?? [],
+        채운값: r.채운값 ?? { 정부지원금: null, 기관부담_현금: null, 기관부담_현물: null },
+      })
+    })
+  }
+
+  function 저장() {
+    if (값 == null) return
+    start(async () => {
+      const r = await 협약금액_확정({ 과제_id, 총사업비: 값 })
+      if (!r.ok) {
+        setErr(r.error ?? "저장하지 못했습니다.")
+        return
+      }
+      // 서버 액션이 이 경로를 revalidate 한다 — 새 총사업비·재원으로 카드가 다시 그려진다.
+    })
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-md border bg-card p-3">
+      <label className="flex flex-col gap-1 text-[11.5px] text-muted-foreground">
+        <span>
+          총사업비 <span className="text-destructive">*</span>{" "}
+          <span className="text-[10.5px]">
+            원 · 신청서에 적을 금액이든 협약서에 적힌 금액이든, 지금 확정된 금액을 그대로
+          </span>
+        </span>
+        <Input
+          className="h-8 max-w-xs text-[13px]"
+          value={금액}
+          onChange={(e) => set금액(e.target.value)}
+          placeholder="137,000,000"
+        />
+      </label>
+
+      {미리보기 && (
+        <div className="flex flex-col gap-2 rounded-md border p-2.5">
+          <div className="grid grid-cols-3 gap-2 text-[12.5px]">
+            <div>
+              <div className="text-[11px] text-muted-foreground">정부출연금</div>
+              <div className="tabular-nums">{won(미리보기.채운값.정부지원금 ?? 0)}</div>
+            </div>
+            <div>
+              <div className="text-[11px] text-muted-foreground">민간부담 현금</div>
+              <div className="tabular-nums">{won(미리보기.채운값.기관부담_현금 ?? 0)}</div>
+            </div>
+            <div>
+              <div className="text-[11px] text-muted-foreground">민간부담 현물</div>
+              <div className="tabular-nums">{won(미리보기.채운값.기관부담_현물 ?? 0)}</div>
+            </div>
+          </div>
+          <ul className="flex flex-col gap-0.5">
+            {미리보기.근거.map((g, i) => (
+              <li key={i} className="text-[11.5px] text-muted-foreground">
+                · {g}
+              </li>
+            ))}
+          </ul>
+          {미리보기.주의.map((w, i) => (
+            <span key={i} className="text-[11.5px] text-[var(--warning-fg)]">
+              {w}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {err && <span className="text-[12px] text-destructive">{err}</span>}
+
+      <div className="flex items-center gap-2">
+        <span className="text-[11px] text-muted-foreground">
+          공고 규정 또는 기관유형 규정 기본값으로 정부출연금·민간부담을 나눠 채운다
+        </span>
+        <Button
+          type="button"
+          variant="outline"
+          className="ml-auto h-7 text-[12.8px]"
+          disabled={!낼수있나}
+          onClick={계산}
+        >
+          {pending && !미리보기 ? "계산 중…" : "규정으로 계산"}
+        </Button>
+        <Button
+          type="button"
+          className="h-7 text-[12.8px]"
+          disabled={!낼수있나 || !미리보기}
+          onClick={저장}
+        >
+          {pending && 미리보기 ? "저장 중…" : "저장"}
+        </Button>
+      </div>
     </div>
   )
 }

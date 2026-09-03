@@ -1,10 +1,16 @@
 // 과제 계상 — 공고 → 선정 → **협약금액 확정** → 연구비 계상 으로 이어지는지 본다.
 //
 // 진짜로 봐야 할 것은 「저장된다」가 아니라 **연동이 실제로 일어나는가**다:
-//   ① 선정됐지만 총사업비가 0인 건이 「사업비 미확정」으로 잡히는가
-//   ② 협약금액을 넣으면 **그 공고의 규정**으로 정부출연금·민간부담이 나뉘는가
-//   ③ 근거(쪽수·원문)가 화면에 같이 나오는가 — 숫자만 나오면 근거를 못 댄다
-//   ④ 저장 뒤 연구비 계상 화면으로 이어지는가
+//   ① 협약금액을 넣으면 **그 공고의 규정**으로 정부출연금·민간부담이 나뉘는가
+//   ② 근거(쪽수·원문)가 화면에 같이 나오는가 — 숫자만 나오면 근거를 못 댄다
+//   ③ 저장이 실제로 DB에 반영되는가
+//   ④ 관심 공고가 대시보드에서 보이는가
+//
+// ⚠ 2026-09-04 — 이 흐름을 검증하던 전용 대기열 화면(「과제 계상」 · /project-budgeting)을
+//   사용자 지시로 없앴다. 총사업비를 잡는 자리는 과제 상세의 연구비 계상 탭
+//   (`components/funding-share-card.tsx` 의 인라인 입력)으로 옮겼고, 검색·단계 필터
+//   같은 그 화면 전용 UI는 같이 사라졌다. 관심 공고는 대시보드로 옮겼다. 이 파일은 그
+//   새 위치에 맞춰 다시 썼다 — 검사 대상은 같다, **자리만** 바뀌었다.
 //
 // 선정 직후 상태를 만들려고 **총사업비 0 · 상태 수행중 · 공고 837 연결**인 과제를 하나 넣는다.
 // 이건 `[지원 등록]` → `[선정]` 이 만드는 것과 같은 모양이다(`app/actions/apply.ts`).
@@ -155,108 +161,28 @@ try {
   if (미지원) 관심ids.push(await 관심심기(미지원.id))
   log(`선정 직후 상태를 만든다: id=${과제id} · 총사업비 0`)
 
-  await page.goto(`${BASE}/project-budgeting`, { waitUntil: "networkidle0", timeout: 60000 })
+  // ① 연구비 계상 탭으로 바로 들어간다 — 예전엔 대기열 화면에서 줄을 찾아 들어갔는데,
+  //   그 화면이 없어졌으니 [지원 등록]/[선정]이 실제로 넘겨주는 주소로 바로 간다.
+  await page.goto(`${BASE}/projects/${과제id}/budget`, { waitUntil: "networkidle0", timeout: 60000 })
   await page.evaluate(심을것)
   let text = await 본문()
 
-  확인(text.includes("과제 계상"), "화면이 뜬다")
-  확인(text.includes(이름), "선정된 과제가 목록에 있다")
+  확인(text.includes(이름) || text.includes(코드), "과제 상세로 들어왔다")
+  // 총사업비가 0(협약 전)이라 computeShare 가 null 을 낸다 — 「비어 있다」 안내가 뜨는 게 맞다.
+  확인(text.includes("총사업비가 비어 있어 재원을 나눌 수 없다"), "총사업비가 없다는 안내가 뜬다")
 
-  // ⓪ 관심 공고가 **표보다 먼저** 나와야 한다 — 계상보다 앞 단계라 위에 둔다
-  확인(text.includes("관심 공고"), "관심 공고 구역이 있다")
-  확인(
-    text.indexOf("관심 공고") < text.indexOf("사업비 미확정"),
-    "관심 공고가 계상 표보다 위에 있다",
-  )
-  확인(text.includes("선정 ·"), "관심 공고에 지원·선정 상태가 붙는다")
-  if (미지원) {
-    확인(text.includes("아직 지원 등록 안 함"), "지원 안 한 관심 공고는 그렇게 말한다")
-  }
+  // ② 총사업비 인라인 입력 — 비어 있으면 재원 구성 카드 안에 바로 입력창이 뜬다
+  //   (FundingShareCard 의 TotalBudgetInline, 예전 「협약금액 확정」 대화상자를 그대로 옮긴 것)
+  확인(text.includes("총사업비") && text.includes("규정으로 계산"), "총사업비 인라인 입력이 보인다")
 
-  // ① 단계 판정 — 총사업비 0 은 「미계상」이 아니라 「사업비 미확정」이어야 한다
-  const 줄 = await page.evaluate(
-    (n) => [...document.querySelectorAll("tbody tr")].find((r) => r.textContent.includes(n))?.textContent ?? "",
-    이름,
-  )
-  확인(줄.includes("사업비 미확정"), "총사업비 0 은 「사업비 미확정」으로 잡힌다", 줄.slice(0, 70))
-  확인(줄.includes("공고 규정 적용"), "공고에서 온 건이라 공고 규정이 붙는다고 표시한다")
-
-  // ①-2 검색 — 과제명·과제코드·공고명으로 좁힌다
-  const 전체행 = await page.evaluate(() => document.querySelectorAll("tbody tr").length)
-  await page.evaluate(() => {
-    const el = document.querySelector('input[placeholder*="검색"]')
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, "계상연동")
-    el.dispatchEvent(new Event("input", { bubbles: true }))
-  })
-  await 잠깐(400)
-  const 검색행 = await page.evaluate(() => document.querySelectorAll("tbody tr").length)
-  확인(검색행 === 1 && 전체행 > 1, `과제명 검색이 ${전체행}행 → ${검색행}행으로 좁힌다`)
-
-  // 과제코드로도 찾혀야 한다 — 사람은 코드로도 뒤진다
-  await page.evaluate((코드) => {
-    const el = document.querySelector('input[placeholder*="검색"]')
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, 코드)
-    el.dispatchEvent(new Event("input", { bubbles: true }))
-  }, 코드)
-  await 잠깐(400)
-  확인(
-    (await page.evaluate(() => document.querySelectorAll("tbody tr").length)) === 1,
-    "과제코드로도 찾힌다",
-  )
-
-  // 없는 말을 넣으면 빈 상태를 말해 준다 — 조용히 빈 표를 보여주지 않는다
-  await page.evaluate(() => {
-    const el = document.querySelector('input[placeholder*="검색"]')
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, "zzzz없는말zzzz")
-    el.dispatchEvent(new Event("input", { bubbles: true }))
-  })
-  await 잠깐(400)
-  확인((await 본문()).includes("조건에 맞는 과제가 없습니다"), "결과가 없으면 이유를 말한다")
-
-  // 초기화
-  await page.evaluate(() => window.__b.누르기("↺ 초기화"))
-  await 잠깐(400)
-  확인(
-    (await page.evaluate(() => document.querySelectorAll("tbody tr").length)) === 전체행,
-    "초기화하면 전부 돌아온다",
-  )
-
-  // 단계 필터 — 「손이 필요한 것만」이면 완료 건이 빠진다
-  await page.evaluate(() => {
-    const s = [...document.querySelectorAll("select")].find((x) =>
-      x.textContent.includes("손이 필요한 것만"),
-    )
-    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(s, "미완료")
-    s.dispatchEvent(new Event("change", { bubbles: true }))
-  })
-  await 잠깐(400)
-  const 미완료행 = await page.evaluate(() => document.querySelectorAll("tbody tr").length)
-  확인(미완료행 < 전체행 && 미완료행 >= 1, `단계 필터가 ${전체행}행 → ${미완료행}행 (완료 제외)`)
-  await page.evaluate(() => window.__b.누르기("↺ 초기화"))
-  await 잠깐(400)
-
-  // ② 협약금액 확정 대화상자
-  확인(
-    await page.evaluate((n) => {
-      const b = window.__b.줄버튼(n, "협약금액 확정")
-      b?.click()
-      return !!b
-    }, 이름),
-    "[협약금액 확정] 을 연다",
-  )
-  await 잠깐(600)
-  await page.evaluate(심을것)
-  text = await 본문()
-  확인(text.includes("이 공고의 재원 분담 규정"), "어느 규정이 적용되는지 먼저 말한다")
-
-  // ③ 금액 넣고 규정으로 계산 — 저장 전에 근거를 보여줘야 한다
   await page.evaluate((v) => {
-    const el = [...document.querySelectorAll('[data-slot="dialog-content"] input')][0]
-    window.__b.넣기(el, v)
+    const label = [...document.querySelectorAll("label")].find((l) => l.textContent.includes("총사업비"))
+    const el = label?.querySelector("input")
+    if (el) window.__b.넣기(el, v)
   }, 협약금액.toLocaleString("ko-KR"))
   await 잠깐(300)
   확인(
-    await page.evaluate(() => window.__b.버튼("저장하고 계상하러 가기")?.disabled === true),
+    await page.evaluate(() => window.__b.버튼("저장")?.disabled === true),
     "계산 전에는 저장이 잠겨 있다 (근거 없이 저장 못 한다)",
   )
 
@@ -270,13 +196,13 @@ try {
   확인(text.includes("정부출연 상한"), "계산 근거(상한·절사)를 같이 보여준다")
   확인(/p\.\d+|공고|유의사항|기준/.test(text), "근거에 규정 원문·출처가 붙어 있다")
 
-  // ④ 저장 → 연구비 계상 화면으로
-  await page.evaluate(() => window.__b.누르기("저장하고 계상하러 가기"))
+  // ③ 저장
+  await page.evaluate(() => window.__b.누르기("저장"))
   for (let i = 0; i < 40; i++) {
     await 잠깐(500)
-    if (page.url().includes("/budget")) break
+    text = await 본문()
+    if (text.includes("합계") && text.includes("총사업비")) break
   }
-  확인(page.url().includes(`/projects/${과제id}/budget`), `저장 뒤 계상 화면으로 간다 — ${page.url()}`)
 
   // ⑤ DB 에 실제로 나뉘어 들어갔는가 — 화면 말고 데이터로 확인한다
   const [p] = await pgSelect("projects", `id=eq.${과제id}&select=*`)
@@ -291,13 +217,25 @@ try {
   const 출연비율 = (Number(p.정부지원금 ?? 0) / 협약금액) * 100
   확인(출연비율 <= 75.0001, `정부출연 비율 ${출연비율.toFixed(1)}% — 공고 규정(75% 이내)이 적용됐다`)
 
-  // ⑥ 단계가 「미계상」으로 넘어갔는가 — 이제 비목을 나눌 기준이 생겼다
-  await page.goto(`${BASE}/project-budgeting`, { waitUntil: "networkidle0", timeout: 60000 })
-  const 줄후 = await page.evaluate(
-    (n) => [...document.querySelectorAll("tbody tr")].find((r) => r.textContent.includes(n))?.textContent ?? "",
-    이름,
+  // ⑥ 저장 뒤에는 「비어 있다」 경고가 아니라 계산값이 그대로 카드에 남아 있어야 한다 —
+  //   이제 비목을 나눌 기준이 생겼다는 뜻이다. 새로고침해서 서버가 넘긴 값으로 다시 본다.
+  await page.goto(`${BASE}/projects/${과제id}/budget`, { waitUntil: "networkidle0", timeout: 60000 })
+  const 저장후 = await 본문()
+  확인(
+    저장후.includes("총사업비가 비어 있어 재원을 나눌 수 없다") === false,
+    "재원 카드가 빈 상태로 되돌아가지 않는다",
   )
-  확인(줄후.includes("계상 전"), "단계가 「계상 전」으로 넘어갔다", 줄후.slice(0, 70))
+  확인(저장후.includes("정부출연금"), "저장한 재원 구성이 카드에 그대로 남아 있다")
+
+  // ④ 관심 공고 — 계상 대기열에 있던 구역을 대시보드로 옮겼다(2026-09-04).
+  //   지원 등록 여부·선정 단계까지 한 줄에서 보여줘야 한다는 요건은 그대로다.
+  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle0", timeout: 60000 })
+  const 대시보드 = await 본문()
+  확인(대시보드.includes("관심 공고"), "관심 공고 구역이 대시보드에 있다")
+  확인(대시보드.includes("선정 ·"), "관심 공고에 지원·선정 상태가 붙는다")
+  if (미지원) {
+    확인(대시보드.includes("아직 지원 등록 안 함"), "지원 안 한 관심 공고는 그렇게 말한다")
+  }
 
   확인(errors.length === 0, `콘솔 오류 ${errors.length}건${errors.length ? `: ${errors.slice(0, 3).join(" | ")}` : ""}`)
 } finally {

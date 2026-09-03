@@ -137,7 +137,6 @@ export async function 협약금액_확정(input: {
     const { error: uErr } = await db.from("projects").update(patch).eq("id", 과제_id)
     if (uErr) return { ok: false, error: uErr.message }
 
-    revalidatePath("/project-budgeting")
     revalidatePath("/projects")
     revalidatePath(`/projects/${과제_id}`)
     revalidatePath(`/projects/${과제_id}/budget`)

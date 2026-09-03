@@ -1,47 +1,17 @@
 import "server-only"
 import { db, safeSelect } from "@/lib/db"
-import { getFundingShareRules, getCompanyProfile, getAllBudgets } from "@/lib/queries-project"
-import { getConfirmedProjectIds } from "@/lib/queries-confirm"
-import { pickRule, computeShare } from "@/lib/funding-share"
-import type { Share } from "@/lib/funding-share"
+import { getAllBudgets } from "@/lib/queries-project"
 
 /**
- * 「과제 계상」 화면 전용 조회 — **선정된 과제를 계상까지 밀어 넣는 대기열**.
+ * 「관심 공고」 조회 — 원래 「과제 계상」 화면(신청·수행 과제가 총사업비를 채우는 대기열)과
+ * 한 파일이었는데, **그 대기열 화면을 없앴다**(2026-09-04 사용자 지시 — 총사업비를 채우는
+ * 일은 이제 연구비 계상 탭(`FundingShareCard`)에서 바로 한다. `db/`·서버 액션은 그대로 두고
+ * `BudgetingRow`·`getBudgetingRows()`·전용 화면만 지웠다 — 계산 로직은 안 건드렸다).
+ * 관심 공고 추적은 계상과 다른 기능이라 살아남았다.
  *
  * ⚠ `lib/queries.ts` 에 넣지 않는다. 네 명이 동시에 여는 파일이라 저장 충돌이 두 번 났다
  *   (`_팀로그/memory/queries-ts-concurrent-save.md`).
  */
-
-export type BudgetingRow = {
-  id: number
-  과제명: string
-  과제코드: string | null
-  상태: string
-  선정결과: string | null
-  선정결과일: string | null
-  공고_id: number | null
-  공고명: string | null
-  사업유형: string | null
-  총사업비: number
-  정부지원금: number | null
-  기관부담_현금: number | null
-  기관부담_현물: number | null
-  /** 이 과제에 잡힌 비목 배정의 합. 0 이면 아직 한 줄도 안 잡았다는 뜻. */
-  배정합: number
-  계상건수: number
-  /** 총사업비 − 배정합. 양수면 아직 덜 잡았다. */
-  남은액: number
-  단계: 계상단계
-  /**
-   * **아직 선정 전(신청중)인가.** 계상의 뜻이 갈린다 —
-   * 신청 단계 계상은 **신청서에 넣는 사업비 계획**이고, 선정 뒤 계상은 **협약 금액을 쪼개는 일**이다.
-   * 금액의 출처도 다르다(내가 써낸 금액 vs 기관이 확정해 준 금액).
-   * 화면이 둘을 같은 말로 부르면 「협약금액 확정」 버튼을 신청 전에 누르게 된다.
-   */
-  신청단계: boolean
-  /** 공고·사업유형·기관유형으로 고른 규칙으로 계산한 재원 구성. 규칙이 없으면 null. */
-  제안: Share | null
-}
 
 /**
  * 계상이 어디까지 왔는지. **순서가 곧 화면 정렬 순서**이고, 앞쪽이 손이 필요한 것이다.
@@ -61,13 +31,6 @@ export const 단계이름: Record<계상단계, string> = {
   초과: "총사업비 초과",
   확정: "확정 · 대장 관리",
 }
-
-/**
- * 「확정」이 맨 끝이다 — 사람이 계상 확정을 누른 건이고, 그 뒤로는 **관리 위치가 사업 대장**이라
- * 이 화면에서 할 일이 없다(`db/100`). 「손이 필요한 것만」 필터에서 자연히 빠진다.
- * 「완료」와 갈라 둔 이유: 합계가 맞는 것(완료)과 사람이 잠근 것(확정)은 다른 사실이다.
- */
-const 단계순서: 계상단계[] = ["사업비_미확정", "미계상", "초과", "진행중", "완료", "확정"]
 
 function 단계판정(총사업비: number, 배정합: number): 계상단계 {
   if (!총사업비 || 총사업비 <= 0) return "사업비_미확정"
@@ -90,88 +53,6 @@ type ProjectRowRaw = {
   정부지원금: number | null
   기관부담_현금: number | null
   기관부담_현물: number | null
-}
-
-/**
- * 계상 대상 = **미선정을 뺀 모든 과제**. 신청중도 들어온다(2026-09-04 사용자 지시).
- *
- * ⚠ 전에는 신청중을 뺐다. 그런데 **사업비 계상은 신청서에 넣는 것**이라 선정 전에 해야 한다 —
- *   선정된 뒤에 처음 계상하는 순서는 실제 일과 반대다. 그래서 신청중을 넣되
- *   `신청단계` 로 표시해 화면이 「협약」과 「신청」을 다른 말로 부르게 한다.
- *
- * ⚠ `선정결과 = '선정'` 으로 거르지 않는다. 시드 12건은 케이오시 관리대장(엑셀)에서 온 것이라
- *   `선정결과` 칸이 비어 있어서, 그걸로 거르면 목록이 통째로 빈다(대장 화면이 이미 겪은 함정).
- *   **「아직 선정 안 됐다고 확인된 것」(미선정)만** 뺀다.
- */
-export async function getBudgetingRows() {
-  const [과제, 예산, 규칙, 회사, 공고, 확정] = await Promise.all([
-    safeSelect<ProjectRowRaw>("projects", () => db.from("projects").select("*")),
-    getAllBudgets(),
-    getFundingShareRules(),
-    getCompanyProfile(),
-    safeSelect<{ id: number; 사업명: string }>("announcements", () =>
-      db.from("announcements").select("*"),
-    ),
-    getConfirmedProjectIds(),
-  ])
-
-  const error = 과제.error ?? 예산.error ?? null
-  const 기관유형 = (회사.rows[0]?.기업규모 as string | undefined) ?? null
-  const 공고명 = new Map(공고.rows.map((a) => [a.id, a.사업명]))
-
-  const 배정 = new Map<number, { 합: number; 건수: number }>()
-  for (const b of 예산.rows) {
-    const cur = 배정.get(b.과제_id) ?? { 합: 0, 건수: 0 }
-    cur.합 += Number(b.배정액 ?? 0)
-    cur.건수 += 1
-    배정.set(b.과제_id, cur)
-  }
-
-  const rows: BudgetingRow[] = 과제.rows
-    .filter((p) => p.선정결과 !== "미선정")
-    .map((p) => {
-      const 총사업비 = Number(p.총사업비 ?? 0)
-      const agg = 배정.get(p.id) ?? { 합: 0, 건수: 0 }
-      const rule = pickRule(규칙.rows, {
-        공고_id: p.공고_id,
-        사업유형: p.사업유형,
-        기관유형,
-      })
-      return {
-        id: p.id,
-        과제명: p.과제명,
-        과제코드: p.과제코드,
-        상태: p.상태,
-        선정결과: p.선정결과,
-        선정결과일: p.선정결과일,
-        공고_id: p.공고_id,
-        공고명: p.공고_id == null ? null : (공고명.get(p.공고_id) ?? null),
-        사업유형: p.사업유형,
-        총사업비,
-        정부지원금: p.정부지원금 == null ? null : Number(p.정부지원금),
-        기관부담_현금: p.기관부담_현금 == null ? null : Number(p.기관부담_현금),
-        기관부담_현물: p.기관부담_현물 == null ? null : Number(p.기관부담_현물),
-        배정합: agg.합,
-        계상건수: agg.건수,
-        남은액: 총사업비 - agg.합,
-        // 사람이 확정을 눌렀으면 그것이 마지막 사실이다 — 합계 판정보다 앞선다.
-        단계: 확정.ids.has(p.id) ? ("확정" as 계상단계) : 단계판정(총사업비, agg.합),
-        // 선정 전이면 이 계상은 「협약」이 아니라 **신청서에 넣는 계획**이다.
-        신청단계: p.상태 === "신청중" || p.선정결과 === "접수" || p.선정결과 === "발표심사",
-        // 총사업비가 0이면 계산이 안 된다(computeShare 가 null). 그때는 금액을 넣는 순간
-        // 화면이 미리보기를 만든다 — 여기서는 규칙이 잡히는지까지만 확인해 둔다.
-        제안: computeShare(총사업비 > 0 ? 총사업비 : null, rule),
-      }
-    })
-
-  // 손이 필요한 것이 위로. 같은 단계면 최근 선정된 것이 위로 온다.
-  rows.sort((a, b) => {
-    const d = 단계순서.indexOf(a.단계) - 단계순서.indexOf(b.단계)
-    if (d !== 0) return d
-    return (b.선정결과일 ?? "").localeCompare(a.선정결과일 ?? "") || b.id - a.id
-  })
-
-  return { rows, error, 기관유형, 규칙수: 규칙.rows.length }
 }
 
 /* ------------------------------------------------------------------------- *

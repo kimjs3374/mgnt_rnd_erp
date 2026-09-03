@@ -5,9 +5,12 @@
 //
 //   ① 신청중 목록에서 그 과제의 「계상」으로 바로 갈 수 있다
 //   ② 계상 화면이 **협약이 아니라 신청 계획**이라고 말한다
-//   ③ 「과제 계상」 대기열에 신청중 건이 들어 있고 「신청」 배지가 붙는다
-//   ④ 「신청 단계만」으로 거르면 선정 전 건만 남는다
 //   ⑤ 한도 검산은 신청 단계에서도 돈다 — 제출 전에 잡아야 값어치가 있다
+//
+// ⚠ 예전 ③④(「과제 계상」 대기열의 「신청」 배지 · 「신청 단계만」 필터)는 뺐다 —
+//   그 화면(/project-budgeting)을 없앴다(2026-09-04 사용자 지시). 총사업비를 잡는 자리도
+//   같이 옮겨서 이제 계상 탭의 재원 구성 카드(FundingShareCard)에서 바로 한다 —
+//   그 인라인 입력 검증은 tests/e2e-applying-budgeting.mjs 가 한다.
 import puppeteer from "puppeteer-core"
 import { 로그인하고 } from "./lib/login.mjs"
 
@@ -32,7 +35,6 @@ page.on("console", (m) => m.type() === "error" && errors.push(m.text()))
 
 const 잠깐 = (ms) => new Promise((r) => setTimeout(r, ms))
 const 본문 = () => page.evaluate(() => document.body.innerText)
-const 줄수 = () => page.evaluate(() => document.querySelectorAll("tbody tr").length)
 const 가기 = async (p) => {
   await page.goto(`${BASE}${p}`, { waitUntil: "networkidle0", timeout: 60000 })
   await 잠깐(400)
@@ -65,37 +67,6 @@ try {
     /한도|검산|초과/.test(계상본문),
     "한도 검산이 신청 단계에서도 보인다(제출 전에 잡아야 값어치가 있다)",
   )
-
-  // ③ 계상 대기열에 신청중 건이 들어왔는가
-  await 가기("/project-budgeting")
-  const 전체줄 = await 줄수()
-  const 신청배지 = await page.evaluate(
-    () =>
-      [...document.querySelectorAll("tbody tr")].filter((t) => t.innerText.includes("신청")).length,
-  )
-  확인(전체줄 > 0, `계상 대기열에 ${전체줄}줄`)
-  확인(신청배지 > 0, `그중 「신청」 배지가 붙은 줄이 ${신청배지}개`)
-
-  // ④ 「신청 단계만」으로 거르기
-  const 골랐나 = await page.evaluate(() => {
-    const sel = [...document.querySelectorAll("select")].find((s) =>
-      [...s.options].some((o) => o.textContent.includes("신청 단계만")),
-    )
-    if (!sel) return false
-    const opt = [...sel.options].find((o) => o.textContent.includes("신청 단계만"))
-    const set = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value").set
-    set.call(sel, opt.value)
-    sel.dispatchEvent(new Event("change", { bubbles: true }))
-    return true
-  })
-  확인(골랐나, "「신청 단계만」 고르는 자리가 있다")
-  await 잠깐(500)
-  const 걸린줄 = await 줄수()
-  const 전부신청 = await page.evaluate(
-    () => [...document.querySelectorAll("tbody tr")].every((t) => t.innerText.includes("신청")),
-  )
-  확인(걸린줄 > 0 && 걸린줄 < 전체줄, `걸러졌다 (${전체줄} → ${걸린줄}줄)`)
-  확인(전부신청, "남은 줄이 전부 신청 단계다")
 
   확인(errors.length === 0, `콘솔 오류 ${errors.length}건${errors.length ? `: ${errors.slice(0, 2).join(" | ")}` : ""}`)
 } finally {

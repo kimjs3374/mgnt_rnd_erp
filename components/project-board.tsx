@@ -181,8 +181,9 @@ export function ProjectBoard({
             ))}
           </ul>
 
-          {총페이지 > 1 && (
-            <div className="flex items-center justify-end gap-2 border-t px-4 py-2 text-xs text-muted-foreground">
+          {/* 페이지가 하나뿐이어도 이 줄은 항상 그린다("1 / 1") — 신청중(1p)·수행중(2p)을
+              오갈 때 이 줄이 있다 없다 하면 카드 높이가 탭마다 바뀐다(2026-09-04 지적). */}
+          <div className="flex items-center justify-end gap-2 border-t px-4 py-2 text-xs text-muted-foreground">
               <button
                 type="button"
                 disabled={현재페이지 === 0}
@@ -204,8 +205,7 @@ export function ProjectBoard({
               >
                 ›
               </button>
-            </div>
-          )}
+          </div>
         </>
       )}
     </div>

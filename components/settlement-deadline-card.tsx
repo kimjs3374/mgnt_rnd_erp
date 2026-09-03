@@ -97,7 +97,8 @@ export function SettlementDeadlineCard({ 정산 }: { 정산: 정산표시 }) {
         sub={설명}
         tone={정산.남은일 <= 7 ? "warn" : "default"}
       />
-      {/* 확인하는 자리가 곧 고치는 자리다. 설정 화면을 따로 두지 않는다. */}
+      {/* 확인하는 자리가 곧 고치는 자리다. 설정 화면을 따로 두지 않는다.
+          버튼 이름은 「편집」이다(2026-09-04 사용자 지시 — 「고치기」에서 바꿨다). */}
       <button
         type="button"
         onClick={() => {
@@ -106,7 +107,7 @@ export function SettlementDeadlineCard({ 정산 }: { 정산: 정산표시 }) {
         }}
         className="absolute top-2 right-2 rounded px-1.5 py-0.5 text-[11px] text-muted-foreground underline-offset-2 hover:bg-secondary/60 hover:underline"
       >
-        {열림 ? "닫기" : "고치기"}
+        {열림 ? "닫기" : "편집"}
       </button>
 
       {열림 && (

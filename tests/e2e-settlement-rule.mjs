@@ -1,7 +1,7 @@
 // 정산 마감을 **사람이 바꿀 수 있는가.** (2026-09-04 사용자 지시: 회계 일정은 매번 달라진다)
 //
 //   ① 카드에 D-day·날짜·요일·규칙이 적혀 있다
-//   ② 「고치기」로 기준일을 바꾸면 마감일이 따라 바뀐다
+//   ② 「편집」으로 기준일을 바꾸면 마감일이 따라 바뀐다
 //   ③ 「이 달만 적용」이 규칙을 이긴다
 //   ④ 「규칙대로」로 되돌린다
 //   ⑤ 끝나면 원래 규칙(25일·앞)으로 되돌려 놓는다 — 시연 화면을 바꿔 놓지 않는다
@@ -35,7 +35,7 @@ const 본문 = () => page.evaluate(() => document.body.innerText)
 const 마감일 = async () => (/(\d{4}-\d{2}-\d{2})\([일월화수목금토]\)/.exec(await 본문()) ?? [])[1] ?? null
 const 열기 = () =>
   page.evaluate(() => {
-    const b = [...document.querySelectorAll("button")].find((x) => x.textContent.trim() === "고치기")
+    const b = [...document.querySelectorAll("button")].find((x) => x.textContent.trim() === "편집")
     b?.click()
     return !!b
   })

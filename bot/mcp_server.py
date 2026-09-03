@@ -22,6 +22,8 @@ from typing import Any
 import psycopg
 from mcp.server.mcpserver import MCPServer
 
+import collect  # 공고 수집 실행기. 같은 디렉터리(/web/rnd/bot)에 있다.
+
 DSN = os.environ["RND_DSN"]  # 기본값을 두지 않는다. 없으면 시작할 때 죽는 편이 낫다.
 
 mcp = MCPServer("rnd")
@@ -509,6 +511,147 @@ def calc_indirect(
         f"  백만원 절사 → {floored:,}원\n"
         f"  ※ 절사 경계에서 부동소수점 때문에 100만원이 사라지는 사례가 있어 epsilon 보정을 넣었다."
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 공고 수집 — 「찾아보는」 도구(search_announcements) 앞에 「받아오는」 도구를 둔다.
+#
+# 나머지 도구는 전부 읽기만 한다. 이 셋만 바깥(IRIS·기업마당·K-Startup·NTIS)을 건드리므로
+# 여기 모아 둔다. 수집 자체는 collect.py 가 scripts/collect-*.mjs 를 띄워서 한다 —
+# 화면이 쓰는 것과 같은 코드다. 두 벌로 갈리면 챗봇 건수와 화면 건수가 달라진다.
+# ─────────────────────────────────────────────────────────────────────────────
+def _db_now() -> str:
+    """DB 서버 시각. 「이번 수집으로 새로 들어온 건」의 기준선이다."""
+    return str(q("select now() as t")[0]["t"])
+
+
+def _신규(source: str, since: str) -> tuple[list[dict], int]:
+    """기준시각 뒤에 생긴 행과, 그 행들에 붙은 요구서류 건수.
+
+    ⚠ 「갱신」은 세지 않는다. announcements 에 updated_at 이 없어서 upsert 로 내용만
+      바뀐 행을 구분할 방법이 없다. 없는 수치를 만들지 않는다.
+    """
+    rows = q(
+        "select id, 사업명, 접수종료, 마감유형, 파싱상태 from app.announcements"
+        " where 출처 = %s and created_at > %s order by created_at desc",
+        (source, since),
+    )
+    if not rows:
+        return [], 0
+    docs = q(
+        "select count(*) as n from app.ann_required_docs where announcement_id = any(%s)",
+        ([r["id"] for r in rows],),
+    )
+    return rows, int(docs[0]["n"])
+
+
+def _수집요약(meta: dict) -> str:
+    meta = collect.refresh(meta)
+    끝났나 = bool(meta.get("finished_at"))
+    rc = meta.get("returncode")
+    상태 = ("완료" if rc in (None, 0) else f"실패(종료코드 {rc})") if 끝났나 else "진행중"
+    since = meta.get("db_since") or ""
+    rows, doc_n = _신규(meta["source"], since) if since else ([], 0)
+
+    out = [
+        f"[{meta['run_id']}] {meta['source']} 수집 {상태} · {collect.경과초(meta)}초 경과"
+        f" · 새로 들어온 공고 {len(rows)}건" + (f" · 요구서류 {doc_n}건 판독" if doc_n else "")
+    ]
+    for r in rows[:10]:
+        기간 = f"~{r['접수종료']}" if r["접수종료"] else f"[{r['마감유형']}]"
+        out.append(f"  - [{r['id']}] {str(r['사업명'])[:50]} · {기간} · {r['파싱상태']}")
+    if len(rows) > 10:
+        out.append(f"  … 외 {len(rows) - 10}건")
+
+    로그 = collect.tail(collect.log_path(meta["run_id"]), 12)
+    if 로그:
+        out.append("\n수집 로그(끝 12줄)\n" + 로그)
+    if not 끝났나:
+        out.append(
+            f"\n※ 아직 돌고 있다. 첨부 다운로드와 공고문 판독은 건당 수십 초 걸린다."
+            f" 잠시 뒤 collect_progress('{meta['run_id']}') 로 다시 본다."
+        )
+    return "\n".join(out)
+
+
+@mcp.tool()
+def collect_announcements(
+    source: str = "IRIS", limit: int = 5, keyword: str = "", wait_seconds: int = 40
+) -> str:
+    """공고를 출처에서 새로 받아온다(수집). 받아온 뒤 조회는 search_announcements 로 한다.
+
+    출처 — IRIS(범부처 국가R&D 공고. 공고문 첨부가 붙어 제출서류까지 판독된다) ·
+    기업마당 · K-Startup(둘 다 공식 오픈API) ·
+    NTIS(수행중 과제 정보라 접수기간이 없다. 신청할 수 있는 공고가 아니다).
+
+    limit 의 단위가 출처마다 다르다 — IRIS·NTIS 는 건수, 기업마당은 첨부까지 판독할 건수
+    (나머지는 목록만 저장), K-Startup 은 100건 단위 페이지로 환산한다.
+    keyword 는 NTIS 검색어에만 쓴다.
+
+    수집은 분 단위다. wait_seconds 만큼만 기다리고, 안 끝나면 run_id 를 돌려준다 —
+    그 뒤 collect_progress 로 이어 본다. 도구 호출이 끊겨도 수집은 계속 돈다.
+    (기본 40초는 챗 계층 타임아웃 120초 안에 답이 돌아오게 잡은 값이다.)
+    """
+    src = collect.출처정규화(source)
+    if not src:
+        목록 = "\n".join(f"- {k}: {v['설명']}" for k, v in collect.SOURCES.items())
+        return f"모르는 출처: {source!r}\n쓸 수 있는 출처\n{목록}"
+
+    도는중 = collect.진행중(src)
+    if 도는중:
+        return (
+            f"{src} 수집이 이미 돌고 있다 — 같은 출처를 두 번 돌리지 않는다"
+            f"(같은 행을 양쪽에서 쓰고, 헤드리스 호출도 두 배로 나간다).\n\n"
+            + _수집요약(도는중)
+        )
+
+    if limit < 1:
+        return "limit 은 1 이상이어야 한다. 무엇을 받아올지 정하지 않고 부르지 않는다."
+
+    meta = collect.start(src, limit, keyword, db_since=_db_now())
+    meta = collect.wait(meta, max(0, wait_seconds))
+    return _수집요약(meta)
+
+
+@mcp.tool()
+def collect_progress(run_id: str = "") -> str:
+    """돌고 있는(또는 방금 끝난) 공고 수집이 어디까지 갔는지 본다. 비워두면 가장 최근 수집."""
+    meta = collect.read_meta(run_id) if run_id else (collect.진행중() or collect.latest_meta())
+    if not meta:
+        return none(
+            f"{run_id!r} 수집 기록이 없다." if run_id else "수집을 돌린 적이 없다. collect_announcements 로 시작한다."
+        )
+    return _수집요약(meta)
+
+
+@mcp.tool()
+def collection_status() -> str:
+    """출처별로 공고를 몇 건 갖고 있고 언제 마지막으로 받아왔는지 — 「지금 새로 받아와야 하나」에 답한다."""
+    rows = q(
+        "select 출처, count(*) as 총건수, max(created_at) as 최근수집,"
+        " count(*) filter (where 마감유형 = 'dated' and 접수종료 >= current_date) as 접수중,"
+        " count(*) filter (where 파싱상태 = '파싱완료') as 판독완료,"
+        " count(*) filter (where created_at > now() - interval '24 hours') as 최근24h"
+        " from app.announcements group by 출처 order by 총건수 desc"
+    )
+    if not rows:
+        return none("수집된 공고가 하나도 없다. collect_announcements 로 받아온다.")
+
+    out = ["출처별 수집 현황"]
+    for r in rows:
+        out.append(
+            f"- {r['출처']}: 총 {r['총건수']}건 · 접수중 {r['접수중']}건 · 공고문 판독 {r['판독완료']}건"
+            f"\n  마지막 수집 {str(r['최근수집'])[:16]}"
+            + (f" · 최근 24시간 {r['최근24h']}건" if r["최근24h"] else "")
+        )
+    out.append(
+        "\n※ 「접수중」은 마감일이 날짜로 적힌 공고만 센다. 상시·소진시는 날짜가 없어 못 센다."
+        "\n※ NTIS 는 수행중 과제 정보(마감유형 '정보성')다 — 신청할 수 있는 공고가 아니다."
+    )
+    도는중 = collect.진행중()
+    if 도는중:
+        out.append(f"\n지금 {도는중['source']} 수집이 돌고 있다 — collect_progress('{도는중['run_id']}')")
+    return "\n".join(out)
 
 
 # ⚠ 반드시 파일 맨 끝. 이 아래에 도구를 정의하면 통째로 등록되지 않는다. 에러도 안 난다.

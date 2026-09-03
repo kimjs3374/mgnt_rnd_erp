@@ -54,6 +54,38 @@ const 눌러 = (label) =>
   }, label)
 
 try {
+  // ⓪ 사이드바 — 셋이 「과제 관리」 한 그룹 아래 모여 있는가(2026-09-04 사용자 지시).
+  await 가기("/projects")
+  const 사이드바 = await page.evaluate(() => {
+    const 그룹 = [...document.querySelectorAll('[data-sidebar="menu-item"]')].find((li) =>
+      li.textContent.includes("과제 관리"),
+    )
+    if (!그룹) return null
+    return {
+      항목: [...그룹.querySelectorAll('[data-sidebar="menu-sub-item"] a')].map((a) =>
+        a.textContent.trim(),
+      ),
+      // 과제사업 그룹에는 셋이 남아 있으면 안 된다(옮긴 것이지 복사한 게 아니다).
+      과제사업: [
+        ...([...document.querySelectorAll('[data-sidebar="menu-item"]')]
+          .find((li) => li.textContent.includes("과제사업"))
+          ?.querySelectorAll('[data-sidebar="menu-sub-item"] a') ?? []),
+      ].map((a) => a.textContent.trim()),
+    }
+  })
+  확인(!!사이드바, "사이드바에 「과제 관리」 그룹이 있다")
+  if (사이드바) {
+    const 셋 = ["신청중", "수행중", "사업종료"]
+    확인(
+      셋.every((t) => 사이드바.항목.includes(t)),
+      `그 그룹 안에 셋이 다 있다 (${사이드바.항목.join(" · ")})`,
+    )
+    확인(
+      셋.every((t) => !사이드바.과제사업.includes(t)),
+      `과제사업 그룹에는 안 남아 있다 (${사이드바.과제사업.join(" · ")})`,
+    )
+  }
+
   // ① · ② 단계가 갈리고 숫자가 맞는가
   const 셈 = {}
   for (const [단계, path] of [

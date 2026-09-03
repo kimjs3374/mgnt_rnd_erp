@@ -81,17 +81,30 @@ try {
         const group = btn?.closest("[data-group]")
         return group?.querySelector("a")?.textContent.replace(/\s+/g, " ").trim() ?? null
       })
+    const 카드높이 = () =>
+      p.evaluate(() => {
+        const h2 = [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === "오늘 처리할 것")
+        return h2?.closest("div.rounded-lg")?.getBoundingClientRect().height ?? null
+      })
     const 전 = await 그룹첫줄()
+    const 높이전 = await 카드높이()
     await p.evaluate(() => {
       const h2 = [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === "오늘 처리할 것")
       h2?.closest("div.rounded-lg")?.querySelector('button[aria-label$="다음 페이지"]')?.click()
     })
     await 잠깐(200)
     const 후 = await 그룹첫줄()
+    const 높이후 = await 카드높이()
     확인(
       "오늘 처리할 것의 페이지 넘김 버튼이 실제로 그 갈래 목록을 바꿈(예전엔 <p>라 안 눌렸다)",
       전 !== null && 후 !== null && 전 !== 후,
       `${전} → ${후}`,
+    )
+    // 8차 개편: 마지막 페이지가 항목 수보다 적어도 빈 줄로 채워 카드 테두리가 안 움직여야 한다(실측 228.5→170.5 였던 것).
+    확인(
+      "페이지를 넘겨도 오늘 처리할 것 카드 테두리가 안 움직임(빈 줄로 채움)",
+      높이전 != null && 높이후 != null && Math.abs(높이전 - 높이후) < 1,
+      `${높이전}px → ${높이후}px`,
     )
   } else {
     console.log("  (오늘 처리할 것에 4건 넘는 갈래가 없어 페이지 넘김 버튼이 안 뜸 - 정상)")

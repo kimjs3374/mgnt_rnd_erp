@@ -42,6 +42,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import ann_rules
 import announce
 import chat
 import gongo
@@ -99,7 +100,9 @@ class Handler(BaseHTTPRequestHandler):
                              "endpoints": ["/health", "/chat", "/eligibility/extract",
                                            "/documents/extract", "/summary/extract",
                                            "/relevance/select", "/eligibility/score",
-                                           "/document/read", "/company/read"]})
+                                           "/document/read", "/company/read",
+                                           "/rules/score", "/rules/batch",
+                                           "/rules/answer"]})
             return
         self._send(404, {"ok": False, "error": f"그런 경로가 없다: {self.path}"})
 
@@ -131,6 +134,12 @@ class Handler(BaseHTTPRequestHandler):
                 self._document_read(body)
             elif path == "/company/read":
                 self._company_read(body)
+            elif path == "/rules/score":
+                self._rules_score(body)
+            elif path == "/rules/batch":
+                self._rules_batch(body)
+            elif path == "/rules/answer":
+                self._rules_answer(body)
             else:
                 self._send(404, {"ok": False, "error": f"그런 경로가 없다: {path}"})
         except LookupError as e:
@@ -282,6 +291,49 @@ class Handler(BaseHTTPRequestHandler):
             self._send(400, {"ok": False, "error": "company 와 text 가 있어야 한다"})
             return
         self._send(200, gongo.score_eligibility(company, text))
+
+    # ── 규칙 판정 — **LLM 을 부르지 않는다** (bot/ann_score.py) ───────────────
+    # 이 세 라우트만 LLM 호출이 0 이다. 나머지는 헤드리스를 부른다.
+    # 실측: 836건 전체 판정이 33초 · 호출 0회. LLM 경로는 37건에서 멈춰 있었다.
+    def _rules_score(self, body: dict) -> None:
+        aid = body.get("announcement_id") or body.get("id")
+        if aid is None:
+            self._send(400, {"ok": False, "error": "announcement_id 가 있어야 한다"})
+            return
+        r = ann_rules.score_announcement(int(aid), save=bool(body.get("save", True)))
+        self._send(200, r)
+
+    def _rules_batch(self, body: dict) -> None:
+        limit = body.get("limit")
+        r = ann_rules.batch(int(limit) if limit else None,
+                            save=bool(body.get("save", True)))
+        self._send(200, r)
+
+    def _rules_answer(self, body: dict) -> None:
+        """사람 답변을 받아 저장하고, 그 공고를 다시 판정해서 돌려준다.
+
+        답의 효과가 같은 응답에 실려 오지 않으면 사람이 같은 질문에 두 번 답한다.
+        """
+        try:
+            r = ann_rules.record_answer(
+                announcement_id=body.get("announcement_id"),
+                특징키=str(body.get("특징키") or ""),
+                사람_값=str(body.get("사람_값") or ""),
+                답변자=str(body.get("답변자") or ""),
+                질문=str(body.get("질문") or ""),
+                근거문장=body.get("근거문장"),
+                ai_추출값=body.get("ai_추출값"),
+                일반화=bool(body.get("일반화")),
+                사유=body.get("사유"),
+                짚은문구=body.get("짚은문구"),
+                종류=str(body.get("종류") or "정보"),
+                구역=body.get("구역"),
+            )
+        except ValueError as e:
+            # 사람이 고칠 수 있는 입력 오류다. 500 으로 숨기지 않는다.
+            self._send(400, {"ok": False, "error": str(e)})
+            return
+        self._send(200, r)
 
 
 def main() -> None:

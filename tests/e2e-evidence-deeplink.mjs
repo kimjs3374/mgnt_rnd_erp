@@ -37,7 +37,8 @@ try {
   // ① 배지 → 집행 건 딥링크
   const 배지 = await page.evaluate(() =>
     [...document.querySelectorAll("tbody a")]
-      .filter((a) => a.textContent.trim().startsWith("증빙"))
+      // ⚠ 글자로 고르지 않는다 — 문구는 바뀐다. **집행 건으로 가는 링크**가 배지다.
+      .filter((a) => /\?expense=\d+$/.test(a.getAttribute("href") ?? ""))
       .map((a) => ({ 글: a.textContent.trim(), href: a.getAttribute("href") ?? "" })),
   )
   확인(배지.length > 0, `증빙 배지가 있다 (${배지.map((b) => b.글).join(" · ")})`)
@@ -47,6 +48,7 @@ try {
   )
 
   // ② 그 주소로 가면 상세가 열려 있다
+  if (!배지.length) throw new Error("배지가 없어 딥링크를 볼 수 없다 — 위 단정 참고")
   await page.goto(`${BASE}${배지[0].href}`, { waitUntil: "networkidle0", timeout: 60000 })
   await new Promise((r) => setTimeout(r, 900))
   const 상세 = await page.evaluate(

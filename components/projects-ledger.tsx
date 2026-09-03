@@ -504,9 +504,9 @@ export function ProjectsLedger({
                         <Link
                           href={`/projects/${r.id}/expenses${증빙[r.id].빈집행ids[0] ? `?expense=${증빙[r.id].빈집행ids[0]}` : ""}`}
                           title={`집행 ${증빙[r.id].빈집행건}건에 필수 서류 ${증빙[r.id].빈칸}칸이 비었다 — 눌러서 가장 오래된 건부터 채웁니다`}
-                          className="ml-1.5 inline-block rounded bg-[var(--warning)] px-1 py-0.5 align-middle text-[10.5px] font-medium text-[var(--warning-fg)] underline-offset-2 hover:underline"
+                          className="ml-1.5 inline-block rounded bg-[var(--warning)] px-1 py-0.5 align-middle text-[10.5px] font-medium whitespace-nowrap text-[var(--warning-fg)] underline-offset-2 hover:underline"
                         >
-                          증빙 {증빙[r.id].빈칸}
+                          집행 {증빙[r.id].빈집행건}건 증빙 없음
                         </Link>
                       )}
                     </TableCell>

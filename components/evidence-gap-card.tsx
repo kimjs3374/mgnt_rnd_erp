@@ -108,7 +108,7 @@ export function EvidenceGapCard({
       value={과제들.length}
       sub={
         있다
-          ? `과제 ${과제들.length}건 · 집행 ${빈집행건}건에 서류 ${빈칸}칸이 비었다 — 눌러서 보기`
+          ? `과제 ${과제들.length}건 · 증빙 없는 집행 ${빈집행건}건 (빠진 서류 ${빈칸}장) — 눌러서 보기`
           : "집행 건별 필수 서류가 다 채워져 있다"
       }
       tone={있다 ? "warn" : "default"}
@@ -133,7 +133,7 @@ export function EvidenceGapCard({
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle className="text-base">
-              사업비 증빙 미비 — 과제 {과제들.length}건 · 집행 {빈집행건}건 · 빈 칸 {빈칸}
+              사업비 증빙 미비 — 과제 {과제들.length}건 · 증빙 없는 집행 {빈집행건}건
             </DialogTitle>
             <DialogDescription>
               집행 건에 붙어야 하는 <b>필수 서류</b>가 빈 곳입니다. 정산에서 반려되는 자리라
@@ -165,7 +165,7 @@ export function EvidenceGapCard({
                     {p.과제명}
                   </Link>
                   <span className="text-xs text-muted-foreground tabular-nums">
-                    집행 {p.구멍.빈집행건}건 / {p.구멍.집행건}건 · 빈 칸 {p.구멍.빈칸}
+                    집행 {p.구멍.집행건}건 중 {p.구멍.빈집행건}건에 증빙 없음 (빠진 서류 {p.구멍.빈칸}장)
                     {p.구멍.면제칸 > 0 ? ` · 면제 ${p.구멍.면제칸}칸` : ""}
                   </span>
                 </div>

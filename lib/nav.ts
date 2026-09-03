@@ -36,7 +36,12 @@ export const NAV: NavGroup[] = [
     icon: "FolderKanban",
     items: [
       { title: "공고 탐색", url: "/announcements" },
-      { title: "사업 대장", url: "/programs" },
+      // ⚠ 「사업 대장」(지원사업 관리)은 여기 없다 — **통합 관리 그룹으로 옮겼다**
+      //   (2026-09-04 사용자 지시: 과제 관리·지원사업 관리를 한 그룹에 모아 놓고, 각각의
+      //   상세 화면 안에서 신청중·수행중·사업종료를 본다. 처음엔 이 그룹 밑에 넣고 단계
+      //   셋도 사이드바에 따로 늘어놓았는데 — "뭔가 이상하게 만들고 있다"는 지적을 받고
+      //   되돌렸다. 단계는 메뉴로 늘어놓지 않는다, 상세 화면의 칩(전체/신청중/수행중/
+      //   사업종료)이 이미 그 일을 한다(`components/programs-stage-view.tsx`).
     ],
   },
   {
@@ -56,27 +61,26 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
-    // ⚠ 2026-09-03 에 「사업 대장」 하나를 단계 셋(신청중·수행중·사업종료)으로 나눠 사이드바
-    //    항목 넷(전체+세 단계)을 만들었는데, 2026-09-04 **사용자가 다시 간소화를 지시했다** —
-    //    "신청중 수행중 사업종료 탭을 삭제하고 전체 관리에서 필터링해서 볼 수 있으면 좋겠다."
-    //
-    //    페이지 자체(`/projects/applying` · `/projects` · `/projects/closed`)는 **지우지 않았다.**
-    //    `/projects/all`(`ProjectsStageView`)이 이미 그 셋을 **칩(chip) 필터**로 갖고 있다 —
-    //    전체/신청중/수행중/사업종료를 눌러 서로 넘나든다(`components/projects-stage-view.tsx`
-    //    115~138행). **사이드바에 넷을 따로 늘어놓는 것과 그 안에서 필터로 옮겨 다니는 것이
-    //    같은 기능을 두 번 보여주고 있었다** — 그래서 사이드바 쪽을 줄였다.
+    // ⚠ 2026-09-04 사용자 지시로 다시 짰다 — 「과제 관리」였던 그룹을 **「통합 관리」**로
+    //    바꾸고, 지원사업·과제사업 각각의 관리 화면(예전 「사업 대장」·「전체」)을 **이 한
+    //    그룹 아래로 모았다.** 처음엔 신청중·수행중·사업종료도 사이드바에 따로 늘어놓았는데
+    //    "뭔가 이상하게 만들고 있다"는 지적을 받고 되돌렸다 — **단계는 메뉴 항목이 아니라
+    //    상세 화면 안의 칩**이다. 「과제 관리」(`/projects/all`)도 「지원사업 관리」
+    //    (`/programs`)도 들어가면 전체/신청중/수행중/사업종료 칩이 이미 있다
+    //    (`components/projects-stage-view.tsx`·`components/programs-stage-view.tsx`).
+    //    사이드바 leaf 는 딱 그 두 개(과제 관리·지원사업 관리)뿐이다.
     //
     //    단계는 여전히 **저장하지 않고 계산한다**(`lib/project-stage.ts`) — 선정을 기록하는 순간
     //    수행중으로, 수행기간이 지나면 사업종료로 저절로 넘어간다. 이건 안 바뀌었다.
-    title: "과제 관리",
-    // 그룹 이름을 누르면 전체(필터의 출발점)로 간다.
+    title: "통합 관리",
+    // 그룹 이름을 누르면 첫 항목(과제 관리)으로 간다.
     url: "/projects/all",
     // ⚠ 아이콘은 `components/app-sidebar.tsx` 의 ICONS 에 **이미 있는 것**만 쓴다.
     //    없는 이름을 적으면 아이콘이 조용히 안 그려진다.
     icon: "ClipboardCheck",
     items: [
-      // 전체 하나만 남겼다. 신청중·수행중·사업종료로 좁혀 보려면 이 화면 안의 칩을 누른다.
-      { title: "전체", url: "/projects/all" },
+      { title: "과제 관리", url: "/projects/all" },
+      { title: "지원사업 관리", url: "/programs" },
       // 내부 연구원 명부. 단계와 성격이 달라(「어디까지 왔나」 대 「누가 있나」) 별도 항목이다.
       // ⑥ 「연구원」을 사이드바에서 뺐다(2026-09-04 사용자 지시) — 명부는 인건비 계상 안에서
       //    관리한다(`app/(app)/projects/[id]/budget/page.tsx`). 명부는 인건비 표에 이름을 넣기
@@ -129,24 +133,32 @@ export function crumbsFor(pathname: string): { label: string; href?: string }[] 
   if (m) {
     const tab = PROJECT_TABS.find((t) => t.seg === (m[2] ?? ""))
     return [
-      // 사이드바 항목이 「전체」 하나로 줄어서(2026-09-04) 부모도 그 주소를 가리킨다.
+      // NAV leaf 이름이 「과제 관리」다(2026-09-04, 통합 관리 그룹 안) — 부모도 그 주소를 가리킨다.
       { label: "과제 관리", href: "/projects/all" },
       { label: "과제" },
       ...(tab && tab.seg ? [{ label: tab.title }] : []),
     ]
   }
 
-  // 단계 필터 페이지(신청중·수행중·사업종료) — 사이드바에서는 뺐지만(2026-09-04) 페이지 자체는
-  // 살아 있고 `/projects/all` 의 칩으로 계속 들어온다. NAV 에 leaf 가 없어 아래 공용 루프가
-  // 못 찾으므로, 여기서 먼저 짚어 준다. 이름은 `lib/project-stage.ts` 의 단계정의를 그대로 쓴다
-  // (다른 데서 이미 검증된 이름과 다시 어긋나지 않게).
-  const 단계경로표 : Record<string, string> = {
-    "/projects/applying": "신청중",
-    "/projects": "수행중",
-    "/projects/closed": "사업종료",
+  // 단계 필터 페이지(신청중·수행중·사업종료) — 사이드바 메뉴가 아니라 상세 화면 안의
+  // 칩으로만 들어온다(2026-09-04, 위 NAV 주석 참고). NAV 에 leaf 가 없어 아래 공용 루프가
+  // 못 찾으므로, 여기서 먼저 짚어 준다. 이름은 `lib/project-stage.ts`·`lib/program-stage.ts`의
+  // 단계정의를 그대로 쓴다(다른 데서 이미 검증된 이름과 다시 어긋나지 않게).
+  const 단계경로표: Record<string, { 부모: string; 부모경로: string; 이름: string }> = {
+    "/projects/applying": { 부모: "과제 관리", 부모경로: "/projects/all", 이름: "신청중" },
+    "/projects": { 부모: "과제 관리", 부모경로: "/projects/all", 이름: "수행중" },
+    "/projects/closed": { 부모: "과제 관리", 부모경로: "/projects/all", 이름: "사업종료" },
+    "/programs/applying": { 부모: "지원사업 관리", 부모경로: "/programs", 이름: "신청중" },
+    "/programs/executing": { 부모: "지원사업 관리", 부모경로: "/programs", 이름: "수행중" },
+    "/programs/closed": { 부모: "지원사업 관리", 부모경로: "/programs", 이름: "사업종료" },
   }
   if (pathname in 단계경로표) {
-    return [{ label: "과제 관리", href: "/projects/all" }, { label: 단계경로표[pathname] }]
+    const s = 단계경로표[pathname]
+    return [
+      { label: "통합 관리" },
+      { label: s.부모, href: s.부모경로 },
+      { label: s.이름 },
+    ]
   }
 
   // 공고 상세(사업명 클릭)도 공고마다 id 가 달라 NAV 에 없다 — 목록 쪽 라벨을 그대로 쓴다.

@@ -41,12 +41,13 @@ try {
   확인("공고 확인이 첫 카드", 제목들[0] === "공고 확인")
   확인("일정 카드 있음", 제목들.includes("일정"))
   확인("과제 관리 카드 있음 (수행 과제·사업 아님)", 제목들.includes("과제 관리"))
+  확인("오늘 처리할 것 카드로 합쳐짐 (셋으로 안 쪼개짐)", 제목들.includes("오늘 처리할 것"))
 
-  // 큐 카드 제목은 <h2> 가 아니라 링크다. 본문 텍스트로 확인한다.
+  // 갈래 제목은 <h2> 가 아니라 링크다. 본문 텍스트로 확인한다.
   const 본문 = await p.evaluate(() => document.body.innerText)
-  확인("비목 확정 카드 있음", 본문.includes("비목 확정"))
-  확인("챙길 서류 카드 있음 (빠진 서류 아님)", 본문.includes("챙길 서류") && !본문.includes("빠진 서류"))
-  확인("제출 전 점검 카드 있음", 본문.includes("제출 전 점검"))
+  확인("비목 확정 갈래 있음", 본문.includes("비목 확정"))
+  확인("챙길 서류 갈래 있음 (빠진 서류 아님)", 본문.includes("챙길 서류") && !본문.includes("빠진 서류"))
+  확인("제출 전 점검 갈래 있음", 본문.includes("제출 전 점검"))
   확인("부제 삭제됨", !본문.includes("오늘 손대야 할 것만 모았다"))
   확인("일간/주간/월간 전환 없음", !본문.includes("일간") && !본문.includes("주간"))
   확인("달력 접기 없음", !본문.includes("달력 접기") && !본문.includes("달력 펼치기"))
@@ -201,6 +202,25 @@ try {
     "탭별 「전체 보기」가 신청중/수행중 단계 경로로",
     과제카드.전체보기.every((h) => h === "/projects" || h === "/projects/applying"),
     과제카드.전체보기.join(", "),
+  )
+
+  // 왼쪽 달력 카드 세로 길이 == 오른쪽(과제 관리 + 오늘 처리할 것) 합계.
+  // CSS Grid 의 items-stretch + flex-1 로 맞춘 것이라 픽셀이 완전히 같아야 한다 —
+  // 몇 px 오차(테두리 반올림)는 봐주되 눈에 띄게 어긋나면 잡아낸다.
+  const 높이대조 = await p.evaluate(() => {
+    const h2 = (t) => [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === t)
+    const 달력 = h2("일정")?.closest("div.rounded-lg")
+    const 과제 = h2("과제 관리")?.closest("div.rounded-lg")
+    const 오늘 = h2("오늘 처리할 것")?.closest("div.rounded-lg")
+    if (!달력 || !과제 || !오늘) return null
+    const 달력높이 = 달력.getBoundingClientRect().height
+    const 오른쪽높이 = 오늘.getBoundingClientRect().bottom - 과제.getBoundingClientRect().top
+    return { 달력높이, 오른쪽높이, 차이: Math.abs(달력높이 - 오른쪽높이) }
+  })
+  확인(
+    "왼쪽 달력과 오른쪽(과제 관리+오늘 처리할 것) 세로 길이가 같음",
+    높이대조 != null && 높이대조.차이 <= 2,
+    높이대조 ? `달력 ${높이대조.달력높이}px / 오른쪽 ${높이대조.오른쪽높이}px (차이 ${높이대조.차이}px)` : "카드 못 찾음",
   )
 
   확인("콘솔 오류 없음", errs.length === 0, errs.join(" | "))

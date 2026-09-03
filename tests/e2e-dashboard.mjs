@@ -1,10 +1,16 @@
 /**
- * 대시보드 e2e — 개편(2026-09-03 3차) 판을 검사한다.
+ * 대시보드 e2e — 개편(2026-09-04 10차) 판을 검사한다.
  *
- *   node tests/e2e-dashboard.mjs
+ *   RND_TEST_ID=<아이디> RND_TEST_PW=<비밀번호> node tests/e2e-dashboard.mjs
+ *
+ * ⚠ 2026-09-04 로그인 게이트가 붙으면서 이 테스트도 막혔었다. 다른 e2e 들이
+ *   쓰는 공용 로그인(tests/lib/login.mjs)을 그대로 가져다 쓴다 — 아이디·비밀번호는
+ *   절대 이 파일에 적지 않는다(저장소가 공개다).
  */
 import puppeteer from "puppeteer-core"
 import { 로그인하고 } from "./lib/login.mjs"
+
+const BASE = "http://127.0.0.1:3610"
 
 const b = await puppeteer.launch({
   executablePath: "/usr/bin/google-chrome",
@@ -33,12 +39,9 @@ const 확인 = (이름, 참, 값 = "") => {
   if (!참) 실패++
 }
 
-// 로그인 게이트(2026-09-04) 뒤로 화면이 전부 들어갔다. 아이디·비밀번호는
-// **환경변수로만** 받는다 — 저장소가 공개다(tests/lib/login.mjs).
-await 로그인하고(page, BASE)
-
 try {
-  await p.goto("http://127.0.0.1:3610/dashboard", { waitUntil: "networkidle0", timeout: 60000 })
+  await 로그인하고(p, BASE, "/dashboard")
+  await p.goto(`${BASE}/dashboard`, { waitUntil: "networkidle0", timeout: 60000 })
   await p.screenshot({ path: H + "d0-full.png", fullPage: true })
 
   const 제목들 = await 카드제목()

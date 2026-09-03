@@ -156,14 +156,14 @@ export function ProjectBoard({
               <li key={r.id} className="h-[52px]">
                 <Link
                   href={`/projects/${r.id}`}
-                  className="flex h-full items-center px-2 hover:bg-muted"
+                  className="flex h-full items-center gap-1.5 px-2 hover:bg-muted"
                 >
+                  {/* 배지를 사업명·부제 두 줄 블록과 나란한 열로 뺐다 — items-center 라
+                      두 줄의 세로 가운데에 온다. 두 줄은 같은 블록 안이라 시작점이 같다. */}
+                  <사업유형배지 코드={r.사업유형} />
                   <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-1.5">
-                      <사업유형배지 코드={r.사업유형} />
-                      <span className="truncate text-[13px]" title={r.과제명}>
-                        {r.과제명}
-                      </span>
+                    <span className="block truncate text-[13px]" title={r.과제명}>
+                      {r.과제명}
                     </span>
                     <span className="block truncate text-xs text-muted-foreground">
                       {부제(r, 현재)}

@@ -192,10 +192,10 @@ try {
     const li = [...document.querySelectorAll("li")].find((x) => (x.innerText ?? "").includes(상호))
     if (!li) return null
     const 없는서류줄 = [...li.querySelectorAll("span")].find((sp) =>
-      (sp.innerText ?? "").trim().startsWith("없는 서류:"),
+      (sp.innerText ?? "").trim().startsWith("증빙 필수 서류:"),
     )
     return {
-      글: (없는서류줄?.innerText ?? "").replace("없는 서류:", "").trim(),
+      글: (없는서류줄?.innerText ?? "").replace("증빙 필수 서류:", "").trim(),
       면제버튼수: [...li.querySelectorAll("button")].filter(
         (b) => (b.innerText ?? "").trim() === "면제",
       ).length,

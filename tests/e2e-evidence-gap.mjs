@@ -111,7 +111,7 @@ try {
   text = await 본문()
 
   console.log("② 무엇이 비었는지 말하는가")
-  확인(text.includes("없는 서류:"), "빠진 서류 이름을 적는다", (text.match(/없는 서류:[^\n]*/) ?? [""])[0].slice(0, 70))
+  확인(text.includes("증빙 필수 서류:"), "빠진 서류 이름을 적는다", (text.match(/증빙 필수 서류:[^\n]*/) ?? [""])[0].slice(0, 70))
   확인(text.includes("채우러 가기"), "그 자리로 가는 링크가 있다")
   확인(text.includes(거래처), "내가 만든 집행 건이 목록에 있다", 거래처)
   확인(

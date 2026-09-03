@@ -189,7 +189,7 @@ export function EvidenceGapCard({
                           빨간 숫자로 두면 그 카드를 아무도 안 본다(사용자 지시). 사유는 필수다. */}
                       {e.빠진서류.length > 0 && (
                         <span className="flex w-full flex-wrap items-center gap-1.5 text-[12.5px] text-[var(--warning-fg)]">
-                          없는 서류:
+                          증빙 필수 서류:
                           {e.빠진서류.map((이름, k) => (
                             <span
                               key={`${e.집행_id}-${이름}`}

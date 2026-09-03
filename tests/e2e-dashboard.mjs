@@ -40,7 +40,7 @@ try {
   console.log("카드 :", 제목들.join(" · "))
   확인("공고 확인이 첫 카드", 제목들[0] === "공고 확인")
   확인("일정 카드 있음", 제목들.includes("일정"))
-  확인("수행 과제·사업 카드 있음", 제목들.includes("수행 과제·사업"))
+  확인("과제 관리 카드 있음 (수행 과제·사업 아님)", 제목들.includes("과제 관리"))
 
   // 큐 카드 제목은 <h2> 가 아니라 링크다. 본문 텍스트로 확인한다.
   const 본문 = await p.evaluate(() => document.body.innerText)
@@ -53,16 +53,17 @@ try {
   확인("「미분류」가 화면에 안 보임", !본문.includes("미분류"))
   확인("마감된 공고 없음", !/\d{4}-\d{2}-\d{2}\s*마감/.test(본문))
 
-  // 탭 3개가 항상 보이는가 (0건이어도)
+  // 탭 2개(과제/지원사업)만 있는가 — 「기타」는 없앴다(자동 수집 출처 4개뿐, 실측)
   const 탭 = await p.evaluate(() =>
     [...document.querySelectorAll('[role="tab"]')].map((t) => t.textContent.trim()),
   )
-  console.log("공고 탭 :", 탭.slice(0, 3).join(" · "))
+  console.log("공고 탭 :", 탭.slice(0, 2).join(" · "))
   // 탭 텍스트는 "과제" + 건수(예: "과제0")가 붙어 나온다. startsWith 로 본다.
   확인(
-    "공고 탭 과제/지원사업/기타 항상 보임",
-    ["과제", "지원사업", "기타"].every((t) => 탭.some((x) => x.startsWith(t))),
+    "공고 탭 과제/지원사업 항상 보임",
+    ["과제", "지원사업"].every((t) => 탭.some((x) => x.startsWith(t))),
   )
+  확인("「기타」 탭 없음", !탭.some((x) => x.startsWith("기타")))
 
   // 공고 표 : 5줄 고정(빈 줄 포함) + 사업명이 상세로 링크
   const 표 = await p.evaluate(() => {
@@ -77,15 +78,35 @@ try {
     표.첫링크 ?? "없음",
   )
 
-  // 「가능만」 토글이 있고 눌러도 안 죽는가
+  // 「가능만」 필터는 없앴다 — 탭별 「전체 공고 확인」 링크가 그 자리를 대신한다
   const 가능만있음 = await p.evaluate(() =>
     [...document.querySelectorAll("button")].some((b) => b.textContent.trim().startsWith("가능만")),
   )
-  확인("가능만 토글 있음", 가능만있음)
-  await 누르기("가능만")
+  확인("가능만 토글 없음", !가능만있음)
+
+  const 전체공고확인 = await p.evaluate(() =>
+    [...document.querySelectorAll("a")]
+      .filter((a) => a.textContent.includes("전체 공고 확인"))
+      .map((a) => a.getAttribute("href")),
+  )
+  console.log("전체 공고 확인 링크 :", 전체공고확인.join(", "))
+  확인(
+    "지원사업 탭의 「전체 공고 확인」이 지원사업 탐색으로",
+    전체공고확인.includes("/announcements"),
+  )
+
+  await 누르기("과제")
   await 잠깐(300)
-  await 누르기("가능만")
-  await 잠깐(300)
+  const 전체공고확인_과제 = await p.evaluate(() =>
+    [...document.querySelectorAll("a")]
+      .filter((a) => a.textContent.includes("전체 공고 확인"))
+      .map((a) => a.getAttribute("href")),
+  )
+  확인(
+    "과제 탭에서는 「전체 공고 확인」이 과제 탐색으로 바뀜",
+    전체공고확인_과제.includes("/project-announcements"),
+    전체공고확인_과제.join(", "),
+  )
 
   // 지원사업 탭에 자격판정 배지가 뜨는가(오늘 신규가 있을 때만 의미 있는 검사)
   const 배지있음 = await p.evaluate(() =>
@@ -137,15 +158,37 @@ try {
   })
   await 잠깐(300)
 
-  // 수행 과제 — 상세 링크 + 오른쪽 날짜 꼬리
+  // 과제 관리 — 상세 링크 + 오른쪽 날짜(연도 포함, D-day 없음) + 사업유형 배지
   const 과제카드 = await p.evaluate(() => {
-    const h2 = [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === "수행 과제·사업")
+    const h2 = [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === "과제 관리")
     const card = h2?.closest("div.rounded-lg")
     const links = [...(card?.querySelectorAll('a[href^="/projects/"]') ?? [])]
-    return { 개수: links.length, 첫줄: links[0]?.textContent.replace(/\s+/g, " ").trim() ?? null }
+    return {
+      개수: links.length,
+      첫줄: links[0]?.textContent.replace(/\s+/g, " ").trim() ?? null,
+      본문: card?.textContent ?? "",
+      전체보기: [...(card?.querySelectorAll("a") ?? [])]
+        .filter((a) => a.textContent.includes("전체 보기"))
+        .map((a) => a.getAttribute("href")),
+    }
   })
-  확인("수행 과제가 상세로 링크", 과제카드.개수 > 0, `${과제카드.개수}개`)
+  확인("과제 관리 목록이 상세로 링크", 과제카드.개수 > 0, `${과제카드.개수}개`)
   console.log(`  (첫 줄: ${과제카드.첫줄})`)
+  확인("과제 관리에 D-day 없음", !/D-\d/.test(과제카드.본문))
+  확인(
+    "종료일이 연도까지 전체 표기(월.일만 아님)",
+    /\d{4}-\d{2}-\d{2}/.test(과제카드.본문),
+    과제카드.본문.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? "없음",
+  )
+  확인(
+    "사업유형 배지(과제/지원사업) 노출",
+    과제카드.본문.includes("과제") || 과제카드.본문.includes("지원사업"),
+  )
+  확인(
+    "탭별 「전체 보기」가 신청중/수행중 단계 경로로",
+    과제카드.전체보기.every((h) => h === "/projects" || h === "/projects/applying"),
+    과제카드.전체보기.join(", "),
+  )
 
   확인("콘솔 오류 없음", errs.length === 0, errs.join(" | "))
 

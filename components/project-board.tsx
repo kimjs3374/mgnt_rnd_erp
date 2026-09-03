@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
+import { Briefcase } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { ProjectRow } from "@/lib/queries"
 import { 단계정의, 단계판정, 미선정인가, type 과제단계 } from "@/lib/project-stage"
@@ -14,29 +15,22 @@ import { 단계정의, 단계판정, 미선정인가, type 과제단계 } from "
  *
  * 2026-09-04 개편(3차)
  *   ⚠ **저장된 `상태` 대신 `lib/project-stage.ts` 의 `단계판정()` 을 쓴다.**
- *     사이드바 「과제 관리」(신청중·수행중·사업종료, 오늘 사용자 지시로 만들어짐)가
- *     이 함수로 단계를 계산한다 — 저장값만 보면 수행기간이 지나도 저절로 안 넘어간다.
- *     예전엔 `r.상태` 를 그대로 썼는데, 그러면 이 카드에 뜬 항목이 실제
- *     `/projects/applying`·`/projects/closed` 에는 없는 어긋남이 생길 수 있었다.
- *   ⚠ **미선정 건은 뺀다.** 세 단계 어디에도 안 넣는다 — 과제가 되지 못한 건이라
- *     지원사업 대장(`/programs`)에서 「왜 떨어졌나」와 함께 보는 게 맞다.
- *   ⚠ **탭 순서·경로는 `단계정의` 하나에서 가져온다.** 사이드바와 다른 순서·다른 주소를
- *     쓰면 같은 개념을 두 군데서 다르게 말하게 된다.
- *   ⚠ **사업유형(과제/지원사업) 배지를 붙인다.** 실측(2026-09-03) 결과 지금 데이터는
- *     전부 `NATIONAL_RND`(과제)라 지금은 다 같은 배지지만, 지자체 사업이 들어오면
- *     바로 값이 생긴다 — 미리 넣어 둔다.
- *   ⚠ **D-day 를 뺐다.** 종료일은 이미 일정(달력) 카드에 「사업종료」로 올라가고,
- *     30일 이내면 거기서 강조된다. 같은 숫자를 두 카드에서 다른 모양으로 보여줄
- *     이유가 없고, 이 카드의 몫은 「언제까지가 아니라 무엇을 하고 있나」다.
- *     날짜는 남기되 **연도까지 다 쓴다** — 월.일만 쓰면 2년 뒤 것과 헷갈린다.
- *   ⚠ **「외 N건」 대신 페이지 넘김.**
+ *   ⚠ **미선정 건은 뺀다.** 세 단계 어디에도 안 넣는다.
+ *   ⚠ **탭 순서·경로는 `단계정의` 하나에서 가져온다.**
  *
- * 2026-09-04 개편(4차) — 「카드가 쓸데없이 크다」는 지적으로 페이지당 8줄 → **3줄**.
- *   줄어든 높이만큼 옆(사실은 아래)에 「오늘 처리할 것」 카드가 새로 생겨 그 자리를
- *   메운다 — 이 카드가 다시 커질 이유는 없다. 옆 달력 카드와 세로를 맞추는 일은
- *   이제 이 카드 혼자가 아니라 **이 카드 + 오늘 처리할 것을 합친 오른쪽 열** 이 한다
- *   (`app/(app)/dashboard/page.tsx` 참고 — 오른쪽 열을 flex-col 로 묶고 오늘 처리할
- *   것에 flex-1 을 준다).
+ * 2026-09-04 개편(4차) — 페이지당 8줄 → 3줄. 옆(아래) 「오늘 처리할 것」이 남는 자리를 메운다.
+ *
+ * 2026-09-04 개편(11차) — 배지를 키우고, 날짜를 오른쪽 별도 칸에서 부제 줄로 옮겼다.
+ *   ⚠ **오른쪽 끝에 날짜를 따로 두던 걸 없앴다.** 과제명 칸이 `flex-1`(남는 공간을
+ *     다 차지)이라 이름이 짧은 날엔 이름과 날짜 사이에 빈 칸이 넓게 남았다(실사용
+ *     지적). 날짜를 부제 줄("기관 · 1차년도 · 과제종료일 2026-10-01")에 합치면
+ *     그 칸 자체가 없어져서 간격 문제가 원천적으로 사라진다.
+ *   ⚠ **배지를 크게, 사각형으로 키웠다**(사용자가 준 참고 그림). 다만 그림의
+ *     꽉 찬 파란 배경은 안 썼다 — 이 대시보드의 다른 배지(공고 확인의 자격판정,
+ *     오늘 처리할 것의 갈래)가 전부 테두리+옅은 배경(outline) 스타일이라, 하나만
+ *     꽉 찬 색으로 하면 이 카드만 튀어 보인다. 색은 살리되(과제=파랑·지원사업=보라)
+ *     톤은 다른 배지와 맞춘다.
+ *   ⚠ 줄 높이를 52px → 56px 로 살짝 키웠다 — 배지가 커진 만큼 자리를 준다.
  */
 
 // 사업종료는 대시보드에 안 올린다 — 보고 나서 할 일이 없다. 순서는 단계정의(신청→수행→종료)를 따른다.
@@ -99,8 +93,13 @@ export function ProjectBoard({
 
   return (
     <div className="flex flex-col rounded-lg border bg-card">
-      <div className="flex items-baseline justify-between border-b px-4 py-2.5">
-        <h2 className="text-sm font-semibold">과제 관리</h2>
+      <div className="flex items-center justify-between border-b px-4 py-2.5">
+        <div className="flex items-center gap-2">
+          <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-[var(--success)] text-[var(--success-fg)]">
+            <Briefcase className="size-3.5" />
+          </span>
+          <h2 className="text-sm font-semibold">과제 관리</h2>
+        </div>
         <span className="text-xs tabular-nums text-muted-foreground">{대상.length}건</span>
       </div>
 
@@ -154,57 +153,53 @@ export function ProjectBoard({
 
           <ul className="flex-1 divide-y">
             {보이는행.map((r) => (
-              <li key={r.id} className="h-[52px]">
+              <li key={r.id} className="h-14">
                 <Link
                   href={`/projects/${r.id}`}
                   className="flex h-full items-center gap-3 px-2 hover:bg-muted"
                 >
+                  <사업유형배지 코드={r.사업유형} />
                   <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-1.5">
-                      <사업유형배지 코드={r.사업유형} />
-                      <span className="truncate text-[13px]" title={r.과제명}>
-                        {r.과제명}
-                      </span>
+                    <span className="block truncate text-[13px] font-medium" title={r.과제명}>
+                      {r.과제명}
                     </span>
                     <span className="block truncate text-xs text-muted-foreground">
-                      {r.부처 ?? r.전문기관 ?? "기관 미상"}
-                      {r.연차 != null && ` · ${r.연차}차년도`}
+                      {부제(r, 현재)}
                     </span>
                   </span>
-                  <날짜꼬리 row={r} 단계={현재} />
                 </Link>
               </li>
             ))}
             {/* 줄 수를 고정한다. 옆 달력 카드보다 짧아서 빈 자리가 남던 것을 없앤다. */}
             {Array.from({ length: 페이지당 - 보이는행.length }).map((_, i) => (
-              <li key={`filler-${i}`} aria-hidden className="h-[52px]" />
+              <li key={`filler-${i}`} aria-hidden className="h-14" />
             ))}
           </ul>
 
           {/* 페이지가 하나뿐이어도 이 줄은 항상 그린다("1 / 1") — 신청중(1p)·수행중(2p)을
               오갈 때 이 줄이 있다 없다 하면 카드 높이가 탭마다 바뀐다(2026-09-04 지적). */}
           <div className="flex items-center justify-end gap-2 border-t px-4 py-2 text-xs text-muted-foreground">
-              <button
-                type="button"
-                disabled={현재페이지 === 0}
-                onClick={() => set페이지((p) => p - 1)}
-                aria-label="이전 페이지"
-                className="flex size-6 items-center justify-center rounded-full border text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
-              >
-                ‹
-              </button>
-              <span className="tabular-nums">
-                {현재페이지 + 1} / {총페이지}
-              </span>
-              <button
-                type="button"
-                disabled={현재페이지 >= 총페이지 - 1}
-                onClick={() => set페이지((p) => p + 1)}
-                aria-label="다음 페이지"
-                className="flex size-6 items-center justify-center rounded-full border text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
-              >
-                ›
-              </button>
+            <button
+              type="button"
+              disabled={현재페이지 === 0}
+              onClick={() => set페이지((p) => p - 1)}
+              aria-label="이전 페이지"
+              className="flex size-6 items-center justify-center rounded-full border text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
+            >
+              ‹
+            </button>
+            <span className="tabular-nums">
+              {현재페이지 + 1} / {총페이지}
+            </span>
+            <button
+              type="button"
+              disabled={현재페이지 >= 총페이지 - 1}
+              onClick={() => set페이지((p) => p + 1)}
+              aria-label="다음 페이지"
+              className="flex size-6 items-center justify-center rounded-full border text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
+            >
+              ›
+            </button>
           </div>
         </>
       )}
@@ -212,42 +207,48 @@ export function ProjectBoard({
   )
 }
 
-/** 과제/지원사업 — 지금은 다 같은 값이지만 지자체 사업이 들어오면 갈린다. */
+/**
+ * 과제/지원사업 — 지금은 다 같은 값(NATIONAL_RND)이지만 지자체 사업이 들어오면 갈린다.
+ * 참고 그림처럼 크게(사각형) 그리되, 이 대시보드의 다른 배지와 같은 톤(테두리+옅은
+ * 배경)을 쓴다 — 하나만 꽉 찬 색이면 이 카드만 튀어 보인다.
+ */
 function 사업유형배지({ 코드 }: { 코드: string | null }) {
   if (!코드) return null
   const 이름 = 사업유형이름[코드] ?? 코드
+  const 색 =
+    코드 === "NATIONAL_RND"
+      ? "border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-400"
+      : 코드 === "LOCAL_TP"
+        ? "border-violet-500/40 bg-violet-500/10 text-violet-600 dark:text-violet-400"
+        : "border-border bg-muted text-muted-foreground"
   return (
-    <span className="inline-flex h-4 shrink-0 items-center rounded border border-border px-1 text-[10px] font-medium text-muted-foreground">
+    <span
+      className={cn(
+        "flex h-9 w-14 shrink-0 items-center justify-center rounded-md border text-[13px] font-semibold",
+        색,
+      )}
+    >
       {이름}
     </span>
   )
 }
 
 /**
- * 오른쪽 날짜 열.
- * 신청중은 아직 협약 전이라 종료일이 의미 없다 — 시작 예정일로 보여준다.
- * 수행중·사업종료는 종료일(연도 포함, 전체) 을 보여준다. D-day 는 없다 —
- * 마감 임박은 일정(달력) 카드가 담당한다.
+ * 부제 줄 — 기관·연차·날짜를 한 줄로 합친다.
+ * 신청중은 아직 협약 전이라 종료일이 의미 없다 — 시작 예정일을 쓴다.
+ * 수행중은 종료일(연도 포함, 전체)을 쓴다. D-day 는 없다 — 마감 임박은 일정(달력) 카드가 담당한다.
  */
-function 날짜꼬리({ row, 단계 }: { row: ProjectRow; 단계: 과제단계 | null }) {
+function 부제(row: ProjectRow, 단계: 과제단계 | null): string {
+  const 기관 = row.부처 ?? row.전문기관 ?? "기관 미상"
+  const 조각 = [기관]
+  if (row.연차 != null) 조각.push(`${row.연차}차년도`)
+
   if (단계 === "신청중") {
-    if (!row.시작일) return null
-    return (
-      <span className="shrink-0 text-right text-xs tabular-nums text-muted-foreground">
-        시작 예정
-        <br />
-        {row.시작일}
-      </span>
-    )
+    if (row.시작일) 조각.push(`시작 예정 ${row.시작일}`)
+  } else if (row.종료일) {
+    const 라벨 = row.사업유형 === "LOCAL_TP" ? "사업종료일" : "과제종료일"
+    조각.push(`${라벨} ${row.종료일}`)
   }
 
-  if (!row.종료일) return null
-  const 라벨 = row.사업유형 === "LOCAL_TP" ? "사업종료일" : "과제종료일"
-  return (
-    <span className="shrink-0 text-right text-xs tabular-nums text-muted-foreground">
-      {라벨}
-      <br />
-      {row.종료일}
-    </span>
-  )
+  return 조각.join(" · ")
 }

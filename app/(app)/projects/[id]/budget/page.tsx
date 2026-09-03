@@ -8,6 +8,8 @@ import { PersonnelEditor } from "@/components/personnel-editor"
 import { ResearchersBoard } from "@/components/researchers-board"
 import { 재원별합계 } from "@/lib/personnel"
 import { getResearchers, getSalaryHistory } from "@/lib/queries-researchers"
+import { getNewHireRules, getAnnouncementDate } from "@/lib/queries-new-hire"
+import { 규칙고르기, 기준일고르기 } from "@/lib/new-hire"
 import {
   getProject,
   getProjectBudget,
@@ -46,8 +48,21 @@ export default async function ProjectBudgetPage({
   const { id: raw } = await params
   const id = Number(raw)
 
-  const [proj, budget, cats, rules, company, reqs, forms, people, confirm, who, 명부, 연봉이력] =
-    await Promise.all([
+  const [
+    proj,
+    budget,
+    cats,
+    rules,
+    company,
+    reqs,
+    forms,
+    people,
+    confirm,
+    who,
+    명부,
+    연봉이력,
+    신규규칙,
+  ] = await Promise.all([
       getProject(id),
       getProjectBudget(id),
       getCategories(),
@@ -62,6 +77,8 @@ export default async function ProjectBudgetPage({
       getResearchers(),
       // ⑥ 명부를 여기서 관리한다(2026-09-04 사용자 지시) — 연봉 이력까지 같이 읽는다.
       getSalaryHistory(),
+      // 신규채용 기준(db/112) — 공고일 기준 입사 N년 이내면 신규. N 은 사업주체마다 다르다.
+      getNewHireRules(),
     ])
   const p = proj.rows[0]
   // 계상이 확정됐으면 이 탭은 **볼 수만** 있다(`db/100`). 고치려면 [확정 해제]다 —
@@ -79,6 +96,30 @@ export default async function ProjectBudgetPage({
 
   // 개인별 인건비 합계(전 연차). 0 보다 클 때만 비목 인건비가 자동으로 맞춰진다.
   const 인건비합계 = Object.values(재원별합계(people.rows)).reduce((s, v) => s + (v || 0), 0)
+
+  // ★ 신규채용 기준 — 규칙(공고 > 사업유형 > 공통)과 기준일을 **서버에서** 고른다.
+  //   ⚠ 실측으로 `projects.공고일` 이 12건 전부 비어 있다. 그래서 연결된 공고의 공고일을
+  //     한 번 더 읽고, 그것도 없으면 협약 시작일을 쓴다 — **무엇을 썼는지 화면에 적는다.**
+  const 공고_id_신규 = (p as { 공고_id?: number | null } | undefined)?.공고_id ?? null
+  // ⚠ `ProjectRow`(lib/queries.ts)에 `공고일` 이 없다(DB 컬럼은 있다). 그 파일은 공유 파일이라
+  //   타입을 고치러 열지 않는다 — 바로 위 `공고_id` 와 같은 방식으로 좁혀 읽는다.
+  const 과제공고일 = (p as { 공고일?: string | null } | undefined)?.공고일 ?? null
+  const 공고날짜 =
+    !과제공고일 && 공고_id_신규
+      ? ((await getAnnouncementDate(공고_id_신규)).rows[0]?.공고일 ?? null)
+      : null
+  const 신규규칙적용 = 규칙고르기(신규규칙.rows, {
+    공고_id: 공고_id_신규,
+    사업유형: p?.사업유형 ?? null,
+  })
+  const 신규기준 = {
+    기준연수: 신규규칙적용?.기준연수 ?? null,
+    기준일: 기준일고르기(과제공고일, 공고날짜, p?.시작일),
+    적용범위: 신규규칙적용?.적용범위 ?? "없음",
+    사업유형: p?.사업유형 ?? null,
+    상태: 신규규칙적용?.상태 ?? "없음",
+    근거: 신규규칙적용?.근거 ?? null,
+  }
 
   const 정렬 = new Map(cats.rows.map((c) => [c.코드, c.정렬 ?? 999]))
   const lines: Line[] = budget.rows
@@ -227,6 +268,7 @@ export default async function ProjectBudgetPage({
         연차연도={연도목록}
         읽기전용={읽기전용}
         명부={명부.rows}
+        신규기준={신규기준}
       />
 
       {/* ⑥ 연구원 명부 — 별도 탭에서 빼고 인건비 표 **바로 아래**에 접어 둔다.

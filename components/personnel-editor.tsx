@@ -10,6 +10,8 @@ import {
 } from "@/app/actions/personnel"
 import { 총액, 급여총액, 재원별합계, 참여율초과, type PersonnelRow } from "@/lib/personnel"
 import { 참여종료일계산 } from "@/lib/participation"
+import { 신규채용판정, type 기준일 } from "@/lib/new-hire"
+import { saveNewHireRule } from "@/app/actions/new-hire"
 
 /**
  * 개인별 인건비 계상 — 연차별로 사람마다 한 줄.
@@ -60,6 +62,7 @@ export function PersonnelEditor({
   연차연도 = [],
   명부 = [],
   읽기전용 = false,
+  신규기준,
 }: {
   과제_id: number
   초기값: PersonnelRow[]
@@ -86,12 +89,27 @@ export function PersonnelEditor({
     국적: string | null
     내외부: string
     연봉: number
+    /** 신규채용 판정의 근거. 없으면 판정하지 않는다(모르는 것을 「기존 인원」으로 밀지 않는다). */
+    입사일자?: string | null
   }[]
   /**
    * 계상이 확정된 과제 — 인건비 산출도 계상의 일부라 같이 잠긴다.
    * **표와 엑셀 다운로드는 그대로 둔다.** 확정된 내역을 못 보거나 못 받으면 곤란하다.
    */
   읽기전용?: boolean
+  /**
+   * 신규채용 판정 기준 — **공고일 기준 입사 N년 이내면 신규**(db/112).
+   * 사업주체마다 달라서 화면에서 고칠 수 있다. 규칙 고르기(공고 > 사업유형 > 공통)와
+   * 기준일 고르기는 **서버가** 한다 — 화면이 다시 계산하면 두 곳이 어긋난다.
+   */
+  신규기준: {
+    기준연수: number | null
+    기준일: 기준일
+    적용범위: string
+    사업유형: string | null
+    상태: string
+    근거: string | null
+  }
 }) {
   // **기본은 1차년도 하나뿐이고, 필요할 때 「+ 연차 추가」로 늘린다.**
   // 협약이 2년이라도 1차년도만 계상하고 넘어가는 경우가 흔해서, 빈 탭을 미리 벌려두면
@@ -104,6 +122,8 @@ export function PersonnelEditor({
   const [rows, setRows] = React.useState<Draft[]>(초기값.map((r) => ({ ...r })))
   const [msg, setMsg] = React.useState<{ ok: boolean; text: string } | null>(null)
   const [상세, set상세] = React.useState(false)
+  // 신규채용 기준연수 — 카드 머리에서 바로 고친다. [기준 저장] 을 누를 때까지는 화면 값만 바뀐다.
+  const [기준연수, set기준연수] = React.useState(String(신규기준.기준연수 ?? ""))
   const [pending, start] = React.useTransition()
 
   React.useEffect(() => setRows(초기값.map((r) => ({ ...r }))), [초기값])
@@ -134,7 +154,19 @@ export function PersonnelEditor({
   function 명부에서넣기(id: number) {
     const r = 명부.find((x) => x.id === id)
     if (!r) return
-    setMsg(null)
+    // ★ 공고일 기준 입사 N년 이내면 신규채용을 **미리 켠다**(2026-09-04 사용자 지시).
+    //   판정은 `lib/new-hire.ts` 가 하고 여기서는 결과와 **이유**만 쓴다.
+    //   `신규 === null`(입사일 없음 등)이면 켜지 않는다 — 모르는 것을 단정하지 않는다.
+    const 판정 = 신규채용판정(r.입사일자, 신규기준.기준일, 신규기준.기준연수)
+    setMsg({
+      ok: 판정.신규 != null,
+      text:
+        `${r.표시명} 을(를) 넣었습니다. 신규채용: ` +
+        (판정.신규 == null
+          ? `판정 못 함 — ${판정.근거}`
+          : `${판정.신규 ? "예" : "아니오"} (${판정.근거})`) +
+        ". 다르면 체크박스를 고치세요 — 사람이 고친 값이 이깁니다.",
+    })
     setRows((prev) => [
       ...prev,
       {
@@ -147,6 +179,7 @@ export function PersonnelEditor({
         국적: r.국적 ?? null,
         내외부: r.내외부 ?? "내부",
         월급여: Math.floor(Math.max(0, Number(r.연봉 ?? 0)) / 12),
+        신규채용여부: 판정.신규 === true,
       },
     ])
   }
@@ -366,11 +399,24 @@ export function PersonnelEditor({
                   />
                 </td>
                 <td className="py-1 pr-1 text-center">
+                  {/* 왜 켜져 있는지(또는 왜 판정 못 했는지)를 커서 올리면 보여준다.
+                      체크만 있고 근거가 없으면 사람이 그 값을 검산할 수 없다. */}
                   <input
                     type="checkbox"
                     checked={r.신규채용여부}
                     onChange={(e) => 수정(r, { 신규채용여부: e.target.checked })}
                     aria-label="신규채용 여부"
+                    title={
+                      신규채용판정(
+                        명부.find(
+                          (m) =>
+                            (r.연구자등록번호 && m.연구자등록번호 === r.연구자등록번호) ||
+                            m.표시명 === r.표시명,
+                        )?.입사일자,
+                        신규기준.기준일,
+                        신규기준.기준연수,
+                      ).근거
+                    }
                   />
                 </td>
                 <td className="py-1 pr-1">
@@ -476,6 +522,61 @@ export function PersonnelEditor({
           </tbody>
         </table>
       </div>
+
+      {/* ★ 신규채용 기준 — **사업주체마다 다르다**(사용자 지적). 여기서 바로 고친다.
+          기본값(제안)인지 사람이 확정한 값인지도 보여준다 — 「3년」이 우리가 둔 값이면
+          그렇다고 말해야 사람이 공고문을 확인한다. */}
+      {!읽기전용 && (
+        <div className="mt-3 flex flex-wrap items-baseline gap-2 rounded-md border bg-secondary/30 px-3 py-2">
+          <span className="text-[12.5px] font-medium">신규채용 기준</span>
+          <span className="text-[12.5px] text-muted-foreground">
+            {신규기준.기준일.무엇} {신규기준.기준일.날짜 ?? "—"} 기준, 입사
+          </span>
+          <input
+            type="number"
+            min={0}
+            max={20}
+            className="h-6 w-14 rounded-md border bg-background px-1 text-right text-[12.5px] tabular-nums"
+            value={기준연수}
+            onChange={(e) => set기준연수(e.target.value)}
+            aria-label="신규채용 기준연수"
+          />
+          <span className="text-[12.5px] text-muted-foreground">년 이내면 신규</span>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-6 text-[12px]"
+            disabled={pending || 기준연수 === String(신규기준.기준연수 ?? "")}
+            onClick={() =>
+              start(async () => {
+                const r = await saveNewHireRule({
+                  사업유형: 신규기준.사업유형,
+                  기준연수: Number(기준연수),
+                  근거: `${신규기준.사업유형 ?? "공통"} — 사람이 확인해 넣은 기준`,
+                })
+                setMsg(
+                  r.ok
+                    ? {
+                        ok: true,
+                        text:
+                          `신규채용 기준을 ${r.기준연수}년으로 저장했습니다(` +
+                          `${신규기준.사업유형 ? `사업유형 ${신규기준.사업유형}` : "공통"} 적용). ` +
+                          "이미 넣은 줄의 체크는 그대로 둡니다 — 사람이 확정한 값이 이깁니다.",
+                      }
+                    : { ok: false, text: r.error ?? "기준을 저장하지 못했습니다." },
+                )
+              })
+            }
+          >
+            기준 저장
+          </Button>
+          <span className="text-[11.5px] text-muted-foreground">
+            {신규기준.상태 === "확정"
+              ? `확정 · ${신규기준.적용범위} 적용`
+              : "제안 — 사업주체 공고문으로 확인하세요"}
+          </span>
+        </div>
+      )}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <Button type="button" variant="outline" className="h-7 text-[12.8px]" onClick={줄추가}>

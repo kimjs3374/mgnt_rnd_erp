@@ -26,7 +26,7 @@ export const NAV: NavGroup[] = [
     icon: "Briefcase",
     items: [
       { title: "사업 대장", url: "/projects" },
-      { title: "공고 탐색", url: "/announcements" },
+      { title: "공고 탐색", url: "/project-announcements" },
     ],
   },
   { title: "집행", url: "/expenses", icon: "ReceiptText" },

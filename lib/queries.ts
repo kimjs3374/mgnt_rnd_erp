@@ -119,6 +119,7 @@ export const getSettlement = () =>
 
 export type AnnouncementRow = {
   id: number
+  출처: string
   사업명: string
   소관부처: string | null
   전문기관: string | null
@@ -129,11 +130,27 @@ export type AnnouncementRow = {
   파싱상태: string
 }
 
+/** 지원사업 > 공고 탐색. 기업마당 공식 오픈 API 출처만 본다 — 과제사업 쪽과 출처를 섞지 않는다. */
 export const getAnnouncements = () =>
   safeSelect<AnnouncementRow>("announcements", () =>
     db
       .from("announcements")
       .select("*")
+      .eq("출처", "기업마당")
+      .order("id")
+      .limit(100),
+  )
+
+/**
+ * 과제사업 > 공고 탐색. NTIS + IRIS 출처만 본다 — 국가 R&D 과제 공고 도메인이라
+ * 지원사업(기업마당, 지자체·중앙부처 지원사업)과 출처 자체가 다르다. 섞지 않는다.
+ */
+export const getRndAnnouncements = () =>
+  safeSelect<AnnouncementRow>("announcements", () =>
+    db
+      .from("announcements")
+      .select("*")
+      .in("출처", ["NTIS", "IRIS"])
       .order("id")
       .limit(100),
   )

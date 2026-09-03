@@ -36,6 +36,14 @@ import unicodedata
 from dataclasses import dataclass, field
 from typing import Any, Iterable
 
+# r6 → r7 (2026-09-04): 사용자가 https://rnd.mgnt.kr/announcements/427 를 짚었다 —
+# 본문 5,697자인데 커버리지 0.4(메타뿐)로 "요건미확인"이 나온 이유를 실측으로 봤다.
+#   ⑫ 헤딩 인식 구멍 — 「1   사업 개요」처럼 마침표 없이 번호+공백만 쓰는 문서를
+#      기존 세 헤딩 패턴이 다 놓쳐서 구역이 통째로 0개였다. 네 번째 패턴을 추가했다.
+#   ⑬ 개인전용_제한 게이트 — "폐업 이력이 있는 (예비)재창업자"류. API 지원대상
+#      태그(일반기업ㆍ1인 창조기업)는 통과해도 실제론 개인의 과거 이력을 요구해서
+#      정상 운영 중인 법인은 애초에 해당 사항이 없다.
+#
 # r5 → r6 (2026-09-04): 사용자 지적 "필터 순위를 정해서 걸러야 — 지역, 중소기업여부,
 # 창업기업여부 등등"에 따라 게이트 두 개를 더 세운다.
 #   ⑨ 창업업력_제한 — K-Startup 상세페이지의 "창업업력" 필드(예비창업자~N년미만).
@@ -69,7 +77,7 @@ from typing import Any, Iterable
 #   ② 「□ 신청자격」 꼴 제목을 못 읽어 공고 2건의 구역이 전부 None 이었다 → 글머리형 제목 추가
 #   ③ 「기업 참여 불가」(대학·연구기관 전용) 게이트가 아예 없었다 → R-ORG-TYPE-EXCL 추가
 # r1 판정은 지우지 않는다. 나란히 두고 「고쳐서 나아졌는가」를 v_ann_rule_vs_llm 으로 본다.
-ENGINE_VERSION = "r6"
+ENGINE_VERSION = "r7"
 
 # NTIS 본문이 "AB01"(4자)로 들어와 있다. 이 길이로는 조항을 읽을 수 없다.
 # 「짧아서 못 읽었다」와 「읽었는데 조항이 없다」는 다른 상태다 — 섞으면 안 된다.
@@ -264,11 +272,16 @@ _HEADING_BULLET = re.compile(r"^[ \t]*[□■◇◆ㅁ]\s*(\S[^\n]{0,24})$", re.
 # 통째로 "앞 절"의 구역으로 잘못 흡수된다(id 192: 지원대상이 「지원규모」로 묶여
 # R-EXCLUSIVE-INDUSTRY 가 그 구역을 못 봤다). ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ 만 흔히 쓰인다.
 _HEADING_ROMAN = re.compile(r"^[ \t]*([ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ])\s*[.\s]?\s*(\S.{0,50})$", re.M)
+# 마침표 없는 번호 제목 — 실측(id 427, 중진공 재창업 공고): 「1   사업 개요」·「2   사업 절차」·
+# 「3   신청 및 선발」처럼 번호 뒤에 마침표 없이 공백만 여러 칸 두는 문서가 있다.
+# 「1. 」류(_HEADING_NUM)와 안 겹치게 마침표가 없는 경우만 잡는다. 번호 뒤 공백이
+# **2칸 이상**이어야 한다 — 한 칸이면 "1 월 접수"처럼 본문 문장과 구분이 안 된다.
+_HEADING_BARE_NUM = re.compile(r"^[ \t]*(\d{1,2})[ \t]{2,}(\S.{0,30})$", re.M)
 _BULLET_TITLE_MAX = 20      # 공백 지운 제목이 이보다 길면 본문 문장으로 본다
 
 
 def _heading_hits(text: str) -> list[tuple[int, str]]:
-    """제목 줄 위치와 제목 문자열. 세 꼴을 모아 위치순으로 돌려준다."""
+    """제목 줄 위치와 제목 문자열. 네 꼴을 모아 위치순으로 돌려준다."""
     hits: list[tuple[int, str]] = []
     for m in _HEADING_NUM.finditer(text or ""):
         hits.append((m.start(), strip_ws(m.group(1))))
@@ -278,6 +291,10 @@ def _heading_hits(text: str) -> list[tuple[int, str]]:
         if len(t) <= _BULLET_TITLE_MAX and "," not in t:
             hits.append((m.start(), t))
     for m in _HEADING_ROMAN.finditer(text or ""):
+        t = strip_ws(m.group(2))
+        if len(t) <= _BULLET_TITLE_MAX and "," not in t:
+            hits.append((m.start(), t))
+    for m in _HEADING_BARE_NUM.finditer(text or ""):
         t = strip_ws(m.group(2))
         if len(t) <= _BULLET_TITLE_MAX and "," not in t:
             hits.append((m.start(), t))
@@ -446,6 +463,17 @@ RULES: list[Rule] = [
          설명="실측 id 3 「주관연구개발기관은 국내 대학에 한하여 신청이 가능 … ※기업 참여 불가」, "
               "실측 id 14 「학술진흥법 제2조의 “대학”(부설연구소 포함) 및 “연구기관”에 소속된 "
               "“연구자” 중 박사학위 소지자로」. 우리는 기업이라 이 조항이 있으면 신청 자체가 안 된다"),
+
+    # 실측 id 427(중진공 「재창업 특화교육ㆍ컨설팅」): "신청자격: 폐업 이력이 있는
+    # (예비)재창업자". API 의 지원대상 태그엔 "일반기업ㆍ1인 창조기업"이 들어 있어
+    # 기존 지원대상_유형 게이트를 통과했지만, 실제로는 **개인의 과거 폐업 경력**을
+    # 요구하는 사업이라 정상 운영 중인 법인(우리)은 애초에 해당 사항이 없다. API
+    # 태그는 "누가 신청기관이 될 수 있는가"의 큰 범주만 주고, "그 사람이 어떤
+    # 개인적 이력이어야 하는가"는 본문에만 있다.
+    Rule("R-INDIVIDUAL-ONLY", "개인전용_제한", "게이트",
+         re.compile(r"(폐업(이력|경험)이있는|예비재창업자|재창업자를대상)"),
+         conf=0.85, sections=("신청자격",), 값불리언=True, 구역없어도=True,
+         설명="실측 id 427: 「지원 대상: 폐업경험을 보유한 (예비)재창업자」"),
 
     Rule("R-SIZE-EXCL", "기업규모_제한", "게이트",
          re.compile(r"(중견기업이상|중견기업에한|대기업에한|대기업만|중견·대기업만|중견기업또는대기업에한)"),

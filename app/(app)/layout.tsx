@@ -1,6 +1,7 @@
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
+import { ChatPanel } from "@/components/chat-panel"
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -20,6 +21,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <SidebarInset className="flex flex-1 flex-col">{children}</SidebarInset>
         </div>
       </SidebarProvider>
+      <ChatPanel />
     </div>
   )
 }

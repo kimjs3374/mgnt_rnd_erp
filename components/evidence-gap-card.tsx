@@ -114,7 +114,7 @@ export function EvidenceGapCard({
                   </span>
                   <Link
                     href={`/projects/${p.id}/expenses`}
-                    className="text-[13px] font-medium underline-offset-2 hover:underline"
+                    className="text-[13px] font-semibold underline-offset-2 hover:underline"
                   >
                     {p.과제명}
                   </Link>

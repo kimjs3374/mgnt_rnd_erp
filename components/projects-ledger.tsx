@@ -489,7 +489,7 @@ export function ProjectsLedger({
                     {/* ⚠ `TableCell` 기본값이 `whitespace-nowrap` 이라 긴 과제명이 한 줄로
                         펼쳐지며 `w-[240px]` 을 무시하고 표를 밀어냈다(1,618px → 가로 스크롤).
                         여기서만 줄바꿈을 허용한다 — 이름을 자르면 어느 과제인지 못 읽는다. */}
-                    <TableCell className="font-medium whitespace-normal">
+                    <TableCell className="font-semibold whitespace-normal">
                       {/* 계상·정산은 과제 안에서 한다. 목록은 어느 과제로 들어갈지만 고른다. */}
                       <Link
                         href={`/projects/${r.id}`}

@@ -3,6 +3,7 @@
 import * as React from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { MoneyInput } from "@/components/money-input"
 import {
   Table,
   TableBody,
@@ -220,12 +221,9 @@ export function BudgetEditor({
                     <TableCell className="font-medium">{l.비목명 ?? l.비목_대분류}</TableCell>
                     <TableCell className="text-muted-foreground">{l.재원구분}</TableCell>
                     <TableCell>
-                      <Input
-                        type="number"
-                        min={0}
-                        step={1000}
-                        value={String(l.배정액)}
-                        onChange={(e) => 수정(i, { 배정액: Number(e.target.value) || 0 })}
+                      <MoneyInput
+                        value={Number(l.배정액) || 0}
+                        onValueChange={(n) => 수정(i, { 배정액: n })}
                         className="h-7 text-right text-[13px] tabular-nums"
                         aria-label={`${l.비목명 ?? l.비목_대분류} ${l.재원구분} 배정액`}
                       />

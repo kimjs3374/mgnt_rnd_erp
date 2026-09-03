@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { MoneyInput } from "@/components/money-input"
 import { saveContractShare } from "@/app/actions/funding-share"
 import { compareWithContract, type Share } from "@/lib/funding-share"
 
@@ -168,14 +168,9 @@ export function FundingShareCard({
                       {c?.통과 === false ? "✗ 규정 위반" : c?.통과 === null ? "? 미입력" : "✓"}
                     </span>
                   </div>
-                  <Input
-                    type="number"
-                    min={0}
-                    step={1000}
-                    value={String(값[키])}
-                    onChange={(e) =>
-                      set값((prev) => ({ ...prev, [키]: Number(e.target.value) || 0 }))
-                    }
+                  <MoneyInput
+                    value={값[키]}
+                    onValueChange={(n) => set값((prev) => ({ ...prev, [키]: n }))}
                     className="h-7 text-right text-[13px] tabular-nums"
                     aria-label={`${이름} 금액`}
                   />

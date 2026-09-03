@@ -114,6 +114,7 @@ export function ProjectsLedger({
   로그인,
   단계,
   단계별 = {},
+  증빙 = {},
   밀린종료 = [],
 }: {
   rows: ProjectRow[]
@@ -124,6 +125,11 @@ export function ProjectsLedger({
    * 서버가 판정해서 넘긴다 — 화면이 다시 판정하면 두 곳에서 규칙이 갈린다.
    */
   단계별?: Record<number, 과제단계>
+  /**
+   * 과제 id → 사업비 증빙 구멍(집행 건별 필수 서류 기준, `lib/queries-evidence-gap.ts`).
+   * 구멍이 없는 과제는 **키가 아예 없다** — 있는 것만 표시한다.
+   */
+  증빙?: Record<number, { 집행건: number; 빈집행건: number; 빈칸: number }>
   /**
    * 수행기간은 끝났는데 저장된 `상태` 가 아직 「수행중」인 과제 id.
    * 사업종료 화면에서만 넘어온다 — 화면이 짚어 주고 사람이 눌러 맞춘다.
@@ -491,6 +497,18 @@ export function ProjectsLedger({
                       >
                         {r.과제명}
                       </Link>
+                      {/* ⚠ 열을 새로 늘리지 않는다 — 방금 폭을 줄여 가로 스크롤을 없앤 표다.
+                          **바로 갈 수 있어야** 하므로 배지 자체가 그 과제의 집행 탭 링크다
+                          (증빙 파일이 실제로 붙는 자리·2026-09-04 사용자 지시). */}
+                      {증빙[r.id] && (
+                        <Link
+                          href={`/projects/${r.id}/expenses`}
+                          title={`집행 ${증빙[r.id].빈집행건}건에 필수 서류 ${증빙[r.id].빈칸}칸이 비었다 — 눌러서 채우러 갑니다`}
+                          className="ml-1.5 inline-block rounded bg-[var(--warning)] px-1 py-0.5 align-middle text-[10.5px] font-medium text-[var(--warning-fg)] underline-offset-2 hover:underline"
+                        >
+                          증빙 {증빙[r.id].빈칸}
+                        </Link>
+                      )}
                     </TableCell>
                     {전체보기중 && (
                       <TableCell className="text-[12px] text-muted-foreground">

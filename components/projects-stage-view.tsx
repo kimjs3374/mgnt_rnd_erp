@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { FolderKanban, Wallet, Layers, Presentation, CalendarClock, TriangleAlert } from "lucide-react"
 import { PageShell, Stat } from "@/components/page-shell"
 import { DbError } from "@/components/db-error"
 import { Button } from "@/components/ui/button"
@@ -7,6 +8,7 @@ import { ProjectCreateButton } from "@/components/project-create-button"
 import { ProjectsLedger } from "@/components/projects-ledger"
 import { getCurrentUser } from "@/lib/current-user"
 import { db, safeSelect } from "@/lib/db"
+import { getEvidenceGaps } from "@/lib/queries-evidence-gap"
 import {
   단계판정,
   단계정의,
@@ -30,7 +32,7 @@ export const dynamic = "force-dynamic"
  * 수행중으로, 수행기간이 지나면 사업종료로 **저절로** 넘어간다(2026-09-03 사용자 지시).
  */
 export async function ProjectsStageView({ 단계 }: { 단계: 보기범위 }) {
-  const [{ rows: 전체, error }, 미배정, 스테이지, 책임자행, who] = await Promise.all([
+  const [{ rows: 전체, error }, 미배정, 스테이지, 책임자행, who, 증빙] = await Promise.all([
     getProjects(),
     // 과제가 아직 정해지지 않은 집행. 사이드바에서 「집행」을 뺐으므로 여기서 알려주지 않으면
     // Slack 으로 막 들어온 건이 아무 화면에도 안 뜬다.
@@ -48,6 +50,8 @@ export async function ProjectsStageView({ 단계 }: { 단계: 보기범위 }) {
       db.from("project_leads").select("*"),
     ),
     getCurrentUser(),
+    // 사업비 증빙이 빈 곳(2026-09-04 사용자 지시). 집행 건별 필수 서류 기준이다.
+    getEvidenceGaps(),
   ])
 
   const 판정재료 = new Map(스테이지.rows.map((r) => [Number(r.id), r]))
@@ -86,6 +90,11 @@ export async function ProjectsStageView({ 단계 }: { 단계: 보기범위 }) {
     : 단계정의.find((d) => d.단계 === 단계)!
   const 총사업비 = rows.reduce((s, r) => s + (r.총사업비 ?? 0), 0)
   const 정부지원금 = rows.reduce((s, r) => s + (r.정부지원금 ?? 0), 0)
+
+  // 이 화면에 보이는 과제 중에서만 센다. 안 보이는 과제의 구멍을 세면 숫자가 안 맞아 보인다.
+  const 증빙미비과제 = rows.filter((r) => 증빙.gaps[r.id])
+  const 빈집행건 = 증빙미비과제.reduce((s, r) => s + (증빙.gaps[r.id]?.빈집행건 ?? 0), 0)
+  const 빈칸 = 증빙미비과제.reduce((s, r) => s + (증빙.gaps[r.id]?.빈칸 ?? 0), 0)
 
   const 올해 = new Date().toISOString().slice(0, 4)
   const 심사중 = rows.filter((r) => (판정재료.get(r.id)?.선정결과 ?? "") === "발표심사").length
@@ -138,27 +147,40 @@ export async function ProjectsStageView({ 단계 }: { 단계: 보기범위 }) {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <Stat label={`${단계} 과제 수`} value={rows.length} sub={정의.설명} />
+        <Stat icon={FolderKanban} label={`${단계} 과제 수`} value={rows.length} sub={정의.설명} />
         <Stat
+          icon={Wallet}
           label="총사업비 합계"
           value={won(총사업비)}
           sub={단계 === "신청중" ? "협약 전이라 0 인 건이 섞여 있다" : `정부지원금 ${won(정부지원금)}`}
         />
         {전체보기중 ? (
-          // 전체 보기에서는 단계별로 몇 건인지가 가장 궁금한 값이다.
+          // ⚠ 여기 「단계별(2 · 6 · 4)」 카드가 있었는데 **바로 위 단계 칩이 같은 숫자**를
+          //   이미 말하고 있어서 자리만 먹었다(사용자 지적). 정산에서 실제로 반려되는
+          //   **사업비 증빙**으로 바꿨다 — 지금 이 대장에서 제일 크게 빈 곳이다.
           <Stat
-            label="단계별"
-            value={단계정의
-              .map((d) => 과제들.filter((r) => 단계판정(재료(r)) === d.단계).length)
-              .join(" · ")}
-            sub="신청중 · 수행중 · 사업종료"
+            icon={TriangleAlert}
+            label="사업비 증빙 미비"
+            value={증빙미비과제.length}
+            sub={
+              증빙미비과제.length
+                ? `과제 ${증빙미비과제.length}건 · 집행 ${빈집행건}건에 서류 ${빈칸}칸이 비었다`
+                : "집행 건별 필수 서류가 다 채워져 있다"
+            }
+            tone={증빙미비과제.length > 0 ? "warn" : "default"}
           />
         ) : 단계 === "신청중" ? (
-          <Stat label="발표·심사 중" value={심사중} sub="결과를 기다리는 건" />
+          <Stat icon={Presentation} label="발표·심사 중" value={심사중} sub="결과를 기다리는 건" />
         ) : 단계 === "수행중" ? (
-          <Stat label={`${올해}년 안에 끝남`} value={올해끝} sub="완료보고를 준비할 건" />
+          <Stat
+            icon={CalendarClock}
+            label={`${올해}년 안에 끝남`}
+            value={올해끝}
+            sub="완료보고를 준비할 건"
+          />
         ) : (
           <Stat
+            icon={TriangleAlert}
             label="상태가 안 맞는 건"
             value={밀린종료.length}
             sub="수행기간은 끝났는데 저장된 상태가 수행중"
@@ -173,6 +195,7 @@ export async function ProjectsStageView({ 단계 }: { 단계: 보기범위 }) {
         로그인={who.인증}
         단계={단계}
         단계별={단계별}
+        증빙={증빙.gaps}
         밀린종료={밀린종료}
       />
 

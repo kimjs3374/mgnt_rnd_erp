@@ -168,6 +168,26 @@ export default async function ProjectBudgetPage({
         </div>
       )}
 
+      {/* 선정 전 계상은 **신청서에 넣는 계획**이다. 협약 계상과 화면이 똑같아서
+          말해 주지 않으면 이미 확정된 금액을 만지는 것으로 읽힌다.
+          (2026-09-04 사용자 지시로 신청중에도 계상을 열었다.) */}
+      {p?.상태 === "신청중" && (
+        <div className="rounded-lg border border-[var(--warning-fg)]/30 bg-[var(--warning)] p-4">
+          <p className="text-sm font-medium text-[var(--warning-fg)]">
+            신청 단계 계상입니다 — 아직 협약 금액이 아닙니다
+          </p>
+          <p className="mt-1 text-xs text-[var(--warning-fg)]">
+            여기 잡는 금액은 <b>신청서·사업계획서에 넣는 계획</b>입니다. 선정되면 기관이 확정한
+            협약 금액으로 <b>다시 맞춰야 합니다</b> — 금액이 깎여 오는 일이 흔합니다. 한도 검산
+            (연구수당 · 간접비)은 지금도 그대로 돌아서, 제출 전에 규정에 어긋난 계상을 미리 잡습니다.{" "}
+            <Link href="/projects/applying" className="underline underline-offset-2">
+              신청중 목록
+            </Link>
+            에서 이 과제의 단계를 봅니다.
+          </p>
+        </div>
+      )}
+
       <FundingShareCard
         과제_id={id}
         총사업비={p?.총사업비 ?? null}

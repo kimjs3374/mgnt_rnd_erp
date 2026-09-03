@@ -146,13 +146,25 @@ export async function ProjectsStageView({ 단계 }: { 단계: 과제단계 }) {
       />
 
       {단계 === "신청중" && (
-        <p className="text-xs text-muted-foreground">
-          결과가 나오면 공고 상세의 「지원 · 선정 · 대장」에서 [선정]을 누르세요 — 그 줄이 바로{" "}
-          <Link href="/projects" className="underline underline-offset-2">
-            수행중
-          </Link>
-          으로 넘어갑니다.
-        </p>
+        <>
+          {/* 사업비 계상은 **신청서에 넣는 것**이라 선정 전에 하는 일이다.
+              선정된 뒤에 처음 계상하는 순서는 실제 일과 반대다(2026-09-04 사용자 지시로 열었다). */}
+          <p className="text-xs text-muted-foreground">
+            신청 단계에서도 <b>과제비를 계상할 수 있습니다</b> — 줄 오른쪽의 「계상」을 누르거나{" "}
+            <Link href="/project-budgeting" className="underline underline-offset-2">
+              과제 계상
+            </Link>
+            에서 「신청 단계만」으로 걸러 보세요. 한도 검산(연구수당 · 간접비)이 지금도 돌아
+            제출 전에 규정에 어긋난 계상을 잡아냅니다.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            결과가 나오면 공고 상세의 「지원 · 선정 · 대장」에서 [선정]을 누르세요 — 그 줄이 바로{" "}
+            <Link href="/projects" className="underline underline-offset-2">
+              수행중
+            </Link>
+            으로 넘어갑니다. 그때 <b>협약 금액으로 계상을 다시 맞춥니다.</b>
+          </p>
+        </>
       )}
 
       {미배정.rows.length > 0 && (

@@ -1,13 +1,13 @@
 {
   "display_information": {
-    "name": "잔업제로",
+    "name": "6PM",
     "description": "지원사업 공고부터 정산까지, 판단 근거와 함께 답합니다",
     "background_color": "#1b4ed8",
     "long_description": "정부·지자체 지원사업을 관리합니다. 공고를 넣으면 자격 요건과 제출 서류를 우리 회사 것과 대조하고, 증빙을 올리면 비목을 규정 근거·과거 유사 집행과 함께 제안합니다. 확신이 낮으면 자동으로 확정하지 않고 사람에게 넘기며, 판단을 고치면 그 사유를 반드시 남깁니다. 남는 것은 결과가 아니라 판단의 근거입니다. 멘션하거나 DM으로 물으면 대장·예산·정산·자격을 근거와 함께 답합니다."
   },
   "features": {
     "bot_user": {
-      "display_name": "잔업제로",
+      "display_name": "6pm",
       "always_online": true
     },
     "slash_commands": [

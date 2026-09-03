@@ -21,12 +21,16 @@ export type EvidenceRequirement = {
   개인정보포함: boolean
   원문: string | null
   출처: string
+  /** true = 집행 건 상세에서 첨부받는 서류(견적서·지출결의서·거래명세서·검수조서). */
+  집행단위?: boolean
 }
 
 export type EvidenceFile = {
   id: number
   비목_대분류: string
   요건_id: number | null
+  /** 집행 건에 붙은 증빙이면 그 건의 id. 비목 단위로 미리 올린 파일은 null. */
+  집행_id: number | null
   파일명: string
   크기: number | null
   업로더: string

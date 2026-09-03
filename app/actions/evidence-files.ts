@@ -41,6 +41,9 @@ export async function uploadEvidenceFile(formData: FormData): Promise<ActionResu
     const 비목_대분류 = String(formData.get("비목_대분류") ?? "")
     const 요건_idRaw = formData.get("요건_id")
     const 요건_id = 요건_idRaw ? Number(요건_idRaw) : null
+    // 집행 상세에서 올리면 그 건에 매단다. 계상 탭에서 올리면 비어 있다(비목 단위 보관).
+    const 집행_idRaw = formData.get("집행_id")
+    const 집행_id = 집행_idRaw ? Number(집행_idRaw) : null
     const file = formData.get("file")
 
     if (!Number.isInteger(과제_id) || 과제_id <= 0) return { ok: false, error: "과제를 찾을 수 없다." }
@@ -93,6 +96,7 @@ export async function uploadEvidenceFile(formData: FormData): Promise<ActionResu
       과제_id,
       비목_대분류,
       요건_id,
+      집행_id,
       파일명: file.name,
       storage_path: path,
       크기: file.size,
@@ -110,6 +114,7 @@ export async function uploadEvidenceFile(formData: FormData): Promise<ActionResu
 
     revalidatePath(`/projects/${과제_id}/budget`)
     revalidatePath(`/projects/${과제_id}/settlement`)
+    revalidatePath(`/projects/${과제_id}/expenses`)
     return { ok: true }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -166,6 +171,7 @@ export async function deleteEvidenceFile(id: number): Promise<ActionResult> {
     if (f.과제_id) {
       revalidatePath(`/projects/${f.과제_id}/budget`)
       revalidatePath(`/projects/${f.과제_id}/settlement`)
+      revalidatePath(`/projects/${f.과제_id}/expenses`)
     }
     return { ok: true }
   } catch (err) {

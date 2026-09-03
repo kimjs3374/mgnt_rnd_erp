@@ -19,7 +19,9 @@ import {
 } from "@/components/ui/table"
 import { StatusBadge, ConfidenceBadge } from "@/components/status-badge"
 import { EmptyState } from "@/components/page-shell"
+import { ExpenseEvidence } from "@/components/expense-evidence"
 import { confirmExpense, correctExpense } from "@/app/actions/expenses"
+import type { EvidenceRequirement, EvidenceFile } from "@/lib/evidence-types"
 
 export type SubOption = { 코드: string; 대분류: string; 이름: string }
 export type CatOption = { 코드: string; 이름: string }
@@ -52,6 +54,9 @@ export type Row = {
   세액: number | null
   비목_대분류: string | null
   비목_세부항목: string | null
+  /** 출연금 | 현금 | 현물. 필터와 정산 대조에 쓴다. */
+  재원구분: string
+  연차: number | null
   ai_확신도: number | null
   ai_근거: string | null
   방향검증: string | null
@@ -71,24 +76,184 @@ const 사유유형 = [
   { v: "판독오류", label: "품목을 잘못 읽음 (판독 오류)" },
 ]
 
+/** 재원 3분류를 정산 관점으로 묶은 표기. 정산 탭과 같은 규칙을 쓴다(출연금+기관부담 현금=현금). */
+const 정산재원 = (재원구분: string) => (재원구분 === "현물" ? "현물" : "현금")
+
+/** 기간 프리셋. RCMS 는 연차·분기 단위로 확인하니 그 폭에 맞춘다. */
+const 기간프리셋 = [
+  { v: "전체", label: "전체" },
+  { v: "1m", label: "최근 1개월" },
+  { v: "3m", label: "최근 3개월" },
+  { v: "6m", label: "최근 6개월" },
+  { v: "12m", label: "최근 1년" },
+] as const
+
+function 프리셋시작(v: string): string | null {
+  if (v === "전체") return null
+  const 개월 = Number(v.replace("m", ""))
+  const d = new Date()
+  d.setMonth(d.getMonth() - 개월)
+  return d.toISOString().slice(0, 10)
+}
+
 export function ExpenseTable({
   rows,
   cats,
   subs,
   labels,
   actor,
+  과제_id,
+  증빙요건 = [],
+  증빙파일 = [],
 }: {
   rows: Row[]
   cats: CatOption[]
   subs: SubOption[]
   labels: { cat: Record<string, string>; sub: Record<string, string> }
   actor: string
+  /** 집행 상세에서 증빙을 첨부하려면 과제가 필요하다. 전체 집행 화면에서는 넘기지 않는다. */
+  과제_id?: number
+  증빙요건?: EvidenceRequirement[]
+  증빙파일?: EvidenceFile[]
 }) {
   const [openId, setOpenId] = React.useState<number | null>(null)
-  const open = rows.find((r) => r.id === openId) ?? null
+
+  // ── 필터 — 항목(비목) · 세부항목 · 재원 · 상태 · 기간 ─────────────────────
+  // RCMS 확인은 「어느 비목의, 어느 기간 집행인가」로 한다. 목록을 눈으로 훑어 세지 않게 한다.
+  const [비목, set비목] = React.useState("전체")
+  const [세부, set세부] = React.useState("전체")
+  const [재원, set재원] = React.useState("전체")
+  const [상태, set상태] = React.useState("전체")
+  const [프리셋, set프리셋] = React.useState<string>("전체")
+  const [시작, set시작] = React.useState("")
+  const [종료, set종료] = React.useState("")
+
+  const 상태목록 = Array.from(new Set(rows.map((r) => r.상태)))
+  const 세부목록 = subs.filter((s) => 비목 === "전체" || s.대분류 === 비목)
+
+  const 기간시작 = 시작 || 프리셋시작(프리셋) || ""
+  const filtered = rows.filter((r) => {
+    if (비목 !== "전체" && r.비목_대분류 !== 비목) return false
+    if (세부 !== "전체" && r.비목_세부항목 !== 세부) return false
+    if (재원 !== "전체" && 정산재원(r.재원구분) !== 재원) return false
+    if (상태 !== "전체" && r.상태 !== 상태) return false
+    // 일자가 비어 있는 건은 기간을 걸면 빠진다. 그게 맞다 — 기간 확인 대상이 아니다.
+    if (기간시작 && (!r.일자 || r.일자 < 기간시작)) return false
+    if (종료 && (!r.일자 || r.일자 > 종료)) return false
+    return true
+  })
+
+  const 걸러짐 = filtered.length !== rows.length
+  const 합계 = filtered.reduce((s, r) => s + Number(r.합계 ?? 0), 0)
+  const 초기화 = () => {
+    set비목("전체"), set세부("전체"), set재원("전체"), set상태("전체")
+    set프리셋("전체"), set시작(""), set종료("")
+  }
+
+  const open = filtered.find((r) => r.id === openId) ?? rows.find((r) => r.id === openId) ?? null
+  const sel =
+    "h-7 rounded-md border bg-transparent px-2 text-[12.5px] text-foreground"
 
   return (
     <>
+      <div className="flex flex-wrap items-center gap-2 border-b p-3">
+        <select
+          className={sel}
+          value={비목}
+          onChange={(e) => {
+            set비목(e.target.value)
+            set세부("전체")
+          }}
+          aria-label="비목으로 걸러내기"
+        >
+          <option value="전체">비목 전체</option>
+          {cats.map((c) => (
+            <option key={c.코드} value={c.코드}>
+              {c.이름}
+            </option>
+          ))}
+        </select>
+
+        <select
+          className={sel}
+          value={세부}
+          onChange={(e) => set세부(e.target.value)}
+          aria-label="세부항목으로 걸러내기"
+        >
+          <option value="전체">세부항목 전체</option>
+          {세부목록.map((s) => (
+            <option key={s.코드} value={s.코드}>
+              {s.이름}
+            </option>
+          ))}
+        </select>
+
+        <select className={sel} value={재원} onChange={(e) => set재원(e.target.value)} aria-label="재원으로 걸러내기">
+          <option value="전체">재원 전체</option>
+          <option value="현금">현금</option>
+          <option value="현물">현물</option>
+        </select>
+
+        <select className={sel} value={상태} onChange={(e) => set상태(e.target.value)} aria-label="상태로 걸러내기">
+          <option value="전체">상태 전체</option>
+          {상태목록.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+
+        <select
+          className={sel}
+          value={프리셋}
+          onChange={(e) => {
+            set프리셋(e.target.value)
+            set시작("")
+          }}
+          aria-label="기간 프리셋"
+        >
+          {기간프리셋.map((p) => (
+            <option key={p.v} value={p.v}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+
+        <input
+          type="date"
+          className={sel}
+          value={기간시작}
+          onChange={(e) => {
+            set시작(e.target.value)
+            set프리셋("전체")
+          }}
+          aria-label="시작일"
+        />
+        <span className="text-[12.5px] text-muted-foreground">~</span>
+        <input
+          type="date"
+          className={sel}
+          value={종료}
+          onChange={(e) => set종료(e.target.value)}
+          aria-label="종료일"
+        />
+
+        <span className="ml-auto text-[12.5px] text-muted-foreground">
+          {filtered.length}건 · <span className="tabular-nums">{won(합계)}</span>
+          {걸러짐 && <span className="ml-1">(전체 {rows.length}건)</span>}
+        </span>
+        {걸러짐 && (
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-7 px-2 text-[12px] text-muted-foreground"
+            onClick={초기화}
+          >
+            필터 해제
+          </Button>
+        )}
+      </div>
+
       {rows.length === 0 ? (
         <EmptyState
           title="집행 내역이 없습니다"
@@ -103,12 +268,20 @@ export function ExpenseTable({
               <TableHead>품목</TableHead>
               <TableHead className="text-right">합계 ⇅</TableHead>
               <TableHead>비목 › 세부항목</TableHead>
+              <TableHead className="w-[64px]">재원</TableHead>
               <TableHead className="text-center">확신도</TableHead>
               <TableHead>상태 ⇅</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.map((e) => (
+            {filtered.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={8} className="py-10 text-center text-[13px] text-muted-foreground">
+                  걸러낸 조건에 맞는 집행이 없습니다. 필터를 풀거나 기간을 넓혀 보세요.
+                </TableCell>
+              </TableRow>
+            ) : null}
+            {filtered.map((e) => (
               <TableRow
                 key={e.id}
                 className="h-[38px] cursor-pointer text-[13px]"
@@ -131,6 +304,7 @@ export function ExpenseTable({
                     </>
                   )}
                 </TableCell>
+                <TableCell className="text-muted-foreground">{정산재원(e.재원구분)}</TableCell>
                 <TableCell className="text-center">
                   <ConfidenceBadge value={e.ai_확신도} />
                 </TableCell>
@@ -151,6 +325,9 @@ export function ExpenseTable({
             subs={subs}
             labels={labels}
             actor={actor}
+            과제_id={과제_id}
+            증빙요건={증빙요건}
+            증빙파일={증빙파일.filter((f) => f.집행_id === open.id)}
             onDone={() => setOpenId(null)}
           />
         )}
@@ -165,6 +342,9 @@ function ExpenseDetail({
   subs,
   labels,
   actor,
+  과제_id,
+  증빙요건,
+  증빙파일,
   onDone,
 }: {
   row: Row
@@ -172,6 +352,9 @@ function ExpenseDetail({
   subs: SubOption[]
   labels: { cat: Record<string, string>; sub: Record<string, string> }
   actor: string
+  과제_id?: number
+  증빙요건: EvidenceRequirement[]
+  증빙파일: EvidenceFile[]
   onDone: () => void
 }) {
   const [mode, setMode] = React.useState<"view" | "correct">("view")
@@ -261,6 +444,17 @@ function ExpenseDetail({
               hint="자사 사업자번호로 계산 확정. LLM 아님"
             />
           </div>
+
+          {/* 이 건의 증빙 — 요건 네 개와 ZIP 한 번에 받기. 과제 화면에서만 뜬다. */}
+          {과제_id != null && (
+            <ExpenseEvidence
+              과제_id={과제_id}
+              집행_id={row.id}
+              비목_대분류={row.비목_대분류}
+              요건={증빙요건}
+              파일={증빙파일}
+            />
+          )}
 
           {/* 우리 회사 과거 처리 */}
           <section className="rounded-lg border bg-card p-3">

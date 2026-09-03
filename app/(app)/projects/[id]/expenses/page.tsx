@@ -4,7 +4,12 @@ import { DbError } from "@/components/db-error"
 import { ExpenseTable, type Row } from "@/components/expense-table"
 import { db, safeSelect } from "@/lib/db"
 import { getLabels } from "@/lib/labels"
-import { getProjectBudget, getCategories } from "@/lib/queries-project"
+import {
+  getProjectBudget,
+  getCategories,
+  getEvidenceRequirements,
+  getProjectEvidenceFiles,
+} from "@/lib/queries-project"
 import { won } from "@/lib/queries"
 
 export const dynamic = "force-dynamic"
@@ -46,7 +51,7 @@ export default async function ProjectExpensesPage({
   const { id: raw } = await params
   const id = Number(raw)
 
-  const [all, dec, labels, cats, subRes, budget] = await Promise.all([
+  const [all, dec, labels, cats, subRes, budget, reqs, files] = await Promise.all([
     safeSelect<ExpenseRaw>("expenses", () =>
       db.from("expenses").select("*").order("일자", { ascending: false }).limit(500),
     ),
@@ -59,6 +64,8 @@ export default async function ProjectExpensesPage({
       db.from("sub_categories").select("*"),
     ),
     getProjectBudget(id),
+    getEvidenceRequirements(),
+    getProjectEvidenceFiles(id),
   ])
 
   const 결정 = new Map<number, DecisionRaw[]>()
@@ -102,6 +109,8 @@ export default async function ProjectExpensesPage({
       세액: e.세액 == null ? null : Number(e.세액),
       비목_대분류: (e.비목_대분류 as string) ?? null,
       비목_세부항목: (e.비목_세부항목 as string) ?? null,
+      재원구분: (e.재원구분 as string) ?? "출연금",
+      연차: e.연차 == null ? null : Number(e.연차),
       ai_확신도: e.ai_확신도 == null ? null : Number(e.ai_확신도),
       ai_근거: (e.ai_근거 as string) ?? null,
       방향검증: (e.방향검증 as string) ?? null,
@@ -156,6 +165,10 @@ export default async function ProjectExpensesPage({
           subs={subRes.rows}
           labels={labels}
           actor="mgnt2"
+          과제_id={id}
+          // 집행 상세에서 받는 요건만 넘긴다(견적서·지출결의서·거래명세서·검수조서).
+          증빙요건={reqs.rows.filter((r) => r.집행단위)}
+          증빙파일={files.rows}
         />
       </Card>
 

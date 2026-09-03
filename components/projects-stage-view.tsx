@@ -9,6 +9,8 @@ import { ProjectsLedger } from "@/components/projects-ledger"
 import { getCurrentUser } from "@/lib/current-user"
 import { db, safeSelect } from "@/lib/db"
 import { getEvidenceGaps } from "@/lib/queries-evidence-gap"
+import { EvidenceGapCard } from "@/components/evidence-gap-card"
+import { getCategories } from "@/lib/queries-project"
 import { 다음정산일 } from "@/lib/settlement-day"
 import {
   단계판정,
@@ -93,6 +95,8 @@ export async function ProjectsStageView({ 단계 }: { 단계: 보기범위 }) {
   const 정부지원금 = rows.reduce((s, r) => s + (r.정부지원금 ?? 0), 0)
 
   // 이 화면에 보이는 과제 중에서만 센다. 안 보이는 과제의 구멍을 세면 숫자가 안 맞아 보인다.
+  // 비목 코드 → 한글. 목록에 EQUIP_PURCHASE 가 보이면 안 된다.
+  const 비목 = await getCategories()
   const 증빙미비과제 = rows.filter((r) => 증빙.gaps[r.id])
   const 빈집행건 = 증빙미비과제.reduce((s, r) => s + (증빙.gaps[r.id]?.빈집행건 ?? 0), 0)
   const 빈칸 = 증빙미비과제.reduce((s, r) => s + (증빙.gaps[r.id]?.빈칸 ?? 0), 0)
@@ -162,16 +166,15 @@ export async function ProjectsStageView({ 단계 }: { 단계: 보기범위 }) {
           // ⚠ 여기 「단계별(2 · 6 · 4)」 카드가 있었는데 **바로 위 단계 칩이 같은 숫자**를
           //   이미 말하고 있어서 자리만 먹었다(사용자 지적). 정산에서 실제로 반려되는
           //   **사업비 증빙**으로 바꿨다 — 지금 이 대장에서 제일 크게 빈 곳이다.
-          <Stat
-            icon={TriangleAlert}
-            label="사업비 증빙 미비"
-            value={증빙미비과제.length}
-            sub={
-              증빙미비과제.length
-                ? `과제 ${증빙미비과제.length}건 · 집행 ${빈집행건}건에 서류 ${빈칸}칸이 비었다`
-                : "집행 건별 필수 서류가 다 채워져 있다"
-            }
-            tone={증빙미비과제.length > 0 ? "warn" : "default"}
+          // ★ 눌러서 **어느 과제의 어느 집행에 무슨 서류가 없는지** 보고, 그 자리로 바로 간다
+          //   (2026-09-04 사용자 지시). 숫자만 있으면 「3건」을 보고도 할 일을 모른다.
+          <EvidenceGapCard
+            과제들={증빙미비과제.map((r) => ({
+              id: r.id,
+              과제명: r.과제명,
+              구멍: 증빙.gaps[r.id]!,
+            }))}
+            비목이름={Object.fromEntries(비목.rows.map((c) => [c.코드, c.이름]))}
           />
         ) : 단계 === "신청중" ? (
           <Stat icon={Presentation} label="발표·심사 중" value={심사중} sub="결과를 기다리는 건" />

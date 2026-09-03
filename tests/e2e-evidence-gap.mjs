@@ -1,90 +1,180 @@
-// 사업비 증빙이 빈 곳을 **대장에서 바로 보고 바로 갈 수 있는가.** (2026-09-04 사용자 지시)
+// 「사업비 증빙 미비」 카드 — 눌러서 **어느 과제의 어느 집행에 무슨 서류가 없는지** 보고,
+// 그 자리로 바로 가는지 본다. (2026-09-04 사용자 지시)
 //
-//   ① 전체 탭 오른쪽 카드가 「사업비 증빙 미비」다 (예전 「단계별」은 위 칩과 같은 숫자라 뺐다)
-//   ② 카드 숫자와 표에 붙은 배지 개수가 맞는다
-//   ③ 배지를 누르면 **그 과제의 집행 탭**으로 간다 — 증빙 파일이 실제로 붙는 자리
-//   ④ 증빙이 다 찬 과제에는 배지가 안 붙는다
-//
-// 읽기만 한다. 아무것도 안 바꾼다.
+// 숫자만 맞는지 보지 않는다 — 목록에 **서류 이름**이 있고, [채우러 가기] 가 실제로 그 집행 건을
+// **펼친 채로** 여는지까지 본다. 그게 이 기능의 값어치다.
 import puppeteer from "puppeteer-core"
 import { 로그인하고 } from "./lib/login.mjs"
+import { env, pgSelect } from "../scripts/lib/pgrest.mjs"
 
-const BASE = "http://127.0.0.1:3610"
+// ⚠ 시드에 기대지 않는다. 지금 집행이 1건뿐이라(재시드 중) 카드가 0 으로 뜨는데, 그 상태로
+//   빨개지는 테스트는 「기능이 깨졌다」는 거짓말이 된다. **구멍을 직접 만들어** 검증하고 지운다.
+const 헤더 = (extra = {}) => ({
+  apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+  Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+  "Accept-Profile": "app",
+  "Content-Profile": "app",
+  "Content-Type": "application/json",
+  ...extra,
+})
+const 넣기 = async (table, rows) => {
+  const r = await fetch(`${env.SUPABASE_URL}/rest/v1/${table}`, {
+    method: "POST",
+    headers: 헤더({ Prefer: "return=representation" }),
+    body: JSON.stringify(rows),
+  })
+  if (!r.ok) throw new Error(`${table} 생성 실패 ${r.status}: ${await r.text()}`)
+  return r.json()
+}
+const 지우기 = (table, q) =>
+  fetch(`${env.SUPABASE_URL}/rest/v1/${table}?${q}`, { method: "DELETE", headers: 헤더() })
+let 과제_id = null
+let 집행_id = null
+const 거래처 = `e2e증빙구멍-${Date.now().toString().slice(-5)}`
+
+const BASE = process.env.RND_BASE ?? "http://127.0.0.1:3610"
 const log = (...a) => console.log("  ", ...a)
 let 실패 = 0
-const 확인 = (ok, 말) => {
+const 확인 = (ok, 말, 곁 = "") => {
   if (!ok) 실패++
-  log(`${ok ? "✓" : "✗"} ${말}`)
+  log(`${ok ? "✓" : "✗"} ${말}${곁 ? ` — ${곁}` : ""}`)
 }
 
 const browser = await puppeteer.launch({
   executablePath: "/usr/bin/google-chrome",
   headless: "new",
-  args: ["--no-sandbox", "--disable-gpu", "--window-size=1700,1300"],
-  defaultViewport: { width: 1700, height: 1300 },
+  args: ["--no-sandbox", "--disable-gpu", "--window-size=1700,1400"],
+  defaultViewport: { width: 1700, height: 1400 },
 })
 const page = await browser.newPage()
+await 로그인하고(page, BASE)
 const errors = []
 page.on("pageerror", (e) => errors.push(String(e)))
 page.on("console", (m) => m.type() === "error" && errors.push(m.text()))
 
-await 로그인하고(page, BASE)
+const 본문 = () => page.evaluate(() => document.body.innerText)
+const 잠깐 = (ms) => new Promise((r) => setTimeout(r, ms))
 
 try {
+  // ── 셋업: 증빙이 필요한 비목(FACILITY)의 집행 한 건. 서류는 하나도 안 붙인다 = 구멍.
+  const [과제] = await 넣기("projects", [
+    {
+      과제코드: `E2E-GAP-${Date.now().toString().slice(-6)}`,
+      과제명: "e2e 증빙구멍 테스트 과제",
+      사업유형: "NATIONAL_RND",
+      시작일: "2026-01-01",
+      종료일: "2027-12-31",
+      연차: 1,
+      총사업비: 10000000,
+      상태: "수행중",
+      선정결과: "선정",
+    },
+  ])
+  과제_id = 과제.id
+  const [집행] = await 넣기("expenses", [
+    {
+      과제_id,
+      비목_대분류: "FACILITY",
+      거래처,
+      일자: "2026-02-03",
+      합계: 1200000,
+      공급가액: 1090909,
+      세액: 109091,
+      품목: [{ 품목명: "e2e 시험용 장비" }],
+      재원구분: "현금",
+      상태: "검토대기",
+    },
+  ])
+  집행_id = 집행.id
+  log(`스크래치 과제 ${과제_id} · 집행 ${집행_id}(${거래처})`)
+
   await page.goto(`${BASE}/projects/all`, { waitUntil: "networkidle0", timeout: 60000 })
-  await new Promise((r) => setTimeout(r, 700))
+  let text = await 본문()
 
-  const 글 = await page.evaluate(() => document.body.innerText)
+  console.log("① 카드가 눌리는가")
+  확인(text.includes("사업비 증빙 미비"), "카드가 있다")
+  const 미비수 = Number((text.match(/사업비 증빙 미비\s*\n?\s*(\d+)/) ?? [])[1] ?? -1)
+  log(`카드 숫자: ${미비수}`)
+  확인(미비수 >= 1, "구멍이 있으니 카드가 1 이상이다", String(미비수))
+  확인(text.includes("눌러서 보기"), "누를 수 있다고 알려 준다(구멍이 있을 때만)")
 
-  // ① 카드
-  확인(글.includes("사업비 증빙 미비"), "오른쪽 카드가 「사업비 증빙 미비」다")
-  확인(!글.includes("신청중 · 수행중 · 사업종료"), "예전 「단계별」 카드는 없어졌다(칩과 겹쳤다)")
-
-  // ② 카드 숫자 = 배지 개수
-  const 배지 = await page.evaluate(() =>
-    [...document.querySelectorAll("tbody a")]
-      .filter((a) => a.textContent.trim().startsWith("증빙"))
-      .map((a) => ({ 글: a.textContent.trim(), href: a.getAttribute("href") ?? "" })),
-  )
-  log(`배지 ${배지.length}개: ${배지.map((b) => b.글).join(" · ")}`)
-
-  // 카드 값은 「과제 수」다. 카드 바로 아래 sub 에 집행·칸 수가 있다.
-  const 카드수 = await page.evaluate(() => {
-    const el = [...document.querySelectorAll("div")].find(
-      (d) => d.textContent.trim().startsWith("사업비 증빙 미비") && d.children.length <= 4,
+  const 눌렀나 = await page.evaluate(() => {
+    const b = [...document.querySelectorAll("button")].find((x) =>
+      (x.getAttribute("aria-label") ?? "").startsWith("사업비 증빙 미비"),
     )
-    const m = el?.innerText.match(/(\d+)/)
-    return m ? Number(m[1]) : null
+    if (!b) return false
+    b.click()
+    return true
   })
-  확인(카드수 === 배지.length, `카드 숫자와 배지 개수가 같다 (카드 ${카드수} · 배지 ${배지.length})`)
-  확인(배지.length > 0, "증빙이 빈 과제가 실제로 잡힌다")
+  확인(눌렀나, "카드가 버튼이다")
+  await 잠깐(700)
+  text = await 본문()
 
-  // ③ 바로 가기 — 그 과제의 집행 탭
+  console.log("② 무엇이 비었는지 말하는가")
+  확인(text.includes("없는 서류:"), "빠진 서류 이름을 적는다", (text.match(/없는 서류:[^\n]*/) ?? [""])[0].slice(0, 70))
+  확인(text.includes("채우러 가기"), "그 자리로 가는 링크가 있다")
+  확인(text.includes(거래처), "내가 만든 집행 건이 목록에 있다", 거래처)
   확인(
-    // 정확한 딥링크(`?expense=<id>`)는 tests/e2e-evidence-deeplink.mjs 가 본다.
-    // 여기서는 **집행 화면으로 간다**까지만 — 두 테스트가 같은 것을 두 번 박으면 같이 썩는다.
-    배지.every((b) => /^\/projects\/\d+\/expenses(\?|$)/.test(b.href)),
-    `배지가 그 과제의 집행 화면으로 간다 (${배지[0]?.href})`,
+    text.includes("e2e 증빙구멍 테스트 과제"),
+    "어느 과제인지도 적는다",
   )
-  const 첫 = 배지[0]
-  await page.goto(`${BASE}${첫.href}`, { waitUntil: "networkidle0", timeout: 60000 })
-  await new Promise((r) => setTimeout(r, 600))
-  const 집행글 = await page.evaluate(() => document.body.innerText)
+  확인(/집행 \d+건 \/ \d+건 · 빈 칸 \d+/.test(text), "과제별로 얼마나 남았는지 센다")
+
+  // DB 와 대조한다 — 화면 숫자가 실제 구멍과 같은지.
+  const 요건 = await pgSelect("evidence_requirements", "집행단위=is.true&필수여부=is.true&select=id,비목_대분류,서류명")
+  확인(요건.length > 0, `집행단위 필수 요건 ${요건.length}종을 기준으로 센다`)
+  const 서류이름들 = [...new Set(요건.map((r) => r.서류명))]
   확인(
-    집행글.includes("집행") && !집행글.includes("아직 집행할 것이 없습니다"),
-    "눌러서 간 자리가 실제로 집행 화면이다",
+    서류이름들.some((n) => text.includes(n)),
+    "목록의 서류 이름이 요건 표에서 온 이름이다",
+    서류이름들.slice(0, 4).join(" · "),
   )
 
-  // ④ 다 찬 과제에는 안 붙는다 — 배지 없는 줄이 하나라도 있어야 「무조건 붙는 것」이 아님이 확인된다
-  await page.goto(`${BASE}/projects/all`, { waitUntil: "networkidle0", timeout: 60000 })
-  await new Promise((r) => setTimeout(r, 600))
-  const 줄수 = await page.evaluate(() => document.querySelectorAll("tbody tr").length)
-  확인(배지.length < 줄수, `배지가 모든 줄에 붙지는 않는다 (${배지.length}/${줄수}줄)`)
+  console.log("③ [채우러 가기] 가 그 집행 건을 펼친 채로 여는가")
+  // 내 집행 건 줄의 링크를 고른다 — 다른 과제 것을 눌러도 통과해 버리면 검사가 헐렁해진다.
+  const 링크 = await page.evaluate((상호) => {
+    const li = [...document.querySelectorAll("li")].find((x) => (x.innerText ?? "").includes(상호))
+    const a = [...(li?.querySelectorAll("a") ?? [])].find((x) =>
+      (x.innerText ?? "").includes("채우러 가기"),
+    )
+    return a?.getAttribute("href") ?? null
+  }, 거래처)
+  확인(!!링크 && /\/projects\/\d+\/expenses\?expense=\d+/.test(링크), "링크가 집행 건을 가리킨다", 링크 ?? "없음")
 
-  확인(errors.length === 0, `콘솔 오류 ${errors.length}건${errors.length ? `: ${errors.slice(0, 2).join(" | ")}` : ""}`)
+  await page.goto(`${BASE}${링크}`, { waitUntil: "networkidle0", timeout: 60000 })
+  await 잠깐(900)
+  text = await 본문()
+  확인(
+    await page.evaluate(() => !!document.querySelector('[role="dialog"]')),
+    "그 집행 건의 상세가 열린 채로 시작한다",
+  )
+  확인(링크.includes(`expense=${집행_id}`), "링크가 내가 만든 집행 건을 가리킨다", 링크)
+  확인(text.includes(거래처), "열린 것이 그 집행 건이다", 거래처)
+  확인(text.includes("증빙"), "증빙 칸이 그 안에 있다")
+
+  확인(errors.length === 0, "콘솔 오류 없음", errors.slice(0, 2).join(" | "))
+} catch (e) {
+  console.log(`  ✗ 예외 — ${e.message}`)
+  실패++
 } finally {
+  try {
+    if (집행_id) await 지우기("expenses", `id=eq.${집행_id}`)
+    if (과제_id) await 지우기("projects", `id=eq.${과제_id}`)
+    const 남음 =
+      (집행_id ? (await pgSelect("expenses", `id=eq.${집행_id}`)).length : 0) +
+      (과제_id ? (await pgSelect("projects", `id=eq.${과제_id}`)).length : 0)
+    console.log(`  ${남음 === 0 ? "✓" : "✗"} 정리 — 만든 과제·집행을 지웠다`)
+    if (남음 !== 0) 실패++
+  } catch (e) {
+    console.log(`  ✗ 정리 실패 — ${e.message}`)
+    실패++
+  }
   await browser.close()
 }
 
-console.log(실패 ? `\n✗ ${실패}건 실패` : "\n✓ 전 항목 통과")
-process.exit(실패 ? 1 : 0)
+console.log()
+if (실패) {
+  console.log(`✗ 실패 ${실패}건`)
+  process.exit(1)
+}
+console.log("✓ 전 항목 통과")

@@ -1,5 +1,9 @@
 import "server-only"
 import { db, safeSelect } from "@/lib/db"
+// 타입은 클라이언트 컴포넌트(목록 카드)도 읽어야 해서 따로 있다 — 이 파일은 server-only 다.
+import type { 빈건, 증빙구멍 } from "@/lib/evidence-gap-types"
+
+export type { 빈건, 증빙구멍 }
 
 /**
  * **사업비 증빙이 빈 곳**을 과제별로 센다. (2026-09-04 사용자 지시)
@@ -11,23 +15,22 @@ import { db, safeSelect } from "@/lib/db"
  * ⚠ `lib/queries.ts` 에 넣지 않는다. 네 명이 동시에 여는 파일이라 저장 충돌이 두 번 났다.
  */
 
-type 집행Raw = { id: number; 과제_id: number | null; 비목_대분류: string | null; 일자: string | null }
-type 요건Raw = { id: number; 비목_대분류: string; 집행단위: boolean; 필수여부: boolean }
-type 파일Raw = { 집행_id: number | null; 요건_id: number | null }
-
-export type 증빙구멍 = {
-  /** 증빙이 필요한 집행 건수(그 과제에서). */
-  집행건: number
-  /** 그중 필수 서류가 하나라도 빈 건수. */
-  빈집행건: number
-  /** 안 채운 필수 서류 칸 수(건 × 서류). 「얼마나 남았나」는 이 숫자가 말해 준다. */
-  빈칸: number
-  /**
-   * 서류가 빈 집행 건 id — **일자가 이른 것부터.**
-   * 「어디가 비었는지」로 바로 보내려면 과제가 아니라 **그 집행 건**을 열어야 한다(사용자 지시).
-   */
-  빈집행ids: number[]
+type 집행Raw = {
+  id: number
+  과제_id: number | null
+  비목_대분류: string | null
+  일자: string | null
+  거래처: string | null
+  합계: number | null
 }
+type 요건Raw = {
+  id: number
+  비목_대분류: string
+  집행단위: boolean
+  필수여부: boolean
+  서류명: string
+}
+type 파일Raw = { 집행_id: number | null; 요건_id: number | null }
 
 /**
  * 과제 id → 증빙 구멍. 구멍이 없는 과제는 **키 자체를 안 만든다**(화면이 `?.` 로 읽는다).
@@ -57,6 +60,8 @@ export async function getEvidenceGaps(): Promise<{
     if (!r.집행단위 || !r.필수여부) continue
     필수.set(r.비목_대분류, [...(필수.get(r.비목_대분류) ?? []), Number(r.id)])
   }
+  // 요건 id → 서류명. 「지출결의서가 없다」까지 말해야 사람이 무엇을 준비할지 안다.
+  const 서류명 = new Map(요건.rows.map((r) => [Number(r.id), String(r.서류명 ?? "이름 없는 서류")]))
 
   // 집행 건별로 붙은 요건 id.
   const 붙음 = new Map<number, Set<number>>()
@@ -76,13 +81,24 @@ export async function getEvidenceGaps(): Promise<{
     if (!칸.length) continue // 이 비목은 집행 건별 증빙을 요구하지 않는다(인건비·간접비 등)
 
     const 있는것 = 붙음.get(Number(e.id)) ?? new Set<number>()
-    const 빈 = 칸.filter((id) => !있는것.has(id)).length
+    const 빈목록 = 칸.filter((id) => !있는것.has(id))
+    const 빈 = 빈목록.length
 
-    const cur = gaps[pid] ?? { 집행건: 0, 빈집행건: 0, 빈칸: 0, 빈집행ids: [] as number[] }
+    const cur =
+      gaps[pid] ??
+      ({ 집행건: 0, 빈집행건: 0, 빈칸: 0, 빈집행ids: [], 상세: [] } as 증빙구멍)
     cur.집행건 += 1
     if (빈 > 0) {
       cur.빈집행건 += 1
       cur.빈집행ids.push(Number(e.id))
+      cur.상세.push({
+        집행_id: Number(e.id),
+        일자: e.일자 ?? null,
+        거래처: e.거래처 ?? null,
+        합계: e.합계 == null ? null : Number(e.합계),
+        비목_대분류: e.비목_대분류 ?? null,
+        빠진서류: 빈목록.map((id) => 서류명.get(id) ?? `요건 ${id}`),
+      })
     }
     cur.빈칸 += 빈
     gaps[pid] = cur
@@ -92,6 +108,7 @@ export async function getEvidenceGaps(): Promise<{
   const 일자 = new Map(집행.rows.map((e) => [Number(e.id), String(e.일자 ?? "")]))
   for (const k of Object.keys(gaps)) {
     gaps[Number(k)].빈집행ids.sort((a, b) => (일자.get(a) ?? "").localeCompare(일자.get(b) ?? ""))
+    gaps[Number(k)].상세.sort((a, b) => (a.일자 ?? "").localeCompare(b.일자 ?? ""))
   }
 
   // 다 채운 과제는 목록에서 뺀다 — 「구멍이 있는 곳」만 남겨야 화면이 조용하다.

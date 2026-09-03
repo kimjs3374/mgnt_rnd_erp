@@ -1,6 +1,7 @@
 // 개인별 인건비 — 기본 1차년도 · 연차 추가 · 엑셀 다운로드 링크
 // 쓰기는 과제 13(종료 과제)에서만 한다. 과제 2(P01)는 시연 주인공이라 건드리지 않는다.
 import puppeteer from "puppeteer-core"
+import { 로그인하고 } from "./lib/login.mjs"
 
 const BASE = "http://127.0.0.1:3610"
 const 과제 = 13
@@ -19,6 +20,10 @@ page.on("console", (m) => m.type() === "error" && errors.push(m.text()))
 
 const 버튼들 = () =>
   page.evaluate(() => [...document.querySelectorAll("button")].map((b) => b.textContent.trim()))
+
+// 로그인 게이트(2026-09-04) 뒤로 화면이 전부 들어갔다. 아이디·비밀번호는
+// **환경변수로만** 받는다 — 저장소가 공개다(tests/lib/login.mjs).
+await 로그인하고(page, BASE)
 
 try {
   await page.goto(`${BASE}/projects/${과제}/budget`, { waitUntil: "networkidle0", timeout: 60000 })

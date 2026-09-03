@@ -15,7 +15,15 @@ import puppeteer from "puppeteer-core"
 import { 로그인하고 } from "./lib/login.mjs"
 
 const BASE = "http://127.0.0.1:3610"
-const 과제 = Number(process.argv[2] ?? 12) // 출연금이 모자란 시드
+/**
+ * 볼 과제. 인자로 주면 그것만 보고, 안 주면 **손볼 것이 있는 과제를 찾아** 본다.
+ *
+ * ⚠ 예전엔 「과제 12 는 출연금이 모자란다」를 박아 뒀는데, db/111 로 출연금을 현금에 합치자
+ *   그 차이가 사라져 과제 12 가 **딱 맞는 과제**가 됐다(합쳐 보니 73,625,000 으로 정확히 일치).
+ *   시드의 특정 상태를 박아 두면 데이터가 좋아질 때 테스트가 빨개진다.
+ *   그래서 **상태를 찾아서** 보고, 아무 데도 문제가 없으면 「손볼 것 없음」 쪽을 검사한다.
+ */
+const 지정과제 = process.argv[2] ? Number(process.argv[2]) : null
 const log = (...a) => console.log("  ", ...a)
 let 실패 = 0
 const 확인 = (ok, 말) => {
@@ -39,6 +47,43 @@ page.on("console", (m) => m.type() === "error" && errors.push(m.text()))
 await 로그인하고(page, BASE)
 
 try {
+  // 손볼 것이 있는 과제를 찾는다. 지정했으면 그것만 본다.
+  let 과제 = 지정과제
+  if (과제 == null) {
+    await page.goto(`${BASE}/projects/all`, { waitUntil: "networkidle0", timeout: 60000 })
+    await new Promise((r) => setTimeout(r, 500))
+    const 후보 = await page.evaluate(() =>
+      [...document.querySelectorAll("tbody tr a")]
+        .map((a) => a.getAttribute("href") ?? "")
+        .filter((h) => /^\/projects\/\d+$/.test(h))
+        .map((h) => Number(h.split("/")[2])),
+    )
+    for (const id of 후보) {
+      await page.goto(`${BASE}/projects/${id}/budget`, { waitUntil: "networkidle0", timeout: 60000 })
+      await new Promise((r) => setTimeout(r, 400))
+      const 있나 = await page.evaluate(() => /손볼 것 \d+/.test(document.body.innerText))
+      if (있나) {
+        과제 = id
+        break
+      }
+    }
+    if (과제 == null) {
+      // 다 맞는 상태도 **검사할 값어치가 있다** — 「손볼 것이 없습니다」를 제대로 말하는가.
+      과제 = 후보[0]
+      await page.goto(`${BASE}/projects/${과제}/budget`, { waitUntil: "networkidle0", timeout: 60000 })
+      await new Promise((r) => setTimeout(r, 600))
+      const 글 = await page.evaluate(() => document.body.innerText)
+      확인(글.includes("모두 맞음"), "손볼 것이 없으면 머리에 「모두 맞음」이라 적는다")
+      확인(글.includes("손볼 것이 없습니다"), "무엇도 안 해도 된다고 분명히 말해 준다")
+      확인(!/손볼 것 \d+/.test(글), "「손볼 것 N」 배지는 안 뜬다")
+      log(`· 지금 손볼 것이 있는 과제가 없어 「다 맞음」 쪽만 검사했다 (과제 ${과제})`)
+      확인(errors.length === 0, `콘솔 오류 ${errors.length}건`)
+      await browser.close()
+      console.log(실패 ? `\n✗ ${실패}건 실패` : "\n✓ 전 항목 통과")
+      process.exit(실패 ? 1 : 0)
+    }
+  }
+  log(`검사할 과제: ${과제}`)
   await page.goto(`${BASE}/projects/${과제}/budget`, { waitUntil: "networkidle0", timeout: 60000 })
   await new Promise((r) => setTimeout(r, 600))
 
@@ -82,8 +127,20 @@ try {
   // ②③ 배지 종류
   const 배지들 = 패널.검사.map((r) => r.배지)
   log(`배지: ${배지들.join(" · ")}`)
-  확인(배지들.includes("부족"), "일치 검사에서 모자란 줄은 「부족」")
-  확인(배지들.includes("여유"), "상한 검사에서 모자란 줄은 「여유」(문제가 아니다)")
+  // ⚠ **어떤 배지가 있는지**를 박지 않는다. 과제마다 상태가 다르고 데이터가 좋아지면 바뀐다
+  //   (과제 12 는 「부족」이었다가 db/111 뒤로 다 맞음이 됐고, 지금 찾은 건 「초과」다).
+  //   봐야 하는 것은 **배지가 다섯 어휘 안에 있고, 문제만 할 일에 올라오는가**다.
+  const 허용 = ["부족", "초과", "확인필요", "여유", "맞음"]
+  확인(
+    배지들.length > 0 && 배지들.every((b) => 허용.includes(b)),
+    `배지가 정해진 다섯 어휘 안에 있다 (${[...new Set(배지들)].join(" · ")})`,
+  )
+  const 문제배지 = 배지들.filter((b) => b === "부족" || b === "초과" || b === "확인필요")
+  확인(문제배지.length > 0, `문제인 줄이 있다 (${문제배지.join(" · ")})`)
+  확인(
+    문제배지.length >= 패널.할일.length,
+    `할 일 줄이 문제 줄보다 많지 않다 (문제 ${문제배지.length} · 할 일 ${패널.할일.length})`,
+  )
   const 여유줄 = 패널.검사.filter((r) => r.배지 === "여유")
   확인(
     여유줄.every((r) => !r.글.includes("미달")),

@@ -4,6 +4,7 @@
  *   node tests/e2e-dashboard.mjs
  */
 import puppeteer from "puppeteer-core"
+import { 로그인하고 } from "./lib/login.mjs"
 
 const b = await puppeteer.launch({
   executablePath: "/usr/bin/google-chrome",
@@ -31,6 +32,10 @@ const 확인 = (이름, 참, 값 = "") => {
   console.log(`${참 ? "  ok " : "  X  "} ${이름}${값 ? " : " + 값 : ""}`)
   if (!참) 실패++
 }
+
+// 로그인 게이트(2026-09-04) 뒤로 화면이 전부 들어갔다. 아이디·비밀번호는
+// **환경변수로만** 받는다 — 저장소가 공개다(tests/lib/login.mjs).
+await 로그인하고(page, BASE)
 
 try {
   await p.goto("http://127.0.0.1:3610/dashboard", { waitUntil: "networkidle0", timeout: 60000 })
@@ -80,51 +85,41 @@ try {
     확인("제출 전 점검 - 「미해결 N건」(행동 문구)이 뜸", /미해결\s*\d+건/.test(오늘카드))
   }
 
-  // ⚠ "다음 페이지" 버튼은 페이지네이션이 필요한 그 갈래(예: 서류)에만 뜬다.
-  //   카드 전체의 첫 링크를 비교하면 페이지네이션이 없는 다른 갈래(예: 대기)의
-  //   첫 항목을 보게 될 수 있다 — 버튼을 담은 "그 그룹" 안에서 비교해야 한다.
-  const 다음버튼있는그룹 = await p.evaluate(() => {
-    const h2 = [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === "오늘 처리할 것")
-    const card = h2?.closest("div.rounded-lg")
-    const btn = card?.querySelector('button[aria-label$="다음 페이지"]')
-    return !!btn?.closest("[data-group]")
-  })
-  if (다음버튼있는그룹) {
-    const 그룹첫줄 = () =>
-      p.evaluate(() => {
-        const h2 = [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === "오늘 처리할 것")
-        const card = h2?.closest("div.rounded-lg")
-        const btn = card?.querySelector('button[aria-label$="다음 페이지"]')
-        const group = btn?.closest("[data-group]")
-        return group?.querySelector("a")?.textContent.replace(/\s+/g, " ").trim() ?? null
-      })
-    const 카드높이 = () =>
-      p.evaluate(() => {
-        const h2 = [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === "오늘 처리할 것")
-        return h2?.closest("div.rounded-lg")?.getBoundingClientRect().height ?? null
-      })
-    const 전 = await 그룹첫줄()
-    const 높이전 = await 카드높이()
+  // 10차 개편: 갈래별 페이지 넘김을 버리고 카드 전체 통합 페이지 하나로 바꿨다.
+  // ⚠ 버튼은 카드에 딱 하나만 있어야 한다(갈래마다 있던 것 없어짐).
+  const 오늘카드정보 = () =>
+    p.evaluate(() => {
+      const h2 = [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === "오늘 처리할 것")
+      const card = h2?.closest("div.rounded-lg")
+      return {
+        버튼수: card?.querySelectorAll('button[aria-label$="다음 페이지"]').length ?? 0,
+        첫줄: card?.querySelector("a")?.textContent.replace(/\s+/g, " ").trim() ?? null,
+        높이: card?.getBoundingClientRect().height ?? null,
+      }
+    })
+  const 정보전 = await 오늘카드정보()
+  확인("오늘 처리할 것에 페이지 넘김 버튼이 있어도 하나뿐", 정보전.버튼수 <= 1, `버튼 ${정보전.버튼수}개`)
+
+  if (정보전.버튼수 === 1) {
     await p.evaluate(() => {
       const h2 = [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === "오늘 처리할 것")
       h2?.closest("div.rounded-lg")?.querySelector('button[aria-label$="다음 페이지"]')?.click()
     })
     await 잠깐(200)
-    const 후 = await 그룹첫줄()
-    const 높이후 = await 카드높이()
+    const 정보후 = await 오늘카드정보()
     확인(
-      "오늘 처리할 것의 페이지 넘김 버튼이 실제로 그 갈래 목록을 바꿈(예전엔 <p>라 안 눌렸다)",
-      전 !== null && 후 !== null && 전 !== 후,
-      `${전} → ${후}`,
+      "오늘 처리할 것의 페이지 넘김 버튼이 실제로 목록을 바꿈(예전엔 <p>라 안 눌렸다)",
+      정보전.첫줄 !== null && 정보후.첫줄 !== null && 정보전.첫줄 !== 정보후.첫줄,
+      `${정보전.첫줄} → ${정보후.첫줄}`,
     )
-    // 8차 개편: 마지막 페이지가 항목 수보다 적어도 빈 줄로 채워 카드 테두리가 안 움직여야 한다(실측 228.5→170.5 였던 것).
+    // 8차 개편: 마지막 페이지가 항목 수보다 적어도 빈 줄로 채워 카드 테두리가 안 움직여야 한다.
     확인(
       "페이지를 넘겨도 오늘 처리할 것 카드 테두리가 안 움직임(빈 줄로 채움)",
-      높이전 != null && 높이후 != null && Math.abs(높이전 - 높이후) < 1,
-      `${높이전}px → ${높이후}px`,
+      정보전.높이 != null && 정보후.높이 != null && Math.abs(정보전.높이 - 정보후.높이) < 1,
+      `${정보전.높이}px → ${정보후.높이}px`,
     )
   } else {
-    console.log("  (오늘 처리할 것에 4건 넘는 갈래가 없어 페이지 넘김 버튼이 안 뜸 - 정상)")
+    console.log("  (오늘 처리할 것 항목이 5건 이하라 페이지 넘김 버튼이 안 뜸 - 정상)")
   }
 
   확인("부제 삭제됨", !본문.includes("오늘 손대야 할 것만 모았다"))

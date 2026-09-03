@@ -13,6 +13,7 @@
 // ⚠ 진짜 마우스 드래그는 OS 이벤트라 puppeteer 로 못 낸다. 페이지 안에서 `DataTransfer` 에
 //   File 을 담아 `bubbles: true` 로 DragEvent 를 dispatch 한다(React 는 루트에서 듣는다).
 import puppeteer from "puppeteer-core"
+import { 로그인하고 } from "./lib/login.mjs"
 
 const BASE = "http://127.0.0.1:3610"
 const 과제 = 2 // P01. 첫 행이 FACILITY 라 집행단위 요건 5종이 붙는다
@@ -73,6 +74,10 @@ const 확보읽기 = (t) => {
   const m = /(\d+)\/(\d+) 확보/.exec(t)
   return m ? { 확보: Number(m[1]), 전체: Number(m[2]) } : null
 }
+
+// 로그인 게이트(2026-09-04) 뒤로 화면이 전부 들어갔다. 아이디·비밀번호는
+// **환경변수로만** 받는다 — 저장소가 공개다(tests/lib/login.mjs).
+await 로그인하고(page, BASE)
 
 try {
   await page.goto(`${BASE}/projects/${과제}/expenses`, { waitUntil: "networkidle0", timeout: 60000 })

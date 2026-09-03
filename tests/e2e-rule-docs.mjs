@@ -6,6 +6,7 @@
 //
 // ⚠ 시드 4건(실제 공고·규정 원문)은 **건드리지 않는다.** 테스트가 만든 것만 지운다.
 import puppeteer from "puppeteer-core"
+import { 로그인하고 } from "./lib/login.mjs"
 
 const BASE = "http://127.0.0.1:3610"
 const log = (...a) => console.log("  ", ...a)
@@ -71,6 +72,10 @@ const 심을것 = `
 
 const 폼파일 = ["e2e-rule-form-1.pdf", "e2e-rule-form-2.pdf"]
 const 카드파일 = ["e2e-rule-common.pdf"]
+
+// 로그인 게이트(2026-09-04) 뒤로 화면이 전부 들어갔다. 아이디·비밀번호는
+// **환경변수로만** 받는다 — 저장소가 공개다(tests/lib/login.mjs).
+await 로그인하고(page, BASE)
 
 try {
   await page.goto(`${BASE}/rules`, { waitUntil: "networkidle0", timeout: 60000 })

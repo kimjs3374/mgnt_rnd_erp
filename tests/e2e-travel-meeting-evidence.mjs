@@ -8,6 +8,7 @@
 // ⚠ P01(id=2)은 시연 과제고, 지금 DB 전체에 TRAVEL·MEETING 집행 건이 하나도 없다 —
 //   그래서 테스트 과제 하나에 출장 건 하나, 회의 건 하나를 만들어서 확인하고 지운다.
 import puppeteer from "puppeteer-core"
+import { 로그인하고 } from "./lib/login.mjs"
 import { env, pgSelect } from "../scripts/lib/pgrest.mjs"
 
 const BASE = "http://127.0.0.1:3610"
@@ -61,6 +62,10 @@ let 과제id = null
 let 출장집행id = null
 let 회의집행id = null
 let 양식id = null
+
+// 로그인 게이트(2026-09-04) 뒤로 화면이 전부 들어갔다. 아이디·비밀번호는
+// **환경변수로만** 받는다 — 저장소가 공개다(tests/lib/login.mjs).
+await 로그인하고(page, BASE)
 
 try {
   과제id = (

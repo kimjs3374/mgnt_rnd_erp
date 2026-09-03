@@ -3,6 +3,7 @@
 // 「신청중이랑 수행중만」처럼 셋 중 둘을 동시에 보는 것이 이번 요청의 핵심이다.
 // 드롭다운(하나만 고름)에서 토글 칩(여러 개 동시에 켬)으로 바뀐 것을 실제 클릭으로 확인한다.
 import puppeteer from "puppeteer-core"
+import { 로그인하고 } from "./lib/login.mjs"
 
 const BASE = "http://127.0.0.1:3610"
 const log = (...a) => console.log("  ", ...a)
@@ -37,6 +38,10 @@ const 칩누르기 = (이름) =>
     b.click()
     return true
   }, 이름)
+
+// 로그인 게이트(2026-09-04) 뒤로 화면이 전부 들어갔다. 아이디·비밀번호는
+// **환경변수로만** 받는다 — 저장소가 공개다(tests/lib/login.mjs).
+await 로그인하고(page, BASE)
 
 try {
   await page.goto(`${BASE}/projects/all`, { waitUntil: "networkidle0", timeout: 60000 })

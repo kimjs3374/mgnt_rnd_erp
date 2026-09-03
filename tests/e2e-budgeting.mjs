@@ -10,6 +10,7 @@
 // 이건 `[지원 등록]` → `[선정]` 이 만드는 것과 같은 모양이다(`app/actions/apply.ts`).
 // ⚠ 시드 12건은 건드리지 않는다. 만든 것은 반드시 지운다.
 import puppeteer from "puppeteer-core"
+import { 로그인하고 } from "./lib/login.mjs"
 import { env, pgSelect } from "../scripts/lib/pgrest.mjs"
 
 const BASE = "http://127.0.0.1:3610"
@@ -142,6 +143,10 @@ const 심을것 = `
 let 과제id = null
 let 관심ids = []
 let 미지원 = null
+
+// 로그인 게이트(2026-09-04) 뒤로 화면이 전부 들어갔다. 아이디·비밀번호는
+// **환경변수로만** 받는다 — 저장소가 공개다(tests/lib/login.mjs).
+await 로그인하고(page, BASE)
 
 try {
   과제id = await 과제만들기()

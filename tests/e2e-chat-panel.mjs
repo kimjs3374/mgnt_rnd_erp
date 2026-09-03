@@ -1,4 +1,5 @@
 import puppeteer from "puppeteer-core"
+import { 로그인하고 } from "./lib/login.mjs"
 const b = await puppeteer.launch({
   executablePath: "/usr/bin/google-chrome", headless: "new",
   args: ["--no-sandbox","--disable-gpu"], defaultViewport:{width:1440,height:900},
@@ -6,6 +7,10 @@ const b = await puppeteer.launch({
 const p = await b.newPage()
 const errs = []
 p.on("pageerror", e => errs.push(String(e)))
+// 로그인 게이트(2026-09-04) 뒤로 화면이 전부 들어갔다. 아이디·비밀번호는
+// **환경변수로만** 받는다 — 저장소가 공개다(tests/lib/login.mjs).
+await 로그인하고(page, BASE)
+
 try {
   await p.goto("http://127.0.0.1:3610/dashboard", {waitUntil:"networkidle0", timeout:30000})
   await p.evaluate(() => [...document.querySelectorAll("button")].find(x=>x.textContent.includes("물어보기"))?.click())

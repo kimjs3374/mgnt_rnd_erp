@@ -7,6 +7,7 @@
 //
 // ⚠ 시드 12건을 건드리지 않는다. 대장 숫자가 바뀌면 대시보드와 발표 대본이 어긋난다.
 import puppeteer from "puppeteer-core"
+import { 로그인하고 } from "./lib/login.mjs"
 import { env, pgSelect } from "../scripts/lib/pgrest.mjs"
 
 /** 만든 과제 한 건을 지운다. `project_entry_log`·`budgets` 는 ON DELETE CASCADE 로 같이 사라진다. */
@@ -81,6 +82,10 @@ const 심을것 = `
 `
 
 let 만든id = null
+
+// 로그인 게이트(2026-09-04) 뒤로 화면이 전부 들어갔다. 아이디·비밀번호는
+// **환경변수로만** 받는다 — 저장소가 공개다(tests/lib/login.mjs).
+await 로그인하고(page, BASE)
 
 try {
   await page.goto(`${BASE}/projects`, { waitUntil: "networkidle0", timeout: 60000 })

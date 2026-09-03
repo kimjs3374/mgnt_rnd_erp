@@ -1,6 +1,7 @@
 // 집행 상세 모달 + 정정 사유 입력 — 실제 클릭 검증
 // 화면이 렌더된다고 동작하는 게 아니다. 눌러봐야 안다.
 import puppeteer from "puppeteer-core"
+import { 로그인하고 } from "./lib/login.mjs"
 
 const BASE = "http://127.0.0.1:3610"
 const shot = (p, n) => p.screenshot({ path: `/tmp/shots/e2e-${n}.png` })
@@ -16,6 +17,10 @@ const page = await browser.newPage()
 const errors = []
 page.on("pageerror", (e) => errors.push(String(e)))
 page.on("console", (m) => m.type() === "error" && errors.push(m.text()))
+
+// 로그인 게이트(2026-09-04) 뒤로 화면이 전부 들어갔다. 아이디·비밀번호는
+// **환경변수로만** 받는다 — 저장소가 공개다(tests/lib/login.mjs).
+await 로그인하고(page, BASE)
 
 try {
   // ── 1. 목록 ────────────────────────────────────────────────

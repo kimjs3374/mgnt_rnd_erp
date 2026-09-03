@@ -3,6 +3,7 @@
 // ⚠ 쓰기 검증은 **과제 13(종료 과제)** 에서만 한다. 과제 2(P01)는 시연 주인공이라
 //   숫자가 바뀌면 데모 대본이 깨진다. 앞서 실제로 P01 예산 한 줄을 지운 사고가 있었다.
 import puppeteer from "puppeteer-core"
+import { 로그인하고 } from "./lib/login.mjs"
 
 const BASE = "http://127.0.0.1:3610"
 const log = (...a) => console.log("  ", ...a)
@@ -19,6 +20,10 @@ const errors = []
 page.on("pageerror", (e) => errors.push(String(e)))
 page.on("console", (m) => m.type() === "error" && errors.push(m.text()))
 const go = (u) => page.goto(`${BASE}${u}`, { waitUntil: "networkidle0", timeout: 60000 })
+
+// 로그인 게이트(2026-09-04) 뒤로 화면이 전부 들어갔다. 아이디·비밀번호는
+// **환경변수로만** 받는다 — 저장소가 공개다(tests/lib/login.mjs).
+await 로그인하고(page, BASE)
 
 try {
   // ── ① 금액 입력칸에 콤마가 붙는가 ────────────────────────────────────────
@@ -189,7 +194,7 @@ try {
   console.log(
     `\n  ⚠ 과제 ${안전과제} 의 인건비 배정액이 바뀌었다(저장이 곧 반영이라 기본 실행에서도 바뀐다).\n` +
       `  ./db/psql.sh -c "update app.budgets set 배정액=13500000 where 과제_id=13 and 비목_대분류='PERSONNEL' and 재원구분='현물'"\n` +
-      `  ./db/psql.sh -c "update app.budgets set 배정액=18015000 where 과제_id=13 and 비목_대분류='PERSONNEL' and 재원구분='출연금'"\n`,
+      `  ./db/psql.sh -c "update app.budgets set 배정액=18015000 where 과제_id=13 and 비목_대분류='PERSONNEL' and 재원구분='현금'"\n`,
   )
 
   // 테스트가 만든 인원 줄은 지운다.

@@ -172,13 +172,20 @@ export default async function ProjectsPage() {
                     <StatusBadge value={r.상태} />
                   </TableCell>
                   <TableCell className="text-right">
-                    <Link
-                      href={`/projects/${r.id}/budget`}
-                      className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                    >
-                      계상
-                    </Link>
-                    <span className="px-1.5 text-xs text-muted-foreground">·</span>
+                    {/* 종료된 과제에는 「계상」을 걸지 않는다 — 계상은 협약·수행 중에 하는 일이다.
+                        과제 안의 탭·개요 링크에서도 같이 뺐다(components/project-tabs.tsx).
+                        지난 계상은 정산 탭의 과제비 원장에서 그대로 본다. */}
+                    {r.상태 !== "종료" && (
+                      <>
+                        <Link
+                          href={`/projects/${r.id}/budget`}
+                          className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                        >
+                          계상
+                        </Link>
+                        <span className="px-1.5 text-xs text-muted-foreground">·</span>
+                      </>
+                    )}
                     <Link
                       href={`/projects/${r.id}/settlement`}
                       className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"

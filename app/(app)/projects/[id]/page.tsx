@@ -83,12 +83,16 @@ export default async function ProjectOverviewPage({
       <Card className="p-4">
         <div className="mb-2 flex items-baseline gap-2">
           <span className="text-[13px] font-medium">한도 검증</span>
-          <Link
-            href={`/projects/${id}/budget`}
-            className="text-xs text-muted-foreground hover:text-foreground"
-          >
-            연구비 계상에서 고치기 →
-          </Link>
+          {/* 종료된 과제에는 계상으로 가는 길을 두지 않는다 — 탭·대장 링크와 같은 규칙이다.
+              지난 계상은 이 화면의 「한도 검증」과 정산 탭 원장에서 그대로 본다. */}
+          {p?.상태 !== "종료" && (
+            <Link
+              href={`/projects/${id}/budget`}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              연구비 계상에서 고치기 →
+            </Link>
+          )}
         </div>
         {checks.length === 0 ? (
           <EmptyState

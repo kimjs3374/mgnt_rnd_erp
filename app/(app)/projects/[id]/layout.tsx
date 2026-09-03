@@ -66,7 +66,9 @@ export default async function ProjectLayout({
         </p>
       </div>
 
-      <ProjectTabs id={id} />
+      {/* 상태를 넘기는 이유는 하나다 — **종료된 과제에는 「연구비 계상」 탭을 안 띄운다.**
+          어느 탭을 띄울지 정하는 건 데이터라서 서버에서 읽어 넘긴다. */}
+      <ProjectTabs id={id} 상태={p.상태} />
 
       {children}
     </div>

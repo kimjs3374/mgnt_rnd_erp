@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { DbError } from "@/components/db-error"
 import { BudgetEditor, type Line } from "@/components/budget-editor"
 import { FundingShareCard } from "@/components/funding-share-card"
@@ -110,6 +111,29 @@ export default async function ProjectBudgetPage({
       {proj.error && <DbError what="과제" error={proj.error} />}
       {budget.error && <DbError what="예산" error={budget.error} />}
       {cats.error && <DbError what="비목" error={cats.error} />}
+
+      {/* 종료된 과제는 탭·대장·개요에서 계상으로 가는 길을 뺐으니, 여기까지 오는 길은
+          주소·북마크뿐이다. 화면을 없애지 않고 왜 빠졌는지를 말한다 —
+          계상 내역이 지워진 것이 아니라는 점이 중요하다. */}
+      {p?.상태 === "종료" && (
+        <div className="rounded-lg border bg-muted/40 p-4">
+          <p className="text-sm font-medium">
+            종료된 과제입니다 — 연구비 계상은 탭에서 뺐습니다
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            계상은 협약·수행 중에 하는 일이라 끝난 과제에는 들어오는 길(과제 탭 · 대장의
+            「계상」 · 개요의 「고치기」)을 두지 않습니다. 지난 계상이 지워진 것은 아닙니다 —{" "}
+            <Link
+              href={`/projects/${id}/settlement`}
+              className="underline underline-offset-2"
+            >
+              정산 탭
+            </Link>
+            의 과제비 원장이 아래 배정액을 기준으로 집행과 대조합니다. 주소로 직접 들어왔기에
+            아래를 그대로 열어 두지만, <b>여기서 배정액을 고치면 정산 대조 기준이 바뀝니다.</b>
+          </p>
+        </div>
+      )}
 
       <FundingShareCard
         과제_id={id}

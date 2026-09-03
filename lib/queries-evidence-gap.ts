@@ -31,6 +31,15 @@ type 요건Raw = {
   서류명: string
 }
 type 파일Raw = { 집행_id: number | null; 요건_id: number | null }
+/** 지금 면제 상태인 칸(db/114 의 `v_evidence_waiver_now`). 최신 행이 「면제」인 것만 온다. */
+type 면제Raw = {
+  집행_id: number
+  요건_id: number
+  사유: string
+  사유유형: string | null
+  행위자: string
+  일시: string
+}
 
 /**
  * 과제 id → 증빙 구멍. 구멍이 없는 과제는 **키 자체를 안 만든다**(화면이 `?.` 로 읽는다).
@@ -42,7 +51,7 @@ export async function getEvidenceGaps(): Promise<{
   gaps: Record<number, 증빙구멍>
   error: string | null
 }> {
-  const [집행, 요건, 파일] = await Promise.all([
+  const [집행, 요건, 파일, 면제] = await Promise.all([
     safeSelect<집행Raw>("expenses", () => db.from("expenses").select("*")),
     safeSelect<요건Raw>("evidence_requirements", () =>
       db.from("evidence_requirements").select("*"),
@@ -50,8 +59,12 @@ export async function getEvidenceGaps(): Promise<{
     safeSelect<파일Raw>("project_evidence_files", () =>
       db.from("project_evidence_files").select("*"),
     ),
+    // 사람이 「이 서류는 없어도 된다」고 사유를 적어 면제한 칸. 미비에서 빼되 목록에는 남긴다.
+    safeSelect<면제Raw>("v_evidence_waiver_now", () =>
+      db.from("v_evidence_waiver_now").select("*"),
+    ),
   ])
-  const error = 집행.error ?? 요건.error ?? 파일.error ?? null
+  const error = 집행.error ?? 요건.error ?? 파일.error ?? 면제.error ?? null
   if (error) return { gaps: {}, error }
 
   // 비목별 **집행단위 필수** 요건 id 들. 이게 한 집행 건이 채워야 할 칸이다.
@@ -62,6 +75,10 @@ export async function getEvidenceGaps(): Promise<{
   }
   // 요건 id → 서류명. 「지출결의서가 없다」까지 말해야 사람이 무엇을 준비할지 안다.
   const 서류명 = new Map(요건.rows.map((r) => [Number(r.id), String(r.서류명 ?? "이름 없는 서류")]))
+
+  // (집행, 요건) → 면제. 「채워졌다」가 아니라 **「사유를 달고 비워 뒀다」**로 따로 센다.
+  const 면제맵 = new Map<string, 면제Raw>()
+  for (const w of 면제.rows) 면제맵.set(`${Number(w.집행_id)}:${Number(w.요건_id)}`, w)
 
   // 집행 건별로 붙은 요건 id.
   const 붙음 = new Map<number, Set<number>>()
@@ -81,13 +98,17 @@ export async function getEvidenceGaps(): Promise<{
     if (!칸.length) continue // 이 비목은 집행 건별 증빙을 요구하지 않는다(인건비·간접비 등)
 
     const 있는것 = 붙음.get(Number(e.id)) ?? new Set<number>()
-    const 빈목록 = 칸.filter((id) => !있는것.has(id))
+    const 안채운것 = 칸.filter((id) => !있는것.has(id))
+    // 면제된 칸은 **미비가 아니다**(사용자 지시). 대신 몇 칸을 왜 면제했는지 같이 들고 간다.
+    const 면제된것 = 안채운것.filter((id) => 면제맵.has(`${Number(e.id)}:${id}`))
+    const 빈목록 = 안채운것.filter((id) => !면제맵.has(`${Number(e.id)}:${id}`))
     const 빈 = 빈목록.length
 
     const cur =
       gaps[pid] ??
-      ({ 집행건: 0, 빈집행건: 0, 빈칸: 0, 빈집행ids: [], 상세: [] } as 증빙구멍)
+      ({ 집행건: 0, 빈집행건: 0, 빈칸: 0, 면제칸: 0, 빈집행ids: [], 상세: [] } as 증빙구멍)
     cur.집행건 += 1
+    cur.면제칸 += 면제된것.length
     if (빈 > 0) {
       cur.빈집행건 += 1
       cur.빈집행ids.push(Number(e.id))
@@ -98,6 +119,39 @@ export async function getEvidenceGaps(): Promise<{
         합계: e.합계 == null ? null : Number(e.합계),
         비목_대분류: e.비목_대분류 ?? null,
         빠진서류: 빈목록.map((id) => 서류명.get(id) ?? `요건 ${id}`),
+        // 면제 버튼이 이 id 를 서버에 보낸다 — 이름만 있으면 어느 칸인지 서버가 모른다.
+        빠진요건ids: 빈목록,
+        면제: 면제된것.map((id) => {
+          const w = 면제맵.get(`${Number(e.id)}:${id}`)!
+          return {
+            요건_id: id,
+            서류명: 서류명.get(id) ?? `요건 ${id}`,
+            사유: w.사유,
+            행위자: w.행위자,
+            일시: w.일시,
+          }
+        }),
+      })
+    } else if (면제된것.length > 0) {
+      // 다 채웠거나 면제로 정리된 건도 **면제 내역은 보여준다** — 「왜 정상인가」가 거기 있다.
+      cur.상세.push({
+        집행_id: Number(e.id),
+        일자: e.일자 ?? null,
+        거래처: e.거래처 ?? null,
+        합계: e.합계 == null ? null : Number(e.합계),
+        비목_대분류: e.비목_대분류 ?? null,
+        빠진서류: [],
+        빠진요건ids: [],
+        면제: 면제된것.map((id) => {
+          const w = 면제맵.get(`${Number(e.id)}:${id}`)!
+          return {
+            요건_id: id,
+            서류명: 서류명.get(id) ?? `요건 ${id}`,
+            사유: w.사유,
+            행위자: w.행위자,
+            일시: w.일시,
+          }
+        }),
       })
     }
     cur.빈칸 += 빈
@@ -112,6 +166,8 @@ export async function getEvidenceGaps(): Promise<{
   }
 
   // 다 채운 과제는 목록에서 뺀다 — 「구멍이 있는 곳」만 남겨야 화면이 조용하다.
+  // 미비가 0 이면 카드에서 뺀다 — **면제만 남은 과제는 「정상」이다**(사용자 지시).
+  // 면제 내역은 그 과제 집행 탭에서 계속 보인다(여기서 세지 않는 것과 기록을 지우는 것은 다르다).
   for (const k of Object.keys(gaps)) {
     if (gaps[Number(k)].빈칸 === 0) delete gaps[Number(k)]
   }

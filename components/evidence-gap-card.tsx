@@ -11,6 +11,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Stat } from "@/components/page-shell"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import { 증빙면제, 증빙면제해제 } from "@/app/actions/evidence-waiver"
 import type { 증빙구멍 } from "@/lib/evidence-gap-types"
 
 /**
@@ -57,6 +60,43 @@ export function EvidenceGapCard({
   비목이름?: Record<string, string>
 }) {
   const [열림, set열림] = React.useState(false)
+  // 지금 사유를 적는 칸 하나. 「어느 집행의 어느 서류를, 면제인지 해제인지」.
+  const [면제중, set면제중] = React.useState<{
+    집행_id: number
+    요건_id: number
+    서류명: string
+    동작: "면제" | "해제"
+  } | null>(null)
+  const [사유, set사유] = React.useState("")
+  const [msg, setMsg] = React.useState<{ ok: boolean; text: string } | null>(null)
+  const [pending, start] = React.useTransition()
+
+  function 보내기() {
+    if (!면제중) return
+    if (!사유.trim()) {
+      setMsg({ ok: false, text: "사유를 적어야 저장됩니다 — 정산에서 그대로 근거가 됩니다." })
+      return
+    }
+    const 대상 = 면제중
+    start(async () => {
+      const r =
+        대상.동작 === "면제"
+          ? await 증빙면제({ 집행_id: 대상.집행_id, 요건_id: 대상.요건_id, 사유 })
+          : await 증빙면제해제({ 집행_id: 대상.집행_id, 요건_id: 대상.요건_id, 사유 })
+      setMsg(
+        r.ok
+          ? {
+              ok: true,
+              text: `${대상.서류명}을(를) ${대상.동작 === "면제" ? "정상 처리했습니다" : "다시 미비로 돌렸습니다"} — 사유와 처리자가 기록에 남았습니다.`,
+            }
+          : { ok: false, text: r.error ?? "처리하지 못했습니다." },
+      )
+      if (r.ok) {
+        set면제중(null)
+        set사유("")
+      }
+    })
+  }
   const 빈집행건 = 과제들.reduce((s, p) => s + p.구멍.빈집행건, 0)
   const 빈칸 = 과제들.reduce((s, p) => s + p.구멍.빈칸, 0)
   const 있다 = 과제들.length > 0
@@ -101,6 +141,12 @@ export function EvidenceGapCard({
             </DialogDescription>
           </DialogHeader>
 
+          {msg && (
+            <p className={`text-[12.5px] ${msg.ok ? "text-muted-foreground" : "text-destructive"}`}>
+              {msg.text}
+            </p>
+          )}
+
           <div className="space-y-4">
             {과제들.map((p, i) => (
               <div
@@ -120,6 +166,7 @@ export function EvidenceGapCard({
                   </Link>
                   <span className="text-xs text-muted-foreground tabular-nums">
                     집행 {p.구멍.빈집행건}건 / {p.구멍.집행건}건 · 빈 칸 {p.구멍.빈칸}
+                    {p.구멍.면제칸 > 0 ? ` · 면제 ${p.구멍.면제칸}칸` : ""}
                   </span>
                 </div>
                 <ul className="divide-y">
@@ -137,10 +184,113 @@ export function EvidenceGapCard({
                           {비목이름[e.비목_대분류] ?? e.비목_대분류}
                         </span>
                       )}
-                      {/* 무슨 서류가 없는지까지 적는다 — 「증빙 부족」만으로는 무엇을 준비할지 모른다. */}
-                      <span className="w-full text-[12.5px] text-[var(--warning-fg)]">
-                        없는 서류: {e.빠진서류.join(" · ")}
-                      </span>
+                      {/* 무슨 서류가 없는지까지 적는다 — 「증빙 부족」만으로는 무엇을 준비할지 모른다.
+                          서류마다 [면제]가 붙는다 — 거래 성격상 그 서류가 없는 건을 영원히
+                          빨간 숫자로 두면 그 카드를 아무도 안 본다(사용자 지시). 사유는 필수다. */}
+                      {e.빠진서류.length > 0 && (
+                        <span className="flex w-full flex-wrap items-center gap-1.5 text-[12.5px] text-[var(--warning-fg)]">
+                          없는 서류:
+                          {e.빠진서류.map((이름, k) => (
+                            <span
+                              key={`${e.집행_id}-${이름}`}
+                              className="inline-flex items-center gap-1 rounded border border-[var(--warning-fg)]/30 bg-[var(--warning)] px-1.5 py-0.5"
+                            >
+                              {이름}
+                              <button
+                                type="button"
+                                className="text-[11px] underline underline-offset-2 hover:no-underline"
+                                title="이 서류 없이도 정상으로 본다 — 사유를 적어야 저장된다"
+                                onClick={() => {
+                                  setMsg(null)
+                                  set사유("")
+                                  set면제중({
+                                    집행_id: e.집행_id,
+                                    요건_id: e.빠진요건ids[k],
+                                    서류명: 이름,
+                                    동작: "면제",
+                                  })
+                                }}
+                              >
+                                면제
+                              </button>
+                            </span>
+                          ))}
+                        </span>
+                      )}
+
+                      {/* 면제한 칸 — 지우지 않고 남긴다. 커서를 올리면 사유·처리자·일시가 보인다. */}
+                      {e.면제.length > 0 && (
+                        <span className="flex w-full flex-wrap items-center gap-1.5 text-[12px] text-muted-foreground">
+                          면제:
+                          {e.면제.map((w) => (
+                            <span
+                              key={`${e.집행_id}-w-${w.요건_id}`}
+                              className="inline-flex items-center gap-1 rounded border bg-secondary/60 px-1.5 py-0.5"
+                              title={`${w.사유} — ${w.행위자} · ${w.일시.slice(0, 16).replace("T", " ")}`}
+                            >
+                              {w.서류명}
+                              <button
+                                type="button"
+                                className="text-[11px] underline underline-offset-2 hover:no-underline"
+                                title="면제를 되돌린다 — 이유를 적어야 저장된다"
+                                onClick={() => {
+                                  setMsg(null)
+                                  set사유("")
+                                  set면제중({
+                                    집행_id: e.집행_id,
+                                    요건_id: w.요건_id,
+                                    서류명: w.서류명,
+                                    동작: "해제",
+                                  })
+                                }}
+                              >
+                                해제
+                              </button>
+                            </span>
+                          ))}
+                        </span>
+                      )}
+
+                      {/* 사유 칸 — 그 줄 바로 아래에서 적는다. 다른 화면으로 보내지 않는다. */}
+                      {면제중?.집행_id === e.집행_id && (
+                        <span className="mt-1 flex w-full flex-wrap items-center gap-1.5">
+                          <span className="text-[12px] font-medium">
+                            {면제중.서류명} {면제중.동작 === "면제" ? "면제" : "해제"} 사유
+                          </span>
+                          <Input
+                            autoFocus
+                            value={사유}
+                            onChange={(ev) => set사유(ev.target.value)}
+                            onKeyDown={(ev) => {
+                              if (ev.key === "Enter") 보내기()
+                              if (ev.key === "Escape") set면제중(null)
+                            }}
+                            placeholder={
+                              면제중.동작 === "면제"
+                                ? "예: 수의계약이라 견적의뢰서가 없음 / 무상 제공이라 세금계산서 없음"
+                                : "예: 사업주체가 서류를 요구한다고 회신"
+                            }
+                            className="h-7 min-w-[280px] flex-1 text-[12.5px]"
+                            aria-label="면제 사유"
+                          />
+                          <Button
+                            type="button"
+                            className="h-7 text-[12px]"
+                            disabled={pending || !사유.trim()}
+                            onClick={보내기}
+                          >
+                            {pending ? "저장 중…" : "저장"}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            className="h-7 text-[12px]"
+                            onClick={() => set면제중(null)}
+                          >
+                            취소
+                          </Button>
+                        </span>
+                      )}
                       <Link
                         href={`/projects/${p.id}/expenses?expense=${e.집행_id}`}
                         className="ml-auto rounded-md border px-2 py-0.5 text-[12px] hover:bg-secondary"
@@ -158,6 +308,10 @@ export function EvidenceGapCard({
           <p className="text-xs text-muted-foreground">
             비목별로 요구 서류가 다릅니다(`app.evidence_requirements`). 인건비·간접비처럼 집행 건별
             증빙을 요구하지 않는 비목은 여기 세지 않습니다 — 없는 요건을 「비었다」고 하면 그게 거짓말입니다.
+            <br />
+            <b>면제</b>는 증빙 파일을 만들어 주는 것이 아닙니다 — 「이 칸은 이 사유로 비워 둔다」는
+            판단을 남기는 것입니다. 미비 숫자에서는 빠지지만 <b>사유·처리자·일시가 기록에 남고</b>{" "}
+            면제 칸 수도 위에 그대로 보입니다. 정산 실사에서 그 사유를 그대로 제시하게 됩니다.
           </p>
         </DialogContent>
       </Dialog>

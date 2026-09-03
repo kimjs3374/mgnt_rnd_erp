@@ -1,15 +1,11 @@
 import { redirect } from "next/navigation"
 import { db } from "@/lib/db"
 import { getCurrentUser } from "@/lib/current-user"
-import { approveUser, rejectUser } from "@/app/actions/admin-users"
+import { AdminPendingUsers } from "@/components/admin-pending-users"
 import { AdminResetRequests } from "@/components/admin-reset-requests"
 import { AdminAccounts } from "@/components/admin-accounts"
-import { Button } from "@/components/ui/button"
-import { formatKstDate } from "@/lib/kst"
 
 export const dynamic = "force-dynamic"
-
-const DEPARTMENT_LABEL: Record<string, string> = { research: "연구소", planning: "기획실" }
 
 type PendingUser = {
   id: number
@@ -89,60 +85,7 @@ export default async function AdminUsersPage() {
       {error && (
         <p className="text-sm text-destructive">목록을 불러오지 못했습니다: {error.message}</p>
       )}
-
-      {!error && pending.length === 0 && (
-        <p className="rounded-lg border bg-card p-8 text-center text-sm text-muted-foreground">
-          승인 대기 중인 계정이 없습니다.
-        </p>
-      )}
-
-      {pending.length > 0 && (
-        <div className="overflow-hidden rounded-lg border bg-card">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-left text-muted-foreground">
-                <th className="px-3 py-2 font-medium">아이디</th>
-                <th className="px-3 py-2 font-medium">이름</th>
-                <th className="px-3 py-2 font-medium">연락처</th>
-                <th className="px-3 py-2 font-medium">이메일</th>
-                <th className="px-3 py-2 font-medium">부서</th>
-                <th className="px-3 py-2 font-medium">신청일</th>
-                <th className="px-3 py-2 font-medium text-right">처리</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pending.map((u) => (
-                <tr key={u.id} className="border-b last:border-0">
-                  <td className="px-3 py-2">{u.username}</td>
-                  <td className="px-3 py-2">{u.name}</td>
-                  <td className="px-3 py-2">{u.phone ?? "-"}</td>
-                  <td className="px-3 py-2">{u.email ?? "-"}</td>
-                  <td className="px-3 py-2">{u.department ? DEPARTMENT_LABEL[u.department] : "-"}</td>
-                  <td className="px-3 py-2">
-                    {formatKstDate(u.created_at)}
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="flex justify-end gap-2">
-                      <form action={approveUser}>
-                        <input type="hidden" name="id" value={u.id} />
-                        <Button type="submit" size="sm">
-                          승인
-                        </Button>
-                      </form>
-                      <form action={rejectUser}>
-                        <input type="hidden" name="id" value={u.id} />
-                        <Button type="submit" size="sm" variant="destructive">
-                          반려
-                        </Button>
-                      </form>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {!error && <AdminPendingUsers initialUsers={pending} />}
 
       <div>
         <h2 className="text-lg font-semibold">전체 계정 · 권한 관리</h2>

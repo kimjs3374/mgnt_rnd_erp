@@ -1,6 +1,5 @@
 "use server"
 
-import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
 import { getCurrentUser } from "@/lib/current-user"
 import { hashPassword } from "@/lib/password"
@@ -21,12 +20,12 @@ async function requireSuperAdmin() {
   return user
 }
 
-export async function approveUser(formData: FormData): Promise<void> {
+export async function approveUser(formData: FormData): Promise<ActionResult> {
   const admin = await requireSuperAdmin()
   const id = Number(formData.get("id"))
-  if (!id) return
+  if (!id) return { ok: false, error: "잘못된 요청입니다." }
 
-  await db
+  const { error } = await db
     .from("users")
     .update({
       status: "approved",
@@ -34,16 +33,22 @@ export async function approveUser(formData: FormData): Promise<void> {
       approved_at: new Date().toISOString(),
     })
     .eq("id", id)
+  if (error) {
+    console.error("[admin-users] 승인 실패:", error.message)
+    return { ok: false, error: "승인에 실패했습니다." }
+  }
 
-  revalidatePath("/admin/users")
+  // revalidatePath를 안 부르는 이유는 changeUserRole 위 주석과 같다 — 화면은
+  // components/admin-pending-users.tsx가 성공 응답을 받으면 그 행을 바로 지운다(낙관적 업데이트).
+  return { ok: true }
 }
 
-export async function rejectUser(formData: FormData): Promise<void> {
+export async function rejectUser(formData: FormData): Promise<ActionResult> {
   const admin = await requireSuperAdmin()
   const id = Number(formData.get("id"))
-  if (!id) return
+  if (!id) return { ok: false, error: "잘못된 요청입니다." }
 
-  await db
+  const { error } = await db
     .from("users")
     .update({
       status: "rejected",
@@ -51,8 +56,12 @@ export async function rejectUser(formData: FormData): Promise<void> {
       approved_at: new Date().toISOString(),
     })
     .eq("id", id)
+  if (error) {
+    console.error("[admin-users] 반려 실패:", error.message)
+    return { ok: false, error: "반려에 실패했습니다." }
+  }
 
-  revalidatePath("/admin/users")
+  return { ok: true }
 }
 
 function generateTempPassword(): string {

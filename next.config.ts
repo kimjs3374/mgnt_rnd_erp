@@ -8,6 +8,13 @@ const nextConfig: NextConfig = {
   //    배포(rnd-web.service)는 기본값 .next 를 그대로 쓴다.
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
 
+  // ⚠ dev 모드를 nginx 뒤(rnd.mgnt.kr)에서 서빙할 때 반드시 필요하다.
+  //    Next 는 dev 리소스(HMR 웹소켓·청크)를 기본적으로 cross-origin 차단하는데,
+  //    우리는 Cloudflare → VPS → nginx 를 거쳐 오므로 origin 이 localhost 가 아니다.
+  //    이게 없으면 화면은 뜨는데 저장해도 자동 반영이 안 된다. 로그에만 조용히 찍힌다.
+  //    프로덕션 빌드에는 영향이 없다.
+  allowedDevOrigins: ["rnd.mgnt.kr", "100.110.60.7"],
+
   experimental: {
     // ⚠ 서버 액션에는 Origin 검증이 걸려 있다.
     //    우리 경로는 Cloudflare → VPS → tailnet → nginx 로 프록시가 여러 겹이라

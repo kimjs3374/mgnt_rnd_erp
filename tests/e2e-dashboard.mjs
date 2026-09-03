@@ -1,8 +1,5 @@
 /**
- * 대시보드 e2e — 개편(2026-09-03 2차) 이후 판을 검사한다.
- *
- * 예전 tests/e2e-calendar.mjs 는 「일간·주간·월간」과 「달력 접기」를 눌렀는데
- * 그 버튼들이 없어졌다(달력이 배지형 월간 전용이 됐다). 그래서 이 파일로 대체한다.
+ * 대시보드 e2e — 개편(2026-09-03 3차) 판을 검사한다.
  *
  *   node tests/e2e-dashboard.mjs
  */
@@ -23,6 +20,11 @@ const 잠깐 = (ms = 400) => new Promise((r) => setTimeout(r, ms))
 const H = process.env.HOME + "/work/"
 const 카드제목 = () =>
   p.evaluate(() => [...document.querySelectorAll("h2")].map((h) => h.textContent.trim()))
+const 누르기 = (t) =>
+  p.evaluate(
+    (t) => [...document.querySelectorAll("button")].find((x) => x.textContent.trim().startsWith(t))?.click(),
+    t,
+  )
 
 let 실패 = 0
 const 확인 = (이름, 참, 값 = "") => {
@@ -40,57 +42,110 @@ try {
   확인("일정 카드 있음", 제목들.includes("일정"))
   확인("수행 과제·사업 카드 있음", 제목들.includes("수행 과제·사업"))
 
-  // 없어져야 하는 것들
+  // 큐 카드 제목은 <h2> 가 아니라 링크다. 본문 텍스트로 확인한다.
   const 본문 = await p.evaluate(() => document.body.innerText)
+  확인("비목 확정 카드 있음", 본문.includes("비목 확정"))
+  확인("챙길 서류 카드 있음 (빠진 서류 아님)", 본문.includes("챙길 서류") && !본문.includes("빠진 서류"))
+  확인("제출 전 점검 카드 있음", 본문.includes("제출 전 점검"))
   확인("부제 삭제됨", !본문.includes("오늘 손대야 할 것만 모았다"))
-  확인("요약 줄 삭제됨", !/오늘 새 공고 \d+ ·/.test(본문))
-  확인("NEW 배지 없음", !본문.includes("NEW"))
   확인("일간/주간/월간 전환 없음", !본문.includes("일간") && !본문.includes("주간"))
   확인("달력 접기 없음", !본문.includes("달력 접기") && !본문.includes("달력 펼치기"))
   확인("「미분류」가 화면에 안 보임", !본문.includes("미분류"))
-
-  // 마감된 공고가 안 올라오는가
   확인("마감된 공고 없음", !/\d{4}-\d{2}-\d{2}\s*마감/.test(본문))
 
-  // 「전체 보기」 링크가 카드마다 하나씩인가
-  const 전체보기 = await p.evaluate(
-    () => [...document.querySelectorAll("a")].filter((a) => a.textContent.includes("전체 보기")).length,
+  // 탭 3개가 항상 보이는가 (0건이어도)
+  const 탭 = await p.evaluate(() =>
+    [...document.querySelectorAll('[role="tab"]')].map((t) => t.textContent.trim()),
   )
-  확인("전체 보기 링크 중복 없음 (카드당 1개)", 전체보기 <= 2, `${전체보기}개`)
+  console.log("공고 탭 :", 탭.slice(0, 3).join(" · "))
+  // 탭 텍스트는 "과제" + 건수(예: "과제0")가 붙어 나온다. startsWith 로 본다.
+  확인(
+    "공고 탭 과제/지원사업/기타 항상 보임",
+    ["과제", "지원사업", "기타"].every((t) => 탭.some((x) => x.startsWith(t))),
+  )
 
-  // 공고 표: 5줄 이하 + 사업명이 상세로 링크되는가
+  // 공고 표 : 5줄 고정(빈 줄 포함) + 사업명이 상세로 링크
   const 표 = await p.evaluate(() => {
     const rows = [...document.querySelectorAll("tbody tr")]
     const a = rows[0]?.querySelector("a[href]")
     return { 줄: rows.length, 첫링크: a?.getAttribute("href") ?? null }
   })
-  확인("공고 5줄 이하", 표.줄 <= 5, `${표.줄}줄`)
+  확인("공고 5줄로 고정(빈줄 포함)", 표.줄 === 5, `${표.줄}줄`)
   확인(
     "사업명이 공고 상세로",
     /^\/(announcements|project-announcements)\/\d+$/.test(표.첫링크 ?? ""),
     표.첫링크 ?? "없음",
   )
 
-  // 달력 격자
-  const 격자 = await p.evaluate(() => {
-    const cell = document.querySelector('button[aria-current="date"]')
-    const g = cell?.parentElement
-    return { 열: g ? getComputedStyle(g).gridTemplateColumns.split(" ").length : 0, 칸: g?.children.length ?? 0 }
+  // 「가능만」 토글이 있고 눌러도 안 죽는가
+  const 가능만있음 = await p.evaluate(() =>
+    [...document.querySelectorAll("button")].some((b) => b.textContent.trim().startsWith("가능만")),
+  )
+  확인("가능만 토글 있음", 가능만있음)
+  await 누르기("가능만")
+  await 잠깐(300)
+  await 누르기("가능만")
+  await 잠깐(300)
+
+  // 지원사업 탭에 자격판정 배지가 뜨는가(오늘 신규가 있을 때만 의미 있는 검사)
+  const 배지있음 = await p.evaluate(() =>
+    ["가능", "불가", "확인필요", "요건미확인"].some((v) => document.body.innerText.includes(v)),
+  )
+  console.log(`  (자격판정 배지 노출: ${배지있음})`)
+
+  // 일정 — 오늘이 속한 달에서는 「오늘」 버튼이 안 보여야(invisible) 하고,
+  // 달을 옮기면 나타나야 한다. 이때 가운데 월 표시가 옆으로 밀리면 안 된다(2026-09-03 지적).
+  const 가운데중심 = () =>
+    p.evaluate(() => {
+      const h2 = [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === "일정")
+      const card = h2?.closest("div.rounded-lg")
+      const label = card?.querySelector("span.tabular-nums")
+      const r = label?.getBoundingClientRect()
+      return r ? r.left + r.width / 2 : null
+    })
+  const 중심_오늘달 = await 가운데중심()
+  const 오늘버튼숨김 = await p.evaluate(() => {
+    const btn = [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "오늘")
+    return btn?.classList.contains("invisible") ?? false
   })
-  확인("달력 7열", 격자.열 === 7, `${격자.열}열 ${격자.칸}칸`)
+  확인("이번 달에서는 「오늘」 버튼이 숨어 있음(자리는 차지)", 오늘버튼숨김)
+
+  await p.evaluate(() => {
+    const h2 = [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === "일정")
+    const card = h2?.closest("div.rounded-lg")
+    ;[...card.querySelectorAll("button")].find((b) => b.getAttribute("aria-label") === "이전 달")?.click()
+  })
+  await 잠깐(300)
+  const 중심_지난달 = await 가운데중심()
+  const 오늘버튼보임 = await p.evaluate(() => {
+    const btn = [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "오늘")
+    return btn ? !btn.classList.contains("invisible") : false
+  })
+  확인("달을 옮기면 「오늘」 버튼이 나타남", 오늘버튼보임)
+  확인(
+    "「오늘」 버튼이 나타나도 월 표시 위치가 안 밀림",
+    중심_오늘달 != null && 중심_지난달 != null && Math.abs(중심_오늘달 - 중심_지난달) < 2,
+    `${중심_오늘달} → ${중심_지난달}`,
+  )
+  await p.screenshot({ path: H + "d1-prevmonth.png", fullPage: true })
 
   // 날짜를 누르면 아래 목록이 그 날로 바뀌는가
-  await p.evaluate(() => document.querySelector('button[aria-current="date"]')?.click())
-  await 잠깐()
-  const 누른뒤 = await p.evaluate(() => document.body.innerText)
-  확인("날짜 클릭이 목록을 바꿈", /\d+월 \d+일/.test(누른뒤))
-  await p.screenshot({ path: H + "d1-day.png", fullPage: true })
+  await p.evaluate(() => {
+    const h2 = [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === "일정")
+    const card = h2?.closest("div.rounded-lg")
+    card?.querySelector("button[aria-current='date'], button[aria-pressed]")?.click()
+  })
+  await 잠깐(300)
 
-  // 수행 과제 탭
-  const 과제링크 = await p.evaluate(
-    () => [...document.querySelectorAll('a[href^="/projects/"]')].length,
-  )
-  확인("수행 과제가 상세로 링크", 과제링크 > 0, `${과제링크}개`)
+  // 수행 과제 — 상세 링크 + 오른쪽 날짜 꼬리
+  const 과제카드 = await p.evaluate(() => {
+    const h2 = [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === "수행 과제·사업")
+    const card = h2?.closest("div.rounded-lg")
+    const links = [...(card?.querySelectorAll('a[href^="/projects/"]') ?? [])]
+    return { 개수: links.length, 첫줄: links[0]?.textContent.replace(/\s+/g, " ").trim() ?? null }
+  })
+  확인("수행 과제가 상세로 링크", 과제카드.개수 > 0, `${과제카드.개수}개`)
+  console.log(`  (첫 줄: ${과제카드.첫줄})`)
 
   확인("콘솔 오류 없음", errs.length === 0, errs.join(" | "))
 

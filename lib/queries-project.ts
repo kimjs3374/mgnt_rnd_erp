@@ -1,6 +1,7 @@
 import "server-only"
 import { db, safeSelect } from "@/lib/db"
 import type { ProjectRow } from "@/lib/queries"
+import type { ShareRule } from "@/lib/funding-share"
 
 /**
  * 과제 상세(개요 · 연구비 계상 · 정산) 전용 조회.
@@ -80,4 +81,24 @@ export const getProjectExpenses = (id: number) =>
 export const getCategories = () =>
   safeSelect<{ 코드: string; 이름: string; 정렬: number | null }>("categories", () =>
     db.from("categories").select("*").order("정렬"),
+  )
+
+/**
+ * 재원 분담 규칙 — 정부출연금 상한 · 민간부담 현금 최소 · 현물 최대.
+ *
+ * 전 행을 받아 와서 고르는 일은 `pickRule()`(순수 함수)이 한다.
+ * DB 쿼리로 우선순위를 표현하면(`or(...)` + `order`) 그 판단이 SQL 문자열 안에 숨는다 —
+ * 「왜 이 규칙이 이겼는지」를 화면에서 말할 수 있어야 하므로 코드로 남긴다.
+ * 규칙은 기관유형 6종 × (공고 + 규정)이라 전건이 수십 행을 넘지 않는다.
+ */
+export const getFundingShareRules = () =>
+  safeSelect<ShareRule>("funding_share_rules", () =>
+    db.from("funding_share_rules").select("*"),
+  )
+
+/** 우리 회사 프로필 — 기관유형(기업규모)을 여기서 읽는다. 규칙이 기관유형별로 갈린다. */
+export const getCompanyProfile = () =>
+  safeSelect<{ 회사명: string | null; 기업규모: string | null; 결산연도: number }>(
+    "company_profile",
+    () => db.from("company_profile").select("*").order("결산연도", { ascending: false }),
   )

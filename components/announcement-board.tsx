@@ -218,15 +218,16 @@ export function AnnouncementBoard({
                     <TableCell className="pr-0">
                       <WatchStar id={r.id} on={r.관심} />
                     </TableCell>
-                    {/* max-w + min-w-0 이 없으면 truncate 가 안 먹고 표가 가로로 밀린다 */}
+                    {/* 배지 없이 텍스트만 — 이 카드는 이미 「가능」만 걸러 보여줘서
+                        배지를 달아도 전부 같은 값이라 정보가 없다. 그 대신 헤더
+                        「사업명」과 실제 글자 시작점이 그대로 맞는다. */}
                     <TableCell className="max-w-[1px] font-medium">
                       <Link
                         href={상세경로(active, r.id)}
-                        className="flex min-w-0 items-center gap-1.5 hover:underline"
+                        className="block truncate hover:underline"
                         title={r.사업명}
                       >
-                        <판정배지 값={판정[r.id]} />
-                        <span className="truncate">{r.사업명}</span>
+                        {r.사업명}
                       </Link>
                     </TableCell>
                     {/* 헤더가 가운데니 값도 가운데다 — 칸 너비(178·212·92px)를 넓혀 둔
@@ -304,28 +305,6 @@ export function AnnouncementBoard({
         </>
       )}
     </div>
-  )
-}
-
-/** 자격판정 배지 — 공고 탐색과 같은 값을 같은 뜻으로 보여준다. 판정이 없으면 아무것도 안 그린다. */
-function 판정배지({ 값 }: { 값?: 자격판정값 }) {
-  if (!값) return null
-  const 스타일: Record<자격판정값, string> = {
-    가능: "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-    불가: "border-muted-foreground/30 bg-muted text-muted-foreground",
-    확인필요: "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400",
-    요건미확인: "border-border text-muted-foreground/70",
-    해당없음: "border-border text-muted-foreground/70",
-  }
-  return (
-    <span
-      className={cn(
-        "inline-flex h-4 shrink-0 items-center rounded border px-1 text-[10px] font-medium leading-none",
-        스타일[값],
-      )}
-    >
-      {값}
-    </span>
   )
 }
 

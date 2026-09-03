@@ -100,10 +100,12 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
-    // 2026-09-04 로그인 도입과 함께 추가. 최고관리자(role=admin)에게만 보인다
-    // (components/app-sidebar.tsx 에서 role 로 필터). 여기서는 항상 넣어 둔다 —
+    // 2026-09-04 로그인 도입과 함께 추가. 슈퍼관리자(role=super_admin)에게만 보인다
+    // (components/app-sidebar.tsx 에서 userRole 로 필터). 여기서는 항상 넣어 둔다 —
     // 안 그러면 /admin/users 브레드크럼(crumbsFor)이 이 항목을 못 찾는다.
-    title: "관리자",
+    // ⚠ title을 "관리자"로 두지 않는다 — "관리자"는 이제 역할 등급 이름(슈퍼관리자>관리자>일반회원)
+    //   이라 메뉴 이름과 겹치면 헷갈린다. "계정 관리"로 분리한다.
+    title: "계정 관리",
     url: "/admin/users",
     icon: "ShieldCheck",
     items: [{ title: "계정 승인", url: "/admin/users" }],

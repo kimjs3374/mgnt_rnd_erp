@@ -31,14 +31,14 @@ type Account = {
   name: string
   email: string | null
   phone: string | null
-  role: "member" | "admin"
+  role: "member" | "admin" | "super_admin"
   status: "approved" | "rejected" | "suspended"
   last_login_at: string | null
 }
 
 export default async function AdminUsersPage() {
   const user = await getCurrentUser()
-  if (!user.인증 || user.role !== "admin") {
+  if (!user.인증 || user.role !== "super_admin") {
     redirect("/dashboard")
   }
 
@@ -70,7 +70,14 @@ export default async function AdminUsersPage() {
   return (
     <div className="space-y-8 p-4">
       <div>
-        <h1 className="text-xl font-semibold">계정 승인</h1>
+        <h1 className="text-xl font-semibold">계정 관리</h1>
+        <p className="text-sm text-muted-foreground">
+          슈퍼관리자만 접근할 수 있습니다. 가입 승인, 권한 부여, 계정 정지를 여기서 처리합니다.
+        </p>
+      </div>
+
+      <div>
+        <h2 className="text-lg font-semibold">계정 승인</h2>
         <p className="text-sm text-muted-foreground">가입 신청한 계정을 승인하거나 반려합니다.</p>
       </div>
 

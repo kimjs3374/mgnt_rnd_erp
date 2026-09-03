@@ -18,7 +18,7 @@ type UserRow = {
   username: string
   password_hash: string
   name: string
-  role: "member" | "admin"
+  role: "member" | "admin" | "super_admin"
   status: "pending" | "approved" | "rejected" | "suspended"
 }
 

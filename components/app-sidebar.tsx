@@ -50,15 +50,16 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
    *   더하면 교집합 타입이 되어 `"admin"`을 못 받는데, dev 서버(Turbopack)는 타입검사를
    *   건너뛰어 화면은 멀쩡하다가 `npm run build`(tsc)에서만 터진다. 이름을 바꿔 충돌 자체를 없앤다.
    */
-  userRole?: "member" | "admin" | null
+  userRole?: "member" | "admin" | "super_admin" | null
   userLabel?: string | null
 }
 
 export function AppSidebar({ userRole, userLabel, ...props }: AppSidebarProps) {
   const pathname = usePathname()
-  // 「관리자」 그룹은 userRole=admin 일 때만 사이드바에 노출한다.
+  // 「계정 관리」 그룹은 슈퍼관리자에게만 노출한다 — 권한을 나눠주는 화면 자체는
+  // 슈퍼관리자만 만질 수 있어야 한다(일반 관리자는 슈퍼관리자가 정해줄 뿐, 스스로 더 못 늘린다).
   // NAV 자체에는 항상 들어 있다 — 안 그러면 /admin/users 브레드크럼이 못 찾는다(lib/nav.ts 참조).
-  const visibleNav = userRole === "admin" ? NAV : NAV.filter((g) => g.title !== "관리자")
+  const visibleNav = userRole === "super_admin" ? NAV : NAV.filter((g) => g.title !== "계정 관리")
 
   return (
     <Sidebar

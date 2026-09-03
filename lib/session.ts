@@ -24,7 +24,7 @@ export type SessionPayload = {
   uid: number
   username: string
   name: string
-  role: "member" | "admin"
+  role: "member" | "admin" | "super_admin"
   iat: number
   /** 절대 만료 시각(초, epoch). 쿠키 Max-Age와 별개로 토큰 자체가 이 시각 이후엔 무효다. */
   exp: number
@@ -67,7 +67,7 @@ export async function createSessionCookie(
     id: number
     username: string
     name: string
-    role: "member" | "admin"
+    role: "member" | "admin" | "super_admin"
   },
   opts?: { remember?: boolean },
 ): Promise<string> {

@@ -10,7 +10,7 @@ type Account = {
   name: string
   email: string | null
   phone: string | null
-  role: "member" | "admin"
+  role: "member" | "admin" | "super_admin"
   status: "approved" | "rejected" | "suspended"
   last_login_at: string | null
 }
@@ -21,11 +21,23 @@ const STATUS_LABEL: Record<Account["status"], string> = {
   suspended: "정지됨",
 }
 
+const ROLE_LABEL: Record<Account["role"], string> = {
+  super_admin: "슈퍼관리자",
+  admin: "관리자",
+  member: "일반회원",
+}
+
 function RoleCell({ account }: { account: Account }) {
   const [state, formAction, pending] = useActionState<ActionResult | null, FormData>(
     async (_prev, formData) => (await changeUserRole(formData)) ?? null,
     null,
   )
+
+  // 슈퍼관리자 등급은 이 화면에서 못 바꾼다 — DB에서 직접 지정하는, 훨씬 무거운 조작이다.
+  if (account.role === "super_admin") {
+    return <span className="text-xs text-muted-foreground">변경 불가</span>
+  }
+
   const nextRole = account.role === "admin" ? "member" : "admin"
   const label = account.role === "admin" ? "일반회원으로 변경" : "관리자로 승격"
 
@@ -102,7 +114,7 @@ export function AdminAccounts({ accounts }: { accounts: Account[] }) {
               <td className="px-3 py-2">{a.name}</td>
               <td className="px-3 py-2">{a.phone ?? a.email ?? "-"}</td>
               <td className="px-3 py-2">{STATUS_LABEL[a.status]}</td>
-              <td className="px-3 py-2">{a.role === "admin" ? "최고관리자" : "일반회원"}</td>
+              <td className="px-3 py-2">{ROLE_LABEL[a.role]}</td>
               <td className="px-3 py-2">
                 {a.last_login_at ? new Date(a.last_login_at).toLocaleString("ko-KR") : "-"}
               </td>

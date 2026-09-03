@@ -17,7 +17,7 @@ export type CurrentUser = {
   이름: string
   /** true = 세션으로 확인됨. false = 로그인 전이라 업로더를 신뢰할 수 없다. */
   인증: boolean
-  role: "member" | "admin" | null
+  role: "member" | "admin" | "super_admin" | null
 }
 
 /** 로그인 전 임시 표기. DB 에도 이 문자열이 그대로 들어가고 화면에 배지로 뜬다. */

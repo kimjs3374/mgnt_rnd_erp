@@ -17,7 +17,11 @@ import time
 from dataclasses import dataclass
 
 MCP_CONFIG = os.environ.get("RND_MCP_CONFIG", "/rnd/bot/mcp.json")
-MODEL = os.environ.get("RND_CHAT_MODEL", "claude-sonnet-5")
+# 기본은 haiku. 2026-09-03 실측으로 낮췄다 — 같은 질문에 두 모델이 **각각 하나씩 틀렸다**:
+# haiku 는 금액을 맞히고(1,914,000) 2024 를 「작년」이라 잘못 불렀고, sonnet 은 연도를
+# 맞히고 금액을 1,740,000 으로 **지어냈다**. haiku 가 더 나쁘지 않아 낮췄다.
+# 되돌리려면 /rnd/bot/.env.mcp 에 RND_CHAT_MODEL=claude-sonnet-5 를 둔다.
+MODEL = os.environ.get("RND_CHAT_MODEL", "claude-haiku-4-5-20251001")
 TIMEOUT = int(os.environ.get("RND_CHAT_TIMEOUT", "120"))
 
 TOOLS = [

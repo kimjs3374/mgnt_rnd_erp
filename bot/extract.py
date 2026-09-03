@@ -34,7 +34,11 @@ import psycopg
 DSN = os.environ["RND_DSN"]
 OUR_BRN = re.sub(r"\D", "", os.environ.get("OUR_BRN", ""))
 THRESHOLD = float(os.environ.get("CLASSIFY_CONFIDENCE_THRESHOLD", "0.70"))
-MODEL = os.environ.get("RND_EXTRACT_MODEL", "claude-sonnet-5")
+# 기본은 haiku. 2026-09-03 실측으로 낮췄다 — 비목 분류 경계 4건(특허 등록비→COMMON_COST,
+# 학회 참가비→HR_SUPPORT, 시료→MATERIAL_BUY, 사무용품→LAB_OPERATION)에서 sonnet 과
+# 똑같이 4/4 를 맞췄고 소요도 같았다(각 60초). 되돌리려면 코드가 아니라
+# /rnd/bot/.env.mcp 에 RND_EXTRACT_MODEL=claude-sonnet-5 를 둔다.
+MODEL = os.environ.get("RND_EXTRACT_MODEL", "claude-haiku-4-5-20251001")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -8,15 +8,18 @@ import {
   savePersonnelRows,
   deletePersonnelRow,
 } from "@/app/actions/personnel"
-import { 총액, 급여총액, 기본재원, 재원별합계, 참여율초과, type PersonnelRow } from "@/lib/personnel"
+import { 총액, 급여총액, 재원별합계, 참여율초과, type PersonnelRow } from "@/lib/personnel"
 
 /**
  * 개인별 인건비 계상 — 연차별로 사람마다 한 줄.
  *
  * 실제 양식(연구개발계획서 인건비 계상표)의 열을 그대로 옮겼다.
  * 총액 = 월급여 × 참여율 × 참여개월수 는 **치는 즉시 다시 계산**된다 — 사람이 계산기를 두 번
- * 두드리지 않게. 그리고 그 합계를 「연구비 계상」의 인건비 줄로 그대로 보낸다
- * (지급=현금 · 미지급=현물로 나눠서. 협약서도 그렇게 갈라져 있다).
+ * 두드리지 않게. 그리고 그 합계를 「연구비 계상」의 인건비 줄로 그대로 보낸다(현금·현물로 나눠서).
+ *
+ * ⚠ 「지급구분」(지급/미지급)은 없다(2026-09-04 사용자 지시로 폐지 — db/107). 재원구분을
+ *   현금·현물 중에서 바로 고른다. "정부출연금으로 직접 지급"하는 예외는 여기서 가르지 않고
+ *   연구비 계상(BudgetEditor)의 PERSONNEL 줄에서 재원(출연금·현금·현물)을 다시 정한다.
  *
  * ⚠ 실명·실제 급여를 공개 URL 에 올리지 않는다(CLAUDE.md §5 절대규칙 5).
  *   대회 기간에는 표시명에 가명을 쓴다. 화면에도 그 문구를 띄운다.
@@ -44,7 +47,6 @@ const 빈줄 = (연차: number, 정렬: number): Draft => ({
   참여개월수: 0,
   참여시작일: null,
   참여종료일: null,
-  지급구분: "미지급",
   재원구분: "현물",
   비고: null,
   _새것: true,
@@ -285,7 +287,6 @@ export function PersonnelEditor({
               <th className="w-[62px] pb-1 text-right font-normal">개월</th>
               <th className="w-[124px] pb-1 font-normal">참여시작</th>
               <th className="w-[124px] pb-1 font-normal">참여종료</th>
-              <th className="w-[78px] pb-1 font-normal">지급구분</th>
               <th className="w-[72px] pb-1 font-normal">재원</th>
               <th className="w-[110px] pb-1 text-right font-normal">총액</th>
               <th className="w-[110px] pb-1 text-right font-normal">급여총액</th>
@@ -295,8 +296,8 @@ export function PersonnelEditor({
           <tbody>
             {보이는.length === 0 && (
               <tr>
-                {/* 상세 열이 둘(연구자등록번호·소속/부서)이라 17. 열을 더하면 여기도 같이 고친다. */}
-                <td colSpan={상세 ? 17 : 15} className="py-8 text-center text-muted-foreground">
+                {/* 상세 열이 둘(연구자등록번호·소속/부서)이라 16. 열을 더하면 여기도 같이 고친다. */}
+                <td colSpan={상세 ? 16 : 14} className="py-8 text-center text-muted-foreground">
                   {연차}차년도에 등록된 인원이 없습니다. 아래 「+ 인원 추가」로 시작하세요.
                 </td>
               </tr>
@@ -422,29 +423,18 @@ export function PersonnelEditor({
                   />
                 </td>
                 <td className="py-1 pr-1">
-                  <select
-                    className="h-7 w-full rounded-md border bg-transparent px-1 text-[12.5px]"
-                    value={r.지급구분}
-                    onChange={(e) =>
-                      // 지급구분을 바꾸면 재원도 따라간다. 예외는 재원 칸에서 직접 고친다.
-                      수정(r, { 지급구분: e.target.value, 재원구분: 기본재원(e.target.value) })
-                    }
-                    aria-label="지급구분"
-                  >
-                    <option value="미지급">미지급</option>
-                    <option value="지급">지급</option>
-                  </select>
-                </td>
-                <td className="py-1 pr-1">
+                  {/* 지급구분(지급/미지급)을 없앴다(db/107) — 현금·현물 둘만 직접 고른다.
+                      "출연금은 다 현금"이라 재원 칸에서도 출연금은 빼서 헷갈릴 여지를 줄였다. */}
                   <select
                     className="h-7 w-full rounded-md border bg-transparent px-1 text-[12.5px]"
                     value={r.재원구분}
-                    onChange={(e) => 수정(r, { 재원구분: e.target.value })}
+                    onChange={(e) =>
+                      수정(r, { 재원구분: e.target.value as "현금" | "현물" })
+                    }
                     aria-label="재원구분"
                   >
                     <option value="현물">현물</option>
                     <option value="현금">현금</option>
-                    <option value="출연금">출연금</option>
                   </select>
                 </td>
                 <td className="py-1 pr-1 text-right font-medium tabular-nums">
@@ -565,10 +555,11 @@ export function PersonnelEditor({
       </div>
 
       <p className="mt-2 text-[11px] text-muted-foreground">
-        총액 = 월급여 × 참여율 × 참여개월수 · 급여총액 = 월급여 × 12 · 지급은 현금, 미지급은 현물로
-        잡힙니다. <b>저장하면 아래 연구비 계상의 인건비 줄이 재원별로 자동으로 맞춰집니다</b>
-        (연차를 가리지 않고 전 연차 합계입니다). 그래서 아래 표의 인건비 칸은 직접 못 고칩니다 —
-        여기서 고칩니다. 엑셀은 실제 계상표 양식(한 사람 두 줄 · 자격·지급구분·총액 세로 병합)으로 나갑니다.
+        총액 = 월급여 × 참여율 × 참여개월수 · 급여총액 = 월급여 × 12 · 재원은 현금(실제 급여이체) ·
+        현물(기관부담) 둘 중 고릅니다. <b>저장하면 아래 연구비 계상의 인건비 줄이 재원별로 자동으로
+        맞춰집니다</b>(연차를 가리지 않고 전 연차 합계입니다). 그래서 아래 표의 인건비 칸은 직접 못
+        고칩니다 — 여기서 고칩니다. 엑셀은 실제 계상표 양식(한 사람 두 줄 · 자격·재원구분·총액
+        세로 병합)으로 나갑니다.
       </p>
     </div>
   )

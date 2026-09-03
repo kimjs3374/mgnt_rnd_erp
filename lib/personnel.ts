@@ -29,8 +29,8 @@ export type PersonnelRow = {
   참여개월수: number
   참여시작일: string | null
   참여종료일: string | null
-  지급구분: string
-  재원구분: string
+  /** 현금 = 실제 급여이체 · 현물 = 기관부담 현물(급여이체 없이 참여로만 잡음). db/107 참조. */
+  재원구분: "현금" | "현물"
   비고: string | null
 }
 
@@ -45,21 +45,21 @@ export function 급여총액(r: Pick<PersonnelRow, "월급여">): number {
   return Math.round(Number(r.월급여 || 0) * 12)
 }
 
-/** 지급구분이 정해지면 재원은 따라온다. 지급=현금, 미지급=현물. */
-export function 기본재원(지급구분: string): "현금" | "현물" {
-  return 지급구분 === "지급" ? "현금" : "현물"
-}
-
 /**
  * 재원별 합계 — 이 값이 `budgets` 의 인건비(PERSONNEL) 줄로 들어간다.
  * 연차를 지정하면 그 연차만 센다(계상은 연차별로 협약한다).
+ *
+ * ⚠ 여기서는 **현금·현물 둘뿐**이다(db/107 — 지급구분 폐지, "출연금은 다 현금"으로 정리했다).
+ *   그 현금이 정부출연금인지 민간부담 현금인지는 여기서 안 가른다 — 그 배정은 연구비 계상
+ *   (`BudgetEditor`)의 PERSONNEL 줄에서 사람이 재원(출연금·현금·현물) 셋 중 고른다.
+ *   `출연금` 키를 0으로 남겨 두는 이유는 그 화면이 세 재원을 한 표로 합칠 때 키가 비어
+ *   있으면 안 되기 때문이다 — 값은 항상 이 인건비 표가 아니라 그쪽에서 채워진다.
  */
 export function 재원별합계(rows: PersonnelRow[], 연차?: number) {
   const out: Record<string, number> = { 출연금: 0, 현금: 0, 현물: 0 }
   for (const r of rows) {
     if (연차 != null && Number(r.연차) !== 연차) continue
-    const key = out[r.재원구분] != null ? r.재원구분 : 기본재원(r.지급구분)
-    out[key] += 총액(r)
+    out[r.재원구분] += 총액(r)
   }
   return out
 }

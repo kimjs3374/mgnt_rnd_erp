@@ -37,7 +37,7 @@ type 입력 = {
   참여개월수: number
   참여시작일?: string | null
   참여종료일?: string | null
-  지급구분: string
+  /** 현금 = 실제 급여이체 · 현물 = 기관부담 현물. db/107 — 지급구분 폐지. */
   재원구분: string
   비고?: string | null
 }
@@ -58,11 +58,10 @@ export async function savePersonnelRows(과제_id: number, rows: 입력[]): Prom
       if (Number(r.참여율) < 0 || Number(r.참여율) > 100) {
         return { ok: false, error: `${r.표시명}: 참여율은 0~100 사이여야 합니다.` }
       }
-      if (!["지급", "미지급"].includes(r.지급구분)) {
-        return { ok: false, error: `${r.표시명}: 지급구분이 이상합니다.` }
-      }
-      if (!["출연금", "현금", "현물"].includes(r.재원구분)) {
-        return { ok: false, error: `${r.표시명}: 재원구분이 이상합니다.` }
+      // ⚠ 「출연금」은 여기서 받지 않는다. 인건비 표는 현금·현물만 가른다(db/107) —
+      //   그 현금이 정부출연금인지 민간현금인지는 연구비 계상(BudgetEditor)에서 다시 정한다.
+      if (!["현금", "현물"].includes(r.재원구분)) {
+        return { ok: false, error: `${r.표시명}: 재원구분은 현금·현물 중 하나여야 합니다.` }
       }
     }
 
@@ -88,7 +87,6 @@ export async function savePersonnelRows(과제_id: number, rows: 입력[]): Prom
       참여개월수: Number(r.참여개월수) || 0,
       참여시작일: r.참여시작일 || null,
       참여종료일: r.참여종료일 || null,
-      지급구분: r.지급구분,
       재원구분: r.재원구분,
       비고: r.비고 ?? null,
     })

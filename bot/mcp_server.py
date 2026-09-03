@@ -914,6 +914,86 @@ def answer_eligibility_question(
     return "\n".join(out)
 
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 의미 기반 판정 학습 — 사람이 판정+코멘트를 남기면 임베딩해서 쌓고, 다음 공고에서
+# 문구가 달라도 뜻이 비슷하면 참고 사례로 보여준다. LLM 을 부르지 않는다 —
+# 로컬 임베딩 모델(격리된 venv, bot/embed_cli.py)만 쓴다.
+#
+# extraction_lexicon(문자열 그대로 일치)과 다른 층이다 — "일반음식점을 영업 중인
+# 자"를 배웠어도 문구가 그대로 같아야 다시 걸리는 게 아니라, "이미용업소는요"처럼
+# 뜻만 비슷해도 코사인 유사도로 찾아낸다.
+# ─────────────────────────────────────────────────────────────────────────────
+@mcp.tool()
+def similar_past_judgments(announcement_id: int) -> str:
+    """이 공고와 뜻이 비슷한 과거 판정 사례를 찾는다. 정답을 대신 정하지 않는다 —
+
+    "예전에 비슷한 걸 이렇게 판단했다"는 참고 사례만 준다. 사람이 아직 아무것도
+    안 남겼으면(judgment_semantic 이 비어 있으면) "사례 없음"이라고 정직하게 답한다.
+    """
+    ann = q("select 사업명, 요약 from app.announcements where id = %s", (announcement_id,))
+    if not ann:
+        return none(f"공고 {announcement_id} 가 없다.")
+
+    err = _쓰기환경()  # 임베딩 계산도 격리 venv 를 부르는 무거운 호출이라 같은 가드를 쓴다
+    if err:
+        return err
+    import semantic_learn  # noqa: PLC0415
+
+    질의 = f"{ann[0]['사업명']} {ann[0]['요약'] or ''}".strip()
+    try:
+        matches = semantic_learn.find_similar(질의)
+    except Exception as e:
+        return f"의미 검색 실패: {type(e).__name__}: {e}"
+
+    if not matches:
+        return (f"'{ann[0]['사업명']}'와 뜻이 비슷한 과거 판정 사례가 없다.\n"
+                "→ 사람이 이 공고를 판정+코멘트로 남기면(record_judgment_comment) "
+                "다음부터 비슷한 공고에 참고 사례로 쓰인다.")
+
+    out = [f"'{ann[0]['사업명']}'와 뜻이 비슷한 과거 판정 {len(matches)}건:"]
+    for m in matches:
+        out.append(
+            f"  유사도 {m['유사도']:.2f} · 판정 {m['판정']}"
+            + (f" · {m['특징키']}" if m.get("특징키") else "")
+            + f"\n    \"{m['텍스트'][:80]}\""
+            + (f"\n    사유: {m['사유']}" if m.get("사유") else "")
+            + f" ({m.get('답변자')})"
+        )
+    out.append("\n※ 참고 사례일 뿐이다 — 이 공고 자체의 판정은 rule_eligibility_check 로 확인한다.")
+    return "\n".join(out)
+
+
+@mcp.tool()
+def record_judgment_comment(
+    announcement_id: int, 텍스트: str, 판정: str, 답변자: str,
+    특징키: str = "", 사유: str = "",
+) -> str:
+    """사람의 판정과 코멘트를 의미 검색용으로 쌓는다.
+
+    텍스트는 판정의 **근거가 된 공고문 문장**을 그대로 옮긴다(판정 결과 자체가
+    아니라 왜 그런지를 말하는 문장이어야 다음에 비슷한 문장이 나왔을 때 걸린다).
+    판정은 가능ㆍ불가ㆍ확인필요ㆍ요건미확인ㆍ해당없음 중 하나.
+    """
+    err = _쓰기환경()
+    if err:
+        return err
+    import semantic_learn  # noqa: PLC0415
+
+    try:
+        row = semantic_learn.record_judgment(
+            텍스트, 판정, 답변자, announcement_id=announcement_id,
+            특징키=(특징키 or None), 사유=(사유 or None),
+        )
+    except ValueError as e:
+        return f"입력을 확인할 것: {e}"
+    except Exception as e:
+        return f"저장 실패: {type(e).__name__}: {e}"
+
+    return (f"저장됨(#{row.get('id')}): {판정} · \"{텍스트[:60]}\"\n"
+            "→ 다음부터 뜻이 비슷한 공고에서 similar_past_judgments 로 이 사례가 보인다.")
+
+
 # ⚠ 반드시 파일 맨 끝. 이 아래에 도구를 정의하면 통째로 등록되지 않는다. 에러도 안 난다.
 if __name__ == "__main__":
     mcp.run()

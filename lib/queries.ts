@@ -146,18 +146,52 @@ export const getAnnouncements = () =>
   )
 
 /**
+ * 출처 우선순위 — 낮을수록 위. **IRIS > NTIS.**
+ *
+ * IRIS 상세페이지에는 공고문(HWP·HWPX·PDF)이 붙어 있어 받아서 접수기간·자격요건·
+ * 제출서류까지 판독이 끝난다. NTIS 국가R&D 과제검색 오픈API 는 **이미 수행 중인 과제의
+ * 메타정보**라 접수기간도 공고문도 없다(scripts/collect-ntis.mjs 주석) — 신청할 수 없다.
+ * 실측 2026-09-03: 요구서류가 뽑힌 공고 7건이 전부 IRIS 다. NTIS 는 16건 중 0건.
+ *
+ * ⚠ 출처 이름을 알파벳순으로 비교하지 않는다. "IRIS" < "NTIS" 가 우연히 맞아떨어지지만
+ *   K-Startup 하나만 붙어도 조용히 틀린다. 출처가 늘면 여기 한 줄을 더한다.
+ */
+export const 출처_우선순위: Record<string, number> = { IRIS: 0, NTIS: 1 }
+export const 출처순위 = (출처: string) => 출처_우선순위[출처] ?? 50
+
+/**
+ * 접수 개념이 없는 행(NTIS 과제검색 등). 「공고」로 세지 않고 표 아래로 내린다.
+ * 마감유형은 수집기가 채운다 — 출처 이름이 아니라 이 값으로 판단한다.
+ */
+export const 정보성 = (r: { 마감유형: string }) => r.마감유형 === "정보성"
+
+/**
  * 과제사업 > 공고 탐색. NTIS + IRIS 출처만 본다 — 국가 R&D 과제 공고 도메인이라
  * 지원사업(기업마당, 지자체·중앙부처 지원사업)과 출처 자체가 다르다. 섞지 않는다.
+ *
+ * 정렬은 **IRIS 먼저, 그 안에서 마감 임박순**이다. 전에는 order("id") 하나뿐이라
+ * 수집 순서대로 NTIS 16건이 IRIS 9건 사이에 끼어 위를 차지했다(실측 2026-09-03).
+ *
+ * DB 에서 접수종료 nulls last 로 한 번 줄여 두는 이유는 limit 때문이다 — 접수기간이 없는
+ * NTIS 행이 뒤로 가야 표가 커져도 IRIS 가 잘려 나가지 않는다. 출처 순위는 받아서 확정한다
+ * (PostgREST 에 CASE 정렬식을 못 넣는다). sort 는 안정 정렬이라 같은 출처 안에서는
+ * DB 가 준 마감 임박순이 그대로 남는다.
  */
-export const getRndAnnouncements = () =>
-  safeSelect<AnnouncementRow>("announcements", () =>
+export const getRndAnnouncements = async () => {
+  const r = await safeSelect<AnnouncementRow>("announcements", () =>
     db
       .from("announcements")
       .select("*")
-      .in("출처", ["NTIS", "IRIS"])
+      .in("출처", ["IRIS", "NTIS"])
+      .order("접수종료", { ascending: true, nullsFirst: false })
       .order("id")
-      .limit(100),
+      .limit(200),
   )
+  return {
+    ...r,
+    rows: [...r.rows].sort((a, b) => 출처순위(a.출처) - 출처순위(b.출처)),
+  }
+}
 
 export type AnnouncementDetailRow = AnnouncementRow & {
   본문: string | null
@@ -226,8 +260,8 @@ export type BoardRow = {
   관심: boolean
 }
 
-export const getAnnouncementBoard = () =>
-  safeSelect<BoardRow>("v_announcement_board", () =>
+export const getAnnouncementBoard = async () => {
+  const r = await safeSelect<BoardRow>("v_announcement_board", () =>
     db
       .from("v_announcement_board")
       // 새로 올라온 것이 위로. 그다음 마감이 임박한 순.
@@ -236,6 +270,24 @@ export const getAnnouncementBoard = () =>
       .order("id", { ascending: false })
       .limit(200),
   )
+
+  // ⚠ 뷰는 공고일이 없으면 수집일을 기준일로 쓴다. NTIS 는 공고일을 안 주므로 수집한 날
+  //   전부 「신규」로 찍히고, 기준일 내림차순이라 IRIS 공고 위에 통째로 앉는다.
+  //   실측 2026-09-03: 과제 탭 25건 중 NTIS 16건이 「오늘 새로 올라온 공고」로 머리에 섰다.
+  //   접수도 못 하는 과제 메타정보를 「어제 없던 공고」라고 말하는 건 거짓이다.
+  //   이 보드의 목적이 바로 그 한 줄(케이오시 현안 1번)이라 더 치명적이다.
+  //   → 정보성 행은 신규에서 빼고 맨 뒤로 내린다. 버리지는 않는다.
+  //
+  //   출처순위로 정렬하지 않는 이유: 이 보드에는 기업마당도 섞여 들어온다(구분='과제'인
+  //   기업마당 행이 실제로 있다). 출처 순위를 쓰면 접수기간이 멀쩡한 기업마당 공고가
+  //   NTIS 밑으로 내려간다. 판단 기준은 출처가 아니라 **접수 개념이 있느냐**다.
+  //
+  //   뷰(DDL)를 고치지 않는다 — 스키마는 4명 사이의 계약서다. 화면 쪽에서 끝낸다.
+  const rows = r.rows
+    .map((x) => (정보성(x) ? { ...x, 신규: false } : x))
+    .sort((a, b) => Number(정보성(a)) - Number(정보성(b)))
+  return { ...r, rows }
+}
 
 export type ProjectRow = {
   id: number

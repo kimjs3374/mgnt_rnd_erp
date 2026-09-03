@@ -8,12 +8,15 @@ import { Button } from "@/components/ui/button"
 
 export const dynamic = "force-dynamic"
 
+const DEPARTMENT_LABEL: Record<string, string> = { research: "연구소", planning: "기획실" }
+
 type PendingUser = {
   id: number
   username: string
   name: string
   phone: string | null
   email: string | null
+  department: "research" | "planning" | null
   created_at: string
 }
 
@@ -33,6 +36,7 @@ type Account = {
   phone: string | null
   role: "member" | "admin" | "super_admin"
   status: "approved" | "rejected" | "suspended"
+  department: "research" | "planning" | null
   last_login_at: string | null
 }
 
@@ -44,7 +48,7 @@ export default async function AdminUsersPage() {
 
   const { data, error } = await db
     .from("users")
-    .select("id, username, name, phone, email, created_at")
+    .select("id, username, name, phone, email, department, created_at")
     .eq("status", "pending")
     .order("created_at", { ascending: true })
     .returns<PendingUser[]>()
@@ -61,7 +65,7 @@ export default async function AdminUsersPage() {
 
   const { data: accountsData, error: accountsError } = await db
     .from("users")
-    .select("id, username, name, email, phone, role, status, last_login_at")
+    .select("id, username, name, email, phone, role, status, department, last_login_at")
     .neq("status", "pending")
     .order("username", { ascending: true })
     .returns<Account[]>()
@@ -100,6 +104,7 @@ export default async function AdminUsersPage() {
                 <th className="px-3 py-2 font-medium">이름</th>
                 <th className="px-3 py-2 font-medium">연락처</th>
                 <th className="px-3 py-2 font-medium">이메일</th>
+                <th className="px-3 py-2 font-medium">부서</th>
                 <th className="px-3 py-2 font-medium">신청일</th>
                 <th className="px-3 py-2 font-medium text-right">처리</th>
               </tr>
@@ -111,6 +116,7 @@ export default async function AdminUsersPage() {
                   <td className="px-3 py-2">{u.name}</td>
                   <td className="px-3 py-2">{u.phone ?? "-"}</td>
                   <td className="px-3 py-2">{u.email ?? "-"}</td>
+                  <td className="px-3 py-2">{u.department ? DEPARTMENT_LABEL[u.department] : "-"}</td>
                   <td className="px-3 py-2">
                     {new Date(u.created_at).toLocaleDateString("ko-KR")}
                   </td>

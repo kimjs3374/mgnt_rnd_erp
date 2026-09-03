@@ -171,6 +171,26 @@ export async function suspendUser(formData: FormData): Promise<ActionResult> {
   return { ok: true }
 }
 
+/** 부서 변경 — 슈퍼관리자가 계정 관리 화면에서 직접 고쳐줄 때 쓴다. 자기 자신도 바꿀 수 있다
+ * (department는 role과 달리 보안 경계가 아니라 메뉴 분류일 뿐이라 자기 자신 제한을 안 둔다). */
+export async function changeUserDepartment(formData: FormData): Promise<ActionResult> {
+  await requireSuperAdmin()
+  const id = Number(formData.get("id"))
+  const department = String(formData.get("department") ?? "")
+  if (!id || (department !== "research" && department !== "planning")) {
+    return { ok: false, error: "잘못된 요청입니다." }
+  }
+
+  const { error } = await db.from("users").update({ department }).eq("id", id)
+  if (error) {
+    console.error("[admin-users] 부서 변경 실패:", error.message)
+    return { ok: false, error: "부서 변경에 실패했습니다." }
+  }
+
+  revalidatePath("/admin/users")
+  return { ok: true }
+}
+
 /** 정지 해제 — approved로 되돌린다. */
 export async function reactivateUser(formData: FormData): Promise<ActionResult> {
   await requireSuperAdmin()

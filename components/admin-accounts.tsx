@@ -1,7 +1,13 @@
 "use client"
 
 import { useActionState } from "react"
-import { changeUserRole, suspendUser, reactivateUser, type ActionResult } from "@/app/actions/admin-users"
+import {
+  changeUserRole,
+  changeUserDepartment,
+  suspendUser,
+  reactivateUser,
+  type ActionResult,
+} from "@/app/actions/admin-users"
 import { Button } from "@/components/ui/button"
 
 type Account = {
@@ -12,6 +18,7 @@ type Account = {
   phone: string | null
   role: "member" | "admin" | "super_admin"
   status: "approved" | "rejected" | "suspended"
+  department: "research" | "planning" | null
   last_login_at: string | null
 }
 
@@ -49,6 +56,35 @@ function RoleCell({ account }: { account: Account }) {
         <Button type="submit" size="sm" variant="outline" disabled={pending}>
           {pending ? "변경 중..." : label}
         </Button>
+      </form>
+      {state && !state.ok && <p className="mt-1 text-xs text-destructive">{state.error}</p>}
+    </div>
+  )
+}
+
+function DepartmentCell({ account }: { account: Account }) {
+  const [state, formAction, pending] = useActionState<ActionResult | null, FormData>(
+    async (_prev, formData) => (await changeUserDepartment(formData)) ?? null,
+    null,
+  )
+
+  return (
+    <div>
+      <form action={formAction}>
+        <input type="hidden" name="id" value={account.id} />
+        <select
+          name="department"
+          defaultValue={account.department ?? ""}
+          disabled={pending}
+          onChange={(e) => e.currentTarget.form?.requestSubmit()}
+          className="h-7 rounded-md border border-input bg-transparent px-1.5 text-xs outline-none"
+        >
+          <option value="" disabled>
+            미지정
+          </option>
+          <option value="research">연구소</option>
+          <option value="planning">기획실</option>
+        </select>
       </form>
       {state && !state.ok && <p className="mt-1 text-xs text-destructive">{state.error}</p>}
     </div>
@@ -102,6 +138,7 @@ export function AdminAccounts({ accounts }: { accounts: Account[] }) {
             <th className="px-3 py-2 font-medium">연락처</th>
             <th className="px-3 py-2 font-medium">상태</th>
             <th className="px-3 py-2 font-medium">역할</th>
+            <th className="px-3 py-2 font-medium">부서</th>
             <th className="px-3 py-2 font-medium">최근 로그인</th>
             <th className="px-3 py-2 font-medium">권한</th>
             <th className="px-3 py-2 font-medium">계정</th>
@@ -115,6 +152,9 @@ export function AdminAccounts({ accounts }: { accounts: Account[] }) {
               <td className="px-3 py-2">{a.phone ?? a.email ?? "-"}</td>
               <td className="px-3 py-2">{STATUS_LABEL[a.status]}</td>
               <td className="px-3 py-2">{ROLE_LABEL[a.role]}</td>
+              <td className="px-3 py-2">
+                <DepartmentCell account={a} />
+              </td>
               <td className="px-3 py-2">
                 {a.last_login_at ? new Date(a.last_login_at).toLocaleString("ko-KR") : "-"}
               </td>

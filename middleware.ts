@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { SESSION_COOKIE, verifySessionCookie } from "@/lib/session"
+import { isPathAllowed } from "@/lib/access"
 
 /**
  * 로그인 게이트 — rnd.mgnt.kr 전체를 로그인 뒤로 묶는다([[login-gate-decision]]).
@@ -9,6 +10,9 @@ import { SESSION_COOKIE, verifySessionCookie } from "@/lib/session"
  *   브라우저 세션 쿠키가 없다. 웹 화면(app 라우트)만 막는다.
  * ⚠ 이 미들웨어는 "로그인했는가"만 본다. RLS 는 여전히 service_role(bypassrls)로 우회 중이다
  *   — db.ts 의 안내대로 authenticated 전환은 이후 과제.
+ *
+ * 부서(연구소/기획실)·슈퍼관리자 전용 경로 판단은 lib/access.ts 하나로 몰아둔다 —
+ * 사이드바(메뉴 숨김)와 여기(실제 차단)가 같은 규칙을 봐야 어긋나지 않는다.
  */
 
 const PUBLIC_PATHS = ["/login"]
@@ -33,6 +37,13 @@ export async function middleware(request: NextRequest) {
     url.pathname = "/login"
     url.search = ""
     if (pathname !== "/") url.searchParams.set("next", pathname)
+    return NextResponse.redirect(url)
+  }
+
+  if (!isPathAllowed(pathname, session.role, session.department)) {
+    const url = request.nextUrl.clone()
+    url.pathname = "/dashboard"
+    url.search = ""
     return NextResponse.redirect(url)
   }
 

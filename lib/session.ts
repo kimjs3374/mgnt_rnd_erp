@@ -25,6 +25,8 @@ export type SessionPayload = {
   username: string
   name: string
   role: "member" | "admin" | "super_admin"
+  /** 메뉴를 가르는 축(role과 별개) — research(연구소) | planning(기획실) | null(미지정). */
+  department: "research" | "planning" | null
   iat: number
   /** 절대 만료 시각(초, epoch). 쿠키 Max-Age와 별개로 토큰 자체가 이 시각 이후엔 무효다. */
   exp: number
@@ -68,6 +70,7 @@ export async function createSessionCookie(
     username: string
     name: string
     role: "member" | "admin" | "super_admin"
+    department: "research" | "planning" | null
   },
   opts?: { remember?: boolean },
 ): Promise<string> {
@@ -78,6 +81,7 @@ export async function createSessionCookie(
     username: user.username,
     name: user.name,
     role: user.role,
+    department: user.department,
     iat: now,
     exp: now + ttl,
   }

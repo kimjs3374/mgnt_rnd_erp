@@ -130,6 +130,23 @@ function SignupPanel() {
           <Input id="s-email" name="email" type="email" placeholder="example@mgnt.kr" />
         </div>
       </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="s-department">소속 부서</Label>
+        {/* 네이티브 select — base-ui Select는 폼 제출과 별도 배선이 필요해 지금 범위엔 과하다. */}
+        <select
+          id="s-department"
+          name="department"
+          required
+          defaultValue=""
+          className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+        >
+          <option value="" disabled>
+            선택하세요
+          </option>
+          <option value="research">연구소</option>
+          <option value="planning">기획실</option>
+        </select>
+      </div>
       {state && !state.ok && <p className="text-sm text-destructive">{state.error}</p>}
       <Button type="submit" className="w-full justify-center" size="lg" disabled={pending}>
         {pending ? "신청 중..." : "가입 신청하기"}

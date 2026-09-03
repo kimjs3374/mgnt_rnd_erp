@@ -17,8 +17,9 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
-import { NAV } from "@/lib/nav"
+import { NAV, type NavGroup } from "@/lib/nav"
 import { logout } from "@/app/actions/auth"
+import { isPathAllowed } from "@/lib/access"
 import {
   Briefcase,
   Building2,
@@ -51,15 +52,27 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
    *   건너뛰어 화면은 멀쩡하다가 `npm run build`(tsc)에서만 터진다. 이름을 바꿔 충돌 자체를 없앤다.
    */
   userRole?: "member" | "admin" | "super_admin" | null
+  /** 메뉴를 가르는 축(role과 별개) — research(연구소) | planning(기획실). */
+  userDepartment?: "research" | "planning" | null
   userLabel?: string | null
 }
 
-export function AppSidebar({ userRole, userLabel, ...props }: AppSidebarProps) {
+export function AppSidebar({ userRole, userDepartment, userLabel, ...props }: AppSidebarProps) {
   const pathname = usePathname()
-  // 「계정 관리」 그룹은 슈퍼관리자에게만 노출한다 — 권한을 나눠주는 화면 자체는
-  // 슈퍼관리자만 만질 수 있어야 한다(일반 관리자는 슈퍼관리자가 정해줄 뿐, 스스로 더 못 늘린다).
-  // NAV 자체에는 항상 들어 있다 — 안 그러면 /admin/users 브레드크럼이 못 찾는다(lib/nav.ts 참조).
-  const visibleNav = userRole === "super_admin" ? NAV : NAV.filter((g) => g.title !== "계정 관리")
+  const role = userRole ?? "member"
+
+  // ⚠ 그룹 제목이 아니라 URL(lib/access.ts)로 판단한다 — nav.ts 의 그룹 구조는
+  //   자주 바뀌는데(예: 여러 부서 화면이 한 그룹 안에 leaf 로 섞여 들어감),
+  //   경로 기준이면 그룹을 어떻게 재구성해도 안 깨진다. 미들웨어와 규칙을 공유한다.
+  //   leaf 가 없는 그룹(대시보드 등)은 그룹 자체의 url 로, leaf 가 있으면 leaf 마다 따로 판단해
+  //   같은 그룹 안에 여러 부서 화면이 섞여 있어도(예: "통합 관리") 맞는 것만 남긴다.
+  const visibleNav: NavGroup[] = NAV.flatMap((g) => {
+    if (!g.items) {
+      return isPathAllowed(g.url, role, userDepartment ?? null) ? [g] : []
+    }
+    const items = g.items.filter((i) => isPathAllowed(i.url, role, userDepartment ?? null))
+    return items.length > 0 ? [{ ...g, items }] : []
+  })
 
   return (
     <Sidebar

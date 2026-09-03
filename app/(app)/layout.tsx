@@ -26,7 +26,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           {/* AppSidebar의 prop 이름은 role이 아니라 userRole이다 — Sidebar가 이미 상속하는
               네이티브 ARIA role과 이름이 겹치면 안 되기 때문(components/app-sidebar.tsx 참조).
               그래서 여기선 user.role(null 포함)을 그대로 넘겨도 된다. */}
-          <AppSidebar userRole={user.role} userLabel={user.인증 ? user.이름 : null} />
+          <AppSidebar
+            userRole={user.role}
+            userDepartment={user.department}
+            userLabel={user.인증 ? user.이름 : null}
+          />
           <SidebarInset className="flex min-w-0 flex-1 flex-col">{children}</SidebarInset>
         </div>
       </SidebarProvider>

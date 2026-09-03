@@ -56,6 +56,7 @@ export function PersonnelEditor({
   초기값,
   협약연수,
   연차연도 = [],
+  읽기전용 = false,
 }: {
   과제_id: number
   초기값: PersonnelRow[]
@@ -67,6 +68,11 @@ export function PersonnelEditor({
   협약연수: number
   /** 그 연차들이 각각 몇 년도인가. `[2022, 2023, 2024]` — 탭에 붙여서 오해를 없앤다. */
   연차연도?: number[]
+  /**
+   * 계상이 확정된 과제 — 인건비 산출도 계상의 일부라 같이 잠긴다.
+   * **표와 엑셀 다운로드는 그대로 둔다.** 확정된 내역을 못 보거나 못 받으면 곤란하다.
+   */
+  읽기전용?: boolean
 }) {
   // **기본은 1차년도 하나뿐이고, 필요할 때 「+ 연차 추가」로 늘린다.**
   // 협약이 2년이라도 1차년도만 계상하고 넘어가는 경우가 흔해서, 빈 탭을 미리 벌려두면
@@ -435,30 +441,38 @@ export function PersonnelEditor({
         >
           전체 연차
         </a>
-        <Button
-          type="button"
-          variant="outline"
-          className="h-7 text-[12.8px]"
-          disabled={pending || 더러움 || 총합 === 0}
-          onClick={반영}
-          title={더러움 ? "먼저 저장하세요" : "이 연차 합계를 인건비 비목으로 보냅니다"}
-        >
-          인건비 비목으로 반영
-        </Button>
+        {!읽기전용 && (
+          <Button
+            type="button"
+            variant="outline"
+            className="h-7 text-[12.8px]"
+            disabled={pending || 더러움 || 총합 === 0}
+            onClick={반영}
+            title={더러움 ? "먼저 저장하세요" : "이 연차 합계를 인건비 비목으로 보냅니다"}
+          >
+            인건비 비목으로 반영
+          </Button>
+        )}
         <span className="ml-auto" />
         {msg && (
           <span className={msg.ok ? "text-[12.5px] text-muted-foreground" : "text-[12.5px] text-destructive"}>
             {msg.text}
           </span>
         )}
-        <Button
-          type="button"
-          className="h-7 text-[12.8px]"
-          disabled={pending || !더러움}
-          onClick={저장}
-        >
-          {pending ? "저장 중…" : "인건비 저장"}
-        </Button>
+        {읽기전용 ? (
+          <span className="text-[12.5px] text-muted-foreground">
+            계상 확정 — 볼 수만 있습니다 (엑셀은 그대로 받을 수 있습니다)
+          </span>
+        ) : (
+          <Button
+            type="button"
+            className="h-7 text-[12.8px]"
+            disabled={pending || !더러움}
+            onClick={저장}
+          >
+            {pending ? "저장 중…" : "인건비 저장"}
+          </Button>
+        )}
       </div>
 
       <p className="mt-2 text-[11px] text-muted-foreground">

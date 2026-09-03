@@ -34,12 +34,15 @@ export function FundingShareCard({
   협약,
   자동,
   없는이유,
+  읽기전용 = false,
 }: {
   과제_id: number
   총사업비: number | null
   협약: 협약값
   자동: Share | null
   없는이유: string | null
+  /** 계상이 확정된 과제 — 숫자와 근거는 그대로 보여주고 저장하는 길만 없앤다(`db/100`). */
+  읽기전용?: boolean
 }) {
   const 협약비었음 =
     협약.정부지원금 == null && 협약.기관부담_현금 == null && 협약.기관부담_현물 == null
@@ -216,6 +219,12 @@ export function FundingShareCard({
             </ul>
           )}
 
+          {읽기전용 ? (
+            <p className="mt-3 text-[12.5px] text-muted-foreground">
+              계상이 확정되어 재원 구성도 잠겼습니다. 계상 합계가 이 금액에 맞춰져 있어서,
+              한쪽만 바꾸면 검증이 어긋납니다.
+            </p>
+          ) : (
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <Button
               type="button"
@@ -245,6 +254,7 @@ export function FundingShareCard({
               {pending ? "저장 중…" : "협약 금액으로 저장"}
             </Button>
           </div>
+          )}
         </>
       )}
     </div>

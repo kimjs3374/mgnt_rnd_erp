@@ -44,11 +44,17 @@ export function BudgetEditor({
   초기값,
   협약,
   비목목록,
+  읽기전용 = false,
 }: {
   과제_id: number
   초기값: Line[]
   협약: ContractInfo
   비목목록: { 코드: string; 이름: string }[]
+  /**
+   * 계상이 확정된 과제. **표와 검증 결과는 그대로 보여주고 고치는 길만 없앤다** —
+   * 숨기면 「무엇으로 확정했는지」를 못 본다. 확정 뒤 관리 위치는 사업 대장이다(`db/100`).
+   */
+  읽기전용?: boolean
 }) {
   const [lines, setLines] = React.useState<Line[]>(초기값)
   const [msg, setMsg] = React.useState<{ ok: boolean; text: string } | null>(null)
@@ -210,7 +216,9 @@ export function BudgetEditor({
             {lines.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="py-10 text-center text-[13px] text-muted-foreground">
-                  계상된 비목이 없습니다. 아래에서 비목을 골라 추가하세요.
+                  {읽기전용
+                    ? "계상된 비목이 없습니다."
+                    : "계상된 비목이 없습니다. 아래에서 비목을 골라 추가하세요."}
                 </TableCell>
               </TableRow>
             ) : (
@@ -221,15 +229,25 @@ export function BudgetEditor({
                     <TableCell className="font-medium">{l.비목명 ?? l.비목_대분류}</TableCell>
                     <TableCell className="text-muted-foreground">{l.재원구분}</TableCell>
                     <TableCell>
-                      <MoneyInput
-                        value={Number(l.배정액) || 0}
-                        onValueChange={(n) => 수정(i, { 배정액: n })}
-                        className="h-7 text-right text-[13px] tabular-nums"
-                        aria-label={`${l.비목명 ?? l.비목_대분류} ${l.재원구분} 배정액`}
-                      />
+                      {읽기전용 ? (
+                        <span className="block text-right tabular-nums">
+                          {won(Number(l.배정액) || 0)}
+                        </span>
+                      ) : (
+                        <MoneyInput
+                          value={Number(l.배정액) || 0}
+                          onValueChange={(n) => 수정(i, { 배정액: n })}
+                          className="h-7 text-right text-[13px] tabular-nums"
+                          aria-label={`${l.비목명 ?? l.비목_대분류} ${l.재원구분} 배정액`}
+                        />
+                      )}
                     </TableCell>
                     <TableCell>
-                      {한도있는비목.has(l.비목_대분류) ? (
+                      {읽기전용 ? (
+                        <span className="block text-right tabular-nums text-muted-foreground">
+                          {l.한도비율 == null ? "—" : `${l.한도비율}%`}
+                        </span>
+                      ) : 한도있는비목.has(l.비목_대분류) ? (
                         <Input
                           type="number"
                           min={0}
@@ -262,15 +280,17 @@ export function BudgetEditor({
                       {won(잔액)}
                     </TableCell>
                     <TableCell>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        className="h-7 px-2 text-[12px] text-muted-foreground"
-                        disabled={pending}
-                        onClick={() => 줄삭제(i)}
-                      >
-                        삭제
-                      </Button>
+                      {!읽기전용 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="h-7 px-2 text-[12px] text-muted-foreground"
+                          disabled={pending}
+                          onClick={() => 줄삭제(i)}
+                        >
+                          삭제
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 )
@@ -288,6 +308,12 @@ export function BudgetEditor({
         </Table>
       </div>
 
+      {읽기전용 ? (
+        <p className="text-[12.5px] text-muted-foreground">
+          계상이 확정되어 <b>볼 수만 있습니다.</b> 고쳐야 하면 위에서 [확정 해제]를 먼저 하세요 —
+          정산 대조 기준이 바뀌는 일이라 사유가 남습니다.
+        </p>
+      ) : (
       <div className="flex flex-wrap items-center gap-2">
         <select
           value={새줄}
@@ -332,6 +358,7 @@ export function BudgetEditor({
           {pending ? "저장 중…" : "계상 저장"}
         </Button>
       </div>
+      )}
     </div>
   )
 }

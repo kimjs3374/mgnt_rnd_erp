@@ -2,7 +2,8 @@ import Link from "next/link"
 import { DbError } from "@/components/db-error"
 import { BudgetEditor, type Line } from "@/components/budget-editor"
 import { FundingShareCard } from "@/components/funding-share-card"
-import { EvidenceAttachments } from "@/components/evidence-attachments"
+import { FormTemplates } from "@/components/form-templates"
+import { BudgetConfirmBar } from "@/components/budget-confirm-bar"
 import { PersonnelEditor } from "@/components/personnel-editor"
 import {
   getProject,
@@ -11,10 +12,11 @@ import {
   getFundingShareRules,
   getCompanyProfile,
   getEvidenceRequirements,
-  getProjectEvidenceFiles,
   getPersonnelCosts,
 } from "@/lib/queries-project"
+import { getConfirmState, getFormTemplates } from "@/lib/queries-confirm"
 import { pickRule, computeShare } from "@/lib/funding-share"
+import { verify, summarize } from "@/lib/verify"
 import { 연차연도 } from "@/lib/fiscal-year"
 import { getCurrentUser } from "@/lib/current-user"
 
@@ -41,18 +43,22 @@ export default async function ProjectBudgetPage({
   const { id: raw } = await params
   const id = Number(raw)
 
-  const [proj, budget, cats, rules, company, reqs, files, people, who] = await Promise.all([
-    getProject(id),
-    getProjectBudget(id),
-    getCategories(),
-    getFundingShareRules(),
-    getCompanyProfile(),
-    getEvidenceRequirements(),
-    getProjectEvidenceFiles(id),
-    getPersonnelCosts(id),
-    getCurrentUser(),
-  ])
+  const [proj, budget, cats, rules, company, reqs, forms, people, confirm, who] =
+    await Promise.all([
+      getProject(id),
+      getProjectBudget(id),
+      getCategories(),
+      getFundingShareRules(),
+      getCompanyProfile(),
+      getEvidenceRequirements(),
+      getFormTemplates(),
+      getPersonnelCosts(id),
+      getConfirmState(id),
+      getCurrentUser(),
+    ])
   const p = proj.rows[0]
+  // 계상이 확정됐으면 이 탭은 **볼 수만** 있다. 관리 위치는 사업 대장으로 넘어간다(`db/100`).
+  const 읽기전용 = confirm.확정
 
   // 협약이 걸친 회계연도들. **탭은 1차년도만 열고 사람이 늘린다**(사용자 지시) —
   // 협약이 여러 해여도 1차년도만 계상하고 넘어가는 경우가 흔해서, 빈 탭을 미리 벌리면
@@ -106,11 +112,38 @@ export default async function ProjectBudgetPage({
             ? `${기관유형} 에 적용할 재원 분담 규칙이 없다. db/91_funding_share_rules.sql 로 규정을 넣거나, 공고에서 읽은 규칙을 등록한다.`
             : "총사업비가 비어 있어 재원을 나눌 수 없다. 개요 탭에서 총사업비를 먼저 넣는다."
 
+  // 확정 막대가 쓰는 값. 한도 위반은 세기만 하고 확정을 막지 않는다 —
+  // 한도를 넘긴 채 협약된 과제가 실제로 있다(P01 연구수당 240,000원 초과).
+  const 협약정보 = {
+    총사업비: p?.총사업비 ?? null,
+    정부지원금: p?.정부지원금 ?? null,
+    기관부담_현금: p?.기관부담_현금 ?? null,
+    기관부담_현물: p?.기관부담_현물 ?? null,
+  }
+  const 위반수 = summarize(verify(lines, 협약정보)).위반
+  const 배정합 = lines.reduce((s, l) => s + Number(l.배정액 ?? 0), 0)
+  const 계상비목 = Array.from(
+    new Set(lines.filter((l) => Number(l.배정액) > 0).map((l) => l.비목_대분류)),
+  )
+
   return (
     <>
       {proj.error && <DbError what="과제" error={proj.error} />}
       {budget.error && <DbError what="예산" error={budget.error} />}
       {cats.error && <DbError what="비목" error={cats.error} />}
+      {confirm.error && <DbError what="계상 확정 상태" error={confirm.error} />}
+
+      {/* 계상 탭은 계상하는 자리다. 다 잡으면 여기서 확정하고 관리 위치가 대장으로 넘어간다. */}
+      <BudgetConfirmBar
+        과제_id={id}
+        과제명={p?.과제명 ?? ""}
+        확정={confirm.확정}
+        최신={confirm.최신}
+        이력={confirm.이력}
+        총사업비={Number(p?.총사업비 ?? 0)}
+        배정합={배정합}
+        위반수={위반수}
+      />
 
       {/* 종료된 과제는 탭·대장·개요에서 계상으로 가는 길을 뺐으니, 여기까지 오는 길은
           주소·북마크뿐이다. 화면을 없애지 않고 왜 빠졌는지를 말한다 —
@@ -145,18 +178,15 @@ export default async function ProjectBudgetPage({
         }}
         자동={자동}
         없는이유={없는이유}
+        읽기전용={읽기전용}
       />
 
       <BudgetEditor
         과제_id={id}
         초기값={lines}
-        협약={{
-          총사업비: p?.총사업비 ?? null,
-          정부지원금: p?.정부지원금 ?? null,
-          기관부담_현금: p?.기관부담_현금 ?? null,
-          기관부담_현물: p?.기관부담_현물 ?? null,
-        }}
+        협약={협약정보}
         비목목록={cats.rows.map((c) => ({ 코드: c.코드, 이름: c.이름 }))}
+        읽기전용={읽기전용}
       />
 
       {/* 인건비는 사람마다 참여율·월급여가 달라 비목 합계 하나로는 만들 수 없다.
@@ -167,19 +197,28 @@ export default async function ProjectBudgetPage({
         초기값={people.rows}
         협약연수={연수}
         연차연도={연도목록}
+        읽기전용={읽기전용}
       />
 
-      {/* 계상한 비목이 곧 준비해야 할 RCMS 증빙 목록이 된다. 그래서 계상 표 바로 아래에 둔다. */}
+      {/* 계상한 비목이 요구하는 **서류 목록**과 그 서류의 회사 표준 양식.
+          여기 있던 「비목별 증빙 파일」은 뺐다 — 증빙 실물은 집행 건 단위로 붙는 것이 맞고
+          집행 탭(components/expense-evidence.tsx)이 이미 그 일을 한다. 계상 단계에서 필요한 것은
+          「무슨 서류를 어떤 양식으로 쓸 것인가」이고, 그게 문서 통일화다. */}
       {reqs.error && <DbError what="증빙 요건" error={reqs.error} />}
-      {files.error && <DbError what="증빙 파일" error={files.error} />}
-      <EvidenceAttachments
-        과제_id={id}
-        요건={reqs.rows}
-        파일={files.rows}
+      {forms.error && <DbError what="표준 양식" error={forms.error} />}
+      <FormTemplates
+        요건={reqs.rows.map((r) => ({
+          서류명: r.서류명,
+          구분: r.구분,
+          비목_대분류: r.비목_대분류,
+          필수여부: r.필수여부,
+          개인정보포함: r.개인정보포함,
+          순번: r.순번,
+        }))}
+        양식={forms.rows}
+        사업유형={p?.사업유형 ?? null}
         비목이름={Object.fromEntries(cats.rows.map((c) => [c.코드, c.이름]))}
-        계상비목={Array.from(
-          new Set(lines.filter((l) => Number(l.배정액) > 0).map((l) => l.비목_대분류)),
-        )}
+        계상비목={계상비목}
         로그인={who.인증}
       />
 

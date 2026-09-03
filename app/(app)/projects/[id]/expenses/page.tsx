@@ -1,4 +1,5 @@
 ﻿import Link from "next/link"
+import { Receipt, Wallet, PieChart, ClipboardCheck } from "lucide-react"
 import { Card, Stat } from "@/components/page-shell"
 import { DbError } from "@/components/db-error"
 import { ExpenseTable, type Row } from "@/components/expense-table"
@@ -12,11 +13,15 @@ import {
   getProjectEvidenceFiles,
 } from "@/lib/queries-project"
 import { won } from "@/lib/queries"
+import { getCurrentUser } from "@/lib/current-user"
 
 export const dynamic = "force-dynamic"
 
 /** 집행으로 인정하는 상태. 「검토대기」와 「반려」는 돈이 나간 것으로 세지 않는다. */
 const 집행인정 = ["확정", "제출", "정산완료"]
+
+/** 급여 정보라 일반회원에게 개인 단위로 안 연다(2026-09-04 사용자 지시) — 합계만 보여준다. */
+const 인건비비목 = ["PERSONNEL", "STUDENT"]
 
 /** 품목 jsonb 에서 사람이 읽을 이름을 뽑는다. 형태가 흔들려도 화면이 안 죽게. */
 function itemLabel(품목: unknown): string {
@@ -43,6 +48,9 @@ type DecisionRaw = Record<string, unknown> & { id: number; expense_id: number }
  * ⚠ 「우리 회사 과거 처리」는 **과제를 넘어서 찾는다.** 목록은 이 과제로 좁히지만,
  *   같은 거래처·같은 세부항목을 어떻게 갈랐는지는 다른 과제의 확정 건에도 들어 있다.
  *   그게 이 제품의 주장(쌓이면 좋아진다)이라 여기서 좁히면 안 된다.
+ *
+ * ⚠ 권한(2026-09-04) — 인건비·학생인건비 건은 개인 급여와 직결돼 일반회원에게 행 자체를
+ *   숨긴다. 합계 숫자만 별도로 보여준다(BudgetPage와 같은 원칙).
  */
 export default async function ProjectExpensesPage({
   params,
@@ -52,7 +60,7 @@ export default async function ProjectExpensesPage({
   const { id: raw } = await params
   const id = Number(raw)
 
-  const [all, dec, labels, cats, subRes, budget, reqs, files, proj] = await Promise.all([
+  const [all, dec, labels, cats, subRes, budget, reqs, files, proj, who] = await Promise.all([
     safeSelect<ExpenseRaw>("expenses", () =>
       db.from("expenses").select("*").order("일자", { ascending: false }).limit(500),
     ),
@@ -68,7 +76,10 @@ export default async function ProjectExpensesPage({
     getEvidenceRequirements(),
     getProjectEvidenceFiles(id),
     getProject(id),
+    getCurrentUser(),
   ])
+
+  const 관리자이상 = who.role === "admin" || who.role === "super_admin"
 
   // ⚠ 선정 전 과제에는 집행이 있을 수 없다 — 받은 돈이 없다(2026-09-04 사용자 지적).
   //   탭·대장 링크에서 뺐지만 주소로는 들어올 수 있다. 빈 표 대신 왜 없는지 말한다.
@@ -150,7 +161,14 @@ export default async function ProjectExpensesPage({
     }
   })
 
-  const 검토대기 = rows.filter((r) => r.상태 === "검토대기").length
+  // 인건비·학생인건비는 개인 급여와 직결돼 일반회원에게는 행 자체를 안 보여준다.
+  // 합계만 별도로 계산해 안내 문구에 쓴다.
+  const 인건비집행액 = 이과제
+    .filter((e) => 집행인정.includes(e.상태) && 인건비비목.includes((e.비목_대분류 as string) ?? ""))
+    .reduce((s, e) => s + Number(e.합계 ?? 0), 0)
+  const 표시행 = 관리자이상 ? rows : rows.filter((r) => !인건비비목.includes(r.비목_대분류 ?? ""))
+
+  const 검토대기 = 표시행.filter((r) => r.상태 === "검토대기").length
   const 집행액 = 이과제
     .filter((e) => 집행인정.includes(e.상태))
     .reduce((s, e) => s + Number(e.합계 ?? 0), 0)
@@ -163,14 +181,16 @@ export default async function ProjectExpensesPage({
       {dec.error && <DbError what="판단 이력" error={dec.error} />}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="집행 건" value={rows.length} sub={`검토 대기 ${검토대기}건`} />
-        <Stat label="집행액" value={won(집행액)} sub="확정·제출·정산완료" />
+        <Stat icon={Receipt} label="집행 건" value={표시행.length} sub={`검토 대기 ${검토대기}건`} />
+        <Stat icon={Wallet} label="집행액" value={won(집행액)} sub="확정·제출·정산완료(인건비 포함 합계)" />
         <Stat
+          icon={PieChart}
           label="계상 대비"
           value={배정 > 0 ? `${Math.round((집행액 / 배정) * 1000) / 10}%` : "—"}
           sub={배정 > 0 ? `배정 ${won(배정)}` : "계상이 아직 없다"}
         />
         <Stat
+          icon={ClipboardCheck}
           label="검토 대기"
           value={검토대기}
           sub={검토대기 > 0 ? "확신도 70% 미만은 자동 확정이 막힌다" : "밀린 건 없음"}
@@ -178,9 +198,16 @@ export default async function ProjectExpensesPage({
         />
       </div>
 
+      {!관리자이상 && (
+        <p className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
+          인건비 집행 합계: <span className="font-medium text-foreground">{won(인건비집행액)}</span>
+          {" "}— 개인별 인건비 집행 건은 관리자 이상만 볼 수 있습니다(위 목록에서 제외됨).
+        </p>
+      )}
+
       <Card>
         <ExpenseTable
-          rows={rows}
+          rows={표시행}
           cats={cats.rows.map((c) => ({ 코드: c.코드, 이름: c.이름 }))}
           subs={subRes.rows}
           labels={labels}

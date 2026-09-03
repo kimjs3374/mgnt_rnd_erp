@@ -5,8 +5,13 @@ import { Input } from "@/components/ui/input"
 import { ExpenseTable, type Row } from "@/components/expense-table"
 import { db, safeSelect } from "@/lib/db"
 import { getLabels } from "@/lib/labels"
+import { won } from "@/lib/queries"
+import { getCurrentUser } from "@/lib/current-user"
 
 export const dynamic = "force-dynamic"
+
+/** 급여 정보라 일반회원에게 개인 단위로 안 연다(2026-09-04 사용자 지시) — 합계만 보여준다. */
+const 인건비비목 = ["PERSONNEL", "STUDENT"]
 
 /** 품목 jsonb 에서 사람이 읽을 이름을 뽑는다. 형태가 흔들려도 화면이 안 죽게. */
 function itemLabel(품목: unknown): string {
@@ -30,9 +35,12 @@ type DecisionRaw = Record<string, unknown> & { id: number; expense_id: number }
 /**
  * 집행 ★ — 우선순위에서 끝까지 지키는 화면.
  * 행을 누르면 상세가 열리고, 거기서 [이대로 확정] 또는 [비목 수정] 을 한다.
+ *
+ * ⚠ 권한(2026-09-04) — 인건비·학생인건비 건은 개인 급여와 직결돼 일반회원에게 행 자체를
+ *   숨긴다. 합계 숫자만 별도로 보여준다(과제별 집행 탭과 같은 원칙).
  */
 export default async function ExpensesPage() {
-  const [exp, dec, labels, catRes, subRes] = await Promise.all([
+  const [exp, dec, labels, catRes, subRes, who] = await Promise.all([
     safeSelect<ExpenseRaw>("expenses", () =>
       db.from("expenses").select("*").order("일자", { ascending: false }).limit(200),
     ),
@@ -46,7 +54,10 @@ export default async function ExpensesPage() {
     safeSelect<{ 코드: string; 대분류: string; 이름: string }>("sub_categories", () =>
       db.from("sub_categories").select("*"),
     ),
+    getCurrentUser(),
   ])
+
+  const 관리자이상 = who.role === "admin" || who.role === "super_admin"
 
   const 결정 = new Map<number, DecisionRaw[]>()
   for (const d of dec.rows) {
@@ -110,11 +121,20 @@ export default async function ExpensesPage() {
     }
   })
 
+  const 인건비집행액 = exp.rows
+    .filter(
+      (e) =>
+        ["확정", "제출", "정산완료"].includes(e.상태) &&
+        인건비비목.includes((e.비목_대분류 as string) ?? ""),
+    )
+    .reduce((s, e) => s + Number(e.합계 ?? 0), 0)
+  const 표시행 = 관리자이상 ? rows : rows.filter((r) => !인건비비목.includes(r.비목_대분류 ?? ""))
+
   const cats = catRes.rows
     .sort((a, b) => (a.정렬 ?? 99) - (b.정렬 ?? 99))
     .map((c) => ({ 코드: c.코드, 이름: c.이름 }))
 
-  const 검토대기 = rows.filter((r) => r.상태 === "검토대기").length
+  const 검토대기 = 표시행.filter((r) => r.상태 === "검토대기").length
 
   return (
     <PageShell
@@ -148,9 +168,16 @@ export default async function ExpensesPage() {
       {exp.error && <DbError what="집행 내역" error={exp.error} />}
       {dec.error && <DbError what="판단 이력" error={dec.error} />}
 
+      {!관리자이상 && (
+        <p className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
+          인건비 집행 합계: <span className="font-medium text-foreground">{won(인건비집행액)}</span>
+          {" "}— 개인별 인건비 집행 건은 관리자 이상만 볼 수 있습니다(아래 목록에서 제외됨).
+        </p>
+      )}
+
       <Card>
         <ExpenseTable
-          rows={rows}
+          rows={표시행}
           cats={cats}
           subs={subRes.rows}
           labels={labels}

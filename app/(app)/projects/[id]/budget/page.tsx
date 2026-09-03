@@ -23,6 +23,7 @@ import { getConfirmState, getFormTemplates } from "@/lib/queries-confirm"
 import { pickRule, computeShare } from "@/lib/funding-share"
 import { verify, summarize } from "@/lib/verify"
 import { 연차연도 } from "@/lib/fiscal-year"
+import { won } from "@/lib/queries"
 import { getCurrentUser } from "@/lib/current-user"
 
 export const dynamic = "force-dynamic"
@@ -39,6 +40,12 @@ export const dynamic = "force-dynamic"
  *   ② 그 금액을 기준으로 비목별 계상을 넣고 한도를 검산한다.
  * ①이 위에 있는 이유: verify() 의 ②번 검증이 「재원별 계상 = 협약 금액」이라
  * 협약 금액이 비어 있으면 아래 표가 무엇과 대조되는지 알 수 없다.
+ *
+ * ⚠ 권한(2026-09-04, 사용자 지시): "총 인건비가 얼마인지는 일반회원도 보되,
+ *   누구에게 얼마씩 배정했는지(개인별 참여율·금액)는 관리자 이상만" — 급여 관련이라
+ *   그대로 열면 사내 마찰이 생길 수 있다는 이유. 같은 원칙으로 비목별 배정표(BudgetEditor)도
+ *   합계는 보여주되 일반회원은 고칠 수 없게(읽기전용) 만든다. 재원 구성(FundingShareCard)은
+ *   개인 단위 정보가 아니라 전 등급에 그대로 연다.
  */
 export default async function ProjectBudgetPage({
   params,
@@ -81,6 +88,10 @@ export default async function ProjectBudgetPage({
       getNewHireRules(),
     ])
   const p = proj.rows[0]
+
+  // 관리자 이상(admin·super_admin)만 인건비 개인별 세부와 비목별 편집을 본다.
+  // 일반회원(또는 세션이 비정상인 경우)은 합계만 본다 — 급여 정보라 세부를 잠근다.
+  const 관리자이상 = who.role === "admin" || who.role === "super_admin"
 
   // ⚠ 「연구비 계상」(5직접비 + 간접비 + 연구수당 한도)은 국가 R&D 전용 규정이다 —
   //   지원사업(지자체·TP)은 정산 방식 자체가 다르다. 탭에서는 이미 뺐지만
@@ -283,37 +294,51 @@ export default async function ProjectBudgetPage({
       {/* ★ 개인별 인건비가 **비목 표보다 위**에 있다(2026-09-04 사용자 지시).
           인건비는 사람마다 참여율·월급여가 달라 비목 합계 하나로는 만들 수 없고,
           **개인별 표가 근거이고 비목 인건비는 그 합계**다. 근거가 결과보다 아래 있으면
-          읽는 순서가 거꾸로다 — 사람을 넣으면 아래 비목 인건비가 저절로 바뀐다. */}
-      {people.error && <DbError what="개인별 인건비" error={people.error} />}
-      <PersonnelEditor
-        과제_id={id}
-        초기값={people.rows}
-        협약연수={연수}
-        연차연도={연도목록}
-        읽기전용={읽기전용}
-        명부={명부.rows}
-        신규기준={신규기준}
-      />
+          읽는 순서가 거꾸로다 — 사람을 넣으면 아래 비목 인건비가 저절로 바뀐다.
 
-      {/* ⑥ 연구원 명부 — 별도 탭에서 빼고 인건비 표 **바로 아래**에 접어 둔다.
-          명부는 인건비 표에 이름을 넣기 위한 재료다. 화면이 갈려 있으면 「등록 → 메뉴 이동 →
-          복귀 → 골라 넣기」 네 걸음이 된다. 늘 펼쳐 두지 않는 이유는 그 반대다 —
-          계상하러 온 사람에게 명부가 먼저 보이면 그것도 순서가 거꾸로다. */}
-      {!읽기전용 && (
-        <details className="rounded-lg border bg-card">
-          <summary className="cursor-pointer list-none p-3 text-[13px] font-medium">
-            연구원 명부 ({명부.rows.filter((r) => r.재직).length}명 재직 · 전체{" "}
-            {명부.rows.length}명)
-            <span className="ml-2 text-xs font-normal text-muted-foreground">
-              여기 등록해 두면 위 인건비 표에서 골라 넣습니다 — 과제마다 다시 치지 않습니다
-            </span>
-          </summary>
-          <div className="border-t p-3">
-            {명부.error && <DbError what="연구원 명부" error={명부.error} />}
-            {연봉이력.error && <DbError what="연봉 이력" error={연봉이력.error} />}
-            <ResearchersBoard rows={명부.rows} 이력={연봉이력.rows} />
-          </div>
-        </details>
+          ⚠ 2026-09-04 권한 추가 — 개인별 참여율·급여는 일반회원에게 안 보인다(급여 정보라
+          마찰 소지). 합계(인건비합계) 하나만 보여준다. 관리자 이상만 개인별 표·명부를 본다. */}
+      {관리자이상 ? (
+        <>
+          {people.error && <DbError what="개인별 인건비" error={people.error} />}
+          <PersonnelEditor
+            과제_id={id}
+            초기값={people.rows}
+            협약연수={연수}
+            연차연도={연도목록}
+            읽기전용={읽기전용}
+            명부={명부.rows}
+            신규기준={신규기준}
+          />
+
+          {/* ⑥ 연구원 명부 — 별도 탭에서 빼고 인건비 표 **바로 아래**에 접어 둔다.
+              명부는 인건비 표에 이름을 넣기 위한 재료다. 화면이 갈려 있으면 「등록 → 메뉴 이동 →
+              복귀 → 골라 넣기」 네 걸음이 된다. 늘 펼쳐 두지 않는 이유는 그 반대다 —
+              계상하러 온 사람에게 명부가 먼저 보이면 그것도 순서가 거꾸로다. */}
+          {!읽기전용 && (
+            <details className="rounded-lg border bg-card">
+              <summary className="cursor-pointer list-none p-3 text-[13px] font-medium">
+                연구원 명부 ({명부.rows.filter((r) => r.재직).length}명 재직 · 전체{" "}
+                {명부.rows.length}명)
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  여기 등록해 두면 위 인건비 표에서 골라 넣습니다 — 과제마다 다시 치지 않습니다
+                </span>
+              </summary>
+              <div className="border-t p-3">
+                {명부.error && <DbError what="연구원 명부" error={명부.error} />}
+                {연봉이력.error && <DbError what="연봉 이력" error={연봉이력.error} />}
+                <ResearchersBoard rows={명부.rows} 이력={연봉이력.rows} />
+              </div>
+            </details>
+          )}
+        </>
+      ) : (
+        <div className="rounded-lg border bg-card p-4">
+          <p className="text-sm font-medium">인건비 합계: {won(인건비합계)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            개인별 참여율·급여 등 세부 내역은 관리자 이상만 볼 수 있습니다.
+          </p>
+        </div>
       )}
 
       <BudgetEditor
@@ -321,7 +346,8 @@ export default async function ProjectBudgetPage({
         초기값={lines}
         협약={협약정보}
         비목목록={cats.rows.map((c) => ({ 코드: c.코드, 이름: c.이름 }))}
-        읽기전용={읽기전용}
+        // 일반회원은 확정 여부와 무관하게 항상 읽기전용 — 비목별 배정 편집은 관리자 이상만.
+        읽기전용={읽기전용 || !관리자이상}
         // 개인별 줄이 **금액을 갖고** 있으면 인건비는 그쪽이 진실이다. 여기서 고치면 다음 저장에 덮인다.
         // ⚠ 이름만 적어 둔 0원짜리 줄로는 잠그지 않는다 — 서버도 그때는 비목을 안 건드리므로
         //   (`app/actions/personnel.ts` 의 인건비동기화), 잠그면 고칠 길이 아예 없어진다.

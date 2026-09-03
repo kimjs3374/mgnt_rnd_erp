@@ -85,10 +85,20 @@ export function AnnouncementsView({
         {...rest}
         rows={보이는행}
         referenceRows={보이는참고}
+        /**
+         * ⚠ 두 자식(숨김 버튼 + 상위에서 받은 actions)에 key 를 붙인다.
+         *   상위(app/(app)/announcements/page.tsx)가 만든 엘리먼트를 여기서 다른 자식과
+         *   **나란히 배열로** 넘기는 순간 React 가 key 를 요구한다 — 실제로 콘솔에
+         *   "Each child in a list should have a unique key prop … Check the render method
+         *   of AnnouncementsView. It was passed a child from AnnouncementsPage" 가 떴다
+         *   (사용자 신고 2026-09-04). 서버 컴포넌트가 만든 엘리먼트가 클라이언트 컴포넌트
+         *   자식 배열에 섞이는 자리라 정적 JSX 인데도 경고가 난다.
+         */
         actions={
           <div className="flex items-center gap-2">
             {총숨김 > 0 && (
               <Button
+                key="숨김토글"
                 type="button"
                 variant={숨김 ? "default" : "outline"}
                 className="h-7 text-[12.8px]"
@@ -103,7 +113,7 @@ export function AnnouncementsView({
                 {숨김 ? `${숨김이름} ${총숨김}건 숨김` : `${숨김이름} ${총숨김}건 표시 중`}
               </Button>
             )}
-            {actions}
+            {actions && <React.Fragment key="상위액션">{actions}</React.Fragment>}
           </div>
         }
       />

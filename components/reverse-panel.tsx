@@ -148,7 +148,9 @@ export function ReversePanel({ rows }: { rows: ReversibleRow[] }) {
                   <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                     <span>{r.출처}</span>
                     <span>· {남은날(r.접수종료, r.마감유형)}</span>
-                    <span className={`· ${확신도색(r.확신도)}`}>
+                    {/* ⚠ 가운뎃점은 본문이지 클래스가 아니다 — 처음에 className 템플릿
+                        안에 「·」를 같이 넣어 잘못된 클래스명이 나갔다(2026-09-04 자체 점검). */}
+                    <span className={확신도색(r.확신도)}>
                       · 확신도 {r.확신도?.toFixed(2) ?? "-"}
                     </span>
                     <span>· {r.판정경로 ?? "규칙"}</span>

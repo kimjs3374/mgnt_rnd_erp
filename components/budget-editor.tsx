@@ -12,6 +12,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { saveBudgetLines, deleteBudgetLine } from "@/app/actions/budget"
 import {
   verify,
@@ -19,6 +26,7 @@ import {
   할일들,
   판정하기,
   손봐야하나,
+  type Check,
   type ContractInfo,
 } from "@/lib/verify"
 
@@ -38,6 +46,29 @@ const 재원목록 = ["출연금", "현금", "현물"] as const
 const 한도있는비목 = new Set(["ALLOWANCE", "INDIRECT"])
 
 const won = (n: number) => "₩" + Math.round(n).toLocaleString("ko-KR")
+
+/**
+ * 「부족·초과」 검증 한 건이 **어느 줄**을 고치면 풀리는지.
+ *
+ * ⚠ 전부가 한 줄로 안 좁혀진다 — 그게 정직한 사실이다.
+ *   · 연구수당·간접비는 비목이 하나(ALLOWANCE·INDIRECT)라 그 비목의 줄(들)로 좁혀진다.
+ *   · 출연금·현금·현물은 **여러 비목에 걸친 재원 합계**다. 그 재원의 줄이 여러 개면
+ *     「어느 비목 줄을 고칠지」는 사람이 골라야 한다 — 자동으로 아무 줄이나 골라 채우면
+ *     그 비목에 그 금액이 왜 들어갔는지 근거가 없는 채로 숫자만 맞아 보이게 된다
+ *     (CLAUDE.md §6-1 「핵심은 판정이 아니라 기록이다」와 정면으로 부딪힌다).
+ *   · 총사업비는 재원 세 갈래의 합이라 그 자체로는 고칠 줄이 없다 — 재원을 맞추면 따라 맞는다.
+ */
+function 자동채우기_후보(c: Check, lines: Line[], 인건비자동: boolean): Line[] {
+  const 비목 = c.대상 === "연구수당" ? "ALLOWANCE" : c.대상 === "간접비" ? "INDIRECT" : null
+  const 재원 = (재원목록 as readonly string[]).includes(c.대상) ? c.대상 : null
+  const 후보 = 비목
+    ? lines.filter((l) => l.비목_대분류 === 비목)
+    : 재원
+      ? lines.filter((l) => l.재원구분 === 재원)
+      : []
+  // 인건비자동 이면 PERSONNEL 줄은 개인별 표에서만 고친다 — 여기서 건드리면 다음 저장에 덮인다.
+  return 인건비자동 ? 후보.filter((l) => l.비목_대분류 !== "PERSONNEL") : 후보
+}
 
 /**
  * 연구비 계상 편집기.
@@ -197,20 +228,36 @@ export function BudgetEditor({
                 여섯 줄을 읽고 머릿속에서 할 일을 만들게 하지 않는다. */}
             {할일.length > 0 ? (
               <ul className="mb-3 space-y-1 rounded-md border border-[var(--warning-fg)]/30 bg-[var(--warning)] px-3 py-2">
-                {할일.map((t) => (
-                  <li
-                    key={`${t.대상}-${t.판정}`}
-                    className="flex flex-wrap items-baseline gap-x-2 text-[13px] text-[var(--warning-fg)]"
-                  >
-                    <span className="font-medium">{t.말}</span>
-                    {t.금액 > 0 && (
-                      <span className="ml-auto text-[15px] font-semibold tabular-nums">
-                        {t.판정 === "부족" ? "+" : "−"}
-                        {won(t.금액)}
-                      </span>
-                    )}
-                  </li>
-                ))}
+                {할일.map((t) => {
+                  // 같은 이름의 check 를 찾아 자동 채우기의 근거(차이·후보 줄)로 쓴다.
+                  // 대상 값이 checks 안에서 유일해서 find 한 번으로 정확히 짚인다.
+                  const c = checks.find((x) => x.대상 === t.대상)
+                  return (
+                    <li
+                      key={`${t.대상}-${t.판정}`}
+                      className="flex flex-wrap items-baseline gap-x-2 text-[13px] text-[var(--warning-fg)]"
+                    >
+                      <span className="font-medium">{t.말}</span>
+                      {t.금액 > 0 && (
+                        <span className="text-[15px] font-semibold tabular-nums">
+                          {t.판정 === "부족" ? "+" : "−"}
+                          {won(t.금액)}
+                        </span>
+                      )}
+                      {!읽기전용 && c && (t.판정 === "부족" || t.판정 === "초과") && (
+                        <CheckAutoFix
+                          check={c}
+                          lines={lines}
+                          과제_id={과제_id}
+                          인건비자동={인건비자동}
+                          잠김={더러움}
+                          onApplied={setMsg}
+                          className="ml-auto"
+                        />
+                      )}
+                    </li>
+                  )
+                })}
               </ul>
             ) : (
               <p className="mb-3 rounded-md border bg-secondary/40 px-3 py-2 text-[13px] text-muted-foreground">
@@ -443,5 +490,166 @@ export function BudgetEditor({
       </div>
       )}
     </div>
+  )
+}
+
+/**
+ * 「차액 채우기」 — 부족·초과 검증 한 건을 특정 줄의 배정액으로 메운다.
+ *
+ * 절대 조용히 넣지 않는다 — 버튼을 누르면 **무엇을 얼마로 바꿀지 안내창에서 먼저 보여주고**,
+ * 사람이 [적용] 을 눌러야 저장된다. 계산은 코드가 하고 확정은 사람이 한다(설계원칙 3).
+ *
+ * ⚠ 컴포넌트 이름을 한글로 짓지 않는다 — JSX 태그 판정이 소문자 ASCII 기준이라 위험하다.
+ */
+function CheckAutoFix({
+  check,
+  lines,
+  과제_id,
+  인건비자동,
+  잠김,
+  onApplied,
+  className = "",
+}: {
+  check: Check
+  lines: Line[]
+  과제_id: number
+  인건비자동: boolean
+  /** 표에 저장 안 한 다른 변경이 있는 상태. 이때는 열지 않는다 — 그 변경을 덮어쓸 수 있다. */
+  잠김: boolean
+  onApplied: (msg: { ok: boolean; text: string }) => void
+  className?: string
+}) {
+  const [열림, set열림] = React.useState(false)
+  const [선택, set선택] = React.useState(0)
+  const [pending, start] = React.useTransition()
+
+  const 후보 = React.useMemo(
+    () => 자동채우기_후보(check, lines, 인건비자동),
+    [check, lines, 인건비자동],
+  )
+
+  if (후보.length === 0) {
+    // 고칠 줄이 아예 없다 — 눌러도 할 게 없는 버튼을 보여주지 않는다.
+    return check.차이 == null ? null : (
+      <span className={"text-[11.5px] font-normal text-[var(--warning-fg)]/80 " + className}>
+        먼저 비목을 추가해야 채울 수 있습니다
+      </span>
+    )
+  }
+
+  const 대상줄 = 후보[선택] ?? 후보[0]
+  const 차이 = check.차이 ?? 0
+  const 새값 = Math.max(0, Math.round(Number(대상줄.배정액) - 차이))
+  const 미해결 = Number(대상줄.배정액) - 차이 < 0 ? Math.abs(Number(대상줄.배정액) - 차이) : 0
+
+  function 열기() {
+    set선택(0)
+    set열림(true)
+  }
+
+  function 적용() {
+    start(async () => {
+      const r = await saveBudgetLines(과제_id, [
+        {
+          비목_대분류: 대상줄.비목_대분류,
+          재원구분: 대상줄.재원구분,
+          배정액: 새값,
+          한도비율: 대상줄.한도비율 == null ? null : Number(대상줄.한도비율),
+        },
+      ])
+      set열림(false)
+      onApplied(
+        r.ok
+          ? {
+              ok: true,
+              text: `${대상줄.비목명 ?? 대상줄.비목_대분류} · ${대상줄.재원구분} 배정액을 ${won(새값)} 로 맞췄습니다.`,
+            }
+          : { ok: false, text: r.error ?? "채우지 못했습니다." },
+      )
+    })
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        className={
+          "rounded-md border border-[var(--warning-fg)]/40 px-2 py-0.5 text-[11.5px] font-normal " +
+          "text-[var(--warning-fg)] hover:bg-[var(--warning-fg)]/10 disabled:opacity-50 " +
+          className
+        }
+        disabled={잠김}
+        title={잠김 ? "저장하지 않은 다른 변경이 있습니다 — 먼저 계상 저장을 누르세요" : undefined}
+        onClick={열기}
+      >
+        차액 채우기
+      </button>
+
+      <Dialog open={열림} onOpenChange={(o) => !o && !pending && set열림(false)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base">{check.이름} — 차액 채우기</DialogTitle>
+            <DialogDescription>{check.근거}</DialogDescription>
+          </DialogHeader>
+
+          {후보.length > 1 && (
+            <label className="flex flex-col gap-1 text-[11.5px] text-muted-foreground">
+              어느 줄에 채울까요 — {후보.length}개 중 하나를 고르세요
+              <select
+                className="h-8 rounded-md border bg-background px-2 text-[13px]"
+                value={선택}
+                onChange={(e) => set선택(Number(e.target.value))}
+              >
+                {후보.map((l, i) => (
+                  <option key={`${l.비목_대분류}-${l.재원구분}`} value={i}>
+                    {l.비목명 ?? l.비목_대분류} · {l.재원구분} (현재 {won(l.배정액)})
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          <p className="text-[13.5px]">
+            <b>
+              {대상줄.비목명 ?? 대상줄.비목_대분류} · {대상줄.재원구분}
+            </b>{" "}
+            배정액을 {won(대상줄.배정액)} → <b>{won(새값)}</b> 로 바꿉니다 ({차이 > 0 ? "−" : "+"}
+            {won(Math.abs(차이))}).
+          </p>
+
+          {미해결 > 0 && (
+            <p className="text-[12px] text-[var(--warning-fg)]">
+              이 줄만으로는 다 못 줄입니다 — {won(미해결)}이 남습니다(0원 아래로는 못 내려갑니다).
+              남는 만큼은 다른 줄에서 마저 줄이세요.
+            </p>
+          )}
+          {대상줄.집행액 > 새값 && (
+            <p className="text-[12px] text-destructive">
+              이미 {won(대상줄.집행액)} 집행됐습니다 — 그보다 적게 배정하면 잔액이 음수가 됩니다.
+            </p>
+          )}
+
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-7 text-[12.8px]"
+              disabled={pending}
+              onClick={() => set열림(false)}
+            >
+              취소
+            </Button>
+            <Button
+              type="button"
+              className="ml-auto h-7 text-[12.8px]"
+              disabled={pending}
+              onClick={적용}
+            >
+              {pending ? "적용 중…" : "적용하고 저장"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

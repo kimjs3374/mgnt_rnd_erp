@@ -109,7 +109,8 @@ async function processOne(rec, workdir) {
       row.파싱상태 = text ? "파싱완료" : "파싱실패"
     } catch (e) {
       row.파싱상태 = "파싱실패"
-      row.비고 = `첨부 다운로드/추출 실패: ${e.message}`.slice(0, 500)
+      // announcements 에는 비고 컬럼이 없다(스키마를 더 넓히지 않는다) — 콘솔에만 남긴다.
+      console.error(`  [${rec.ancmId}] 첨부 다운로드/추출 실패: ${e.message}`)
     }
   } else {
     row.파싱상태 = "첨부없음"
@@ -129,15 +130,18 @@ async function processOne(rec, workdir) {
         const r = extractDocuments(sections)
         docsResult = r
         if (r.ok && Array.isArray(r.docs) && saved?.id) {
-          const existing = await pgSelect("ann_required_docs", `공고_id=eq.${saved.id}&select=id&limit=1`)
+          // ⚠ 실제 테이블은 공고_id 가 아니라 announcement_id 다(2026-09-02 초기 시드,
+          //   db/*.sql 에는 CREATE 문이 없어 처음엔 없는 줄 알고 새로 만들려 했었다).
+          //   필수여부(boolean)는 기존 컬럼 그대로 두고, 구분(text, 4분류)을 병행해 채운다.
+          const existing = await pgSelect("ann_required_docs", `announcement_id=eq.${saved.id}&select=id&limit=1`)
           if (existing.length === 0) {
             const docRows = r.docs.map((d) => ({
-              공고_id: saved.id,
+              announcement_id: saved.id,
               서류명: d.서류명,
+              필수여부: d.구분 === "필수",
               구분: d.구분 ?? "확인필요",
-              부수: d.부수 ?? null,
-              발급처: d.발급처 ?? null,
-              비고: d.비고 ?? null,
+              유효기간_문구: d.비고 ?? null,
+              원문: d.근거문장,
               근거문장: d.근거문장,
               확인상태: "미확인",
             }))

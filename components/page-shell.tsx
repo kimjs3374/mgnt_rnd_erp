@@ -20,7 +20,8 @@ export function PageShell({
   children: React.ReactNode
 }) {
   return (
-    <div className="flex flex-1 flex-col gap-4 p-4">
+    // min-w-0 — 안쪽 표가 넓어도 화면 폭을 넘기지 않게 한다(app/(app)/layout.tsx 주석 참고)
+    <div className="flex min-w-0 flex-1 flex-col gap-4 p-4">
       {/* ② 제목 + 액션 */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>

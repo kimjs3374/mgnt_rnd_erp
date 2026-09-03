@@ -60,6 +60,43 @@ try {
     ["대기", "서류", "점검"].some((v) => 오늘카드.includes(v)) || 오늘카드.includes("지금 손댈 것이 없습니다"),
     오늘카드.replace(/\s+/g, " ").trim().slice(0, 80),
   )
+  // 7차 개편: 「외 N건」(안 눌리던 <p>) 이 없어지고 갈래별 페이지 넘김으로 바뀌었다.
+  확인("오늘 처리할 것에 「외 N건」(안 눌리는 텍스트) 없음", !/외\s*\d+\s*건/.test(오늘카드))
+
+  // ⚠ "다음 페이지" 버튼은 페이지네이션이 필요한 그 갈래(예: 서류)에만 뜬다.
+  //   카드 전체의 첫 링크를 비교하면 페이지네이션이 없는 다른 갈래(예: 대기)의
+  //   첫 항목을 보게 될 수 있다 — 버튼을 담은 "그 그룹" 안에서 비교해야 한다.
+  const 다음버튼있는그룹 = await p.evaluate(() => {
+    const h2 = [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === "오늘 처리할 것")
+    const card = h2?.closest("div.rounded-lg")
+    const btn = card?.querySelector('button[aria-label$="다음 페이지"]')
+    return !!btn?.closest("[data-group]")
+  })
+  if (다음버튼있는그룹) {
+    const 그룹첫줄 = () =>
+      p.evaluate(() => {
+        const h2 = [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === "오늘 처리할 것")
+        const card = h2?.closest("div.rounded-lg")
+        const btn = card?.querySelector('button[aria-label$="다음 페이지"]')
+        const group = btn?.closest("[data-group]")
+        return group?.querySelector("a")?.textContent.replace(/\s+/g, " ").trim() ?? null
+      })
+    const 전 = await 그룹첫줄()
+    await p.evaluate(() => {
+      const h2 = [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === "오늘 처리할 것")
+      h2?.closest("div.rounded-lg")?.querySelector('button[aria-label$="다음 페이지"]')?.click()
+    })
+    await 잠깐(200)
+    const 후 = await 그룹첫줄()
+    확인(
+      "오늘 처리할 것의 페이지 넘김 버튼이 실제로 그 갈래 목록을 바꿈(예전엔 <p>라 안 눌렸다)",
+      전 !== null && 후 !== null && 전 !== 후,
+      `${전} → ${후}`,
+    )
+  } else {
+    console.log("  (오늘 처리할 것에 4건 넘는 갈래가 없어 페이지 넘김 버튼이 안 뜸 - 정상)")
+  }
+
   확인("부제 삭제됨", !본문.includes("오늘 손대야 할 것만 모았다"))
   확인("일간/주간/월간 전환 없음", !본문.includes("일간") && !본문.includes("주간"))
   확인("달력 접기 없음", !본문.includes("달력 접기") && !본문.includes("달력 펼치기"))

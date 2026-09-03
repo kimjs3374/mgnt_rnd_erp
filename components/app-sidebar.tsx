@@ -18,6 +18,7 @@ import {
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
 import { NAV } from "@/lib/nav"
+import { logout } from "@/app/actions/auth"
 import {
   Briefcase,
   Building2,
@@ -27,6 +28,7 @@ import {
   PieChart,
   ReceiptText,
   Layers,
+  ShieldCheck,
 } from "lucide-react"
 
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -37,10 +39,20 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   PieChart,
   ClipboardCheck,
   Building2,
+  ShieldCheck,
 }
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
+  /** 최고관리자(admin)에게만 「관리자」 메뉴를 보여준다. */
+  role?: "member" | "admin" | null
+  userLabel?: string | null
+}
+
+export function AppSidebar({ role, userLabel, ...props }: AppSidebarProps) {
   const pathname = usePathname()
+  // 「관리자」 그룹은 role=admin 일 때만 사이드바에 노출한다.
+  // NAV 자체에는 항상 들어 있다 — 안 그러면 /admin/users 브레드크럼이 못 찾는다(lib/nav.ts 참조).
+  const visibleNav = role === "admin" ? NAV : NAV.filter((g) => g.title !== "관리자")
 
   return (
     <Sidebar
@@ -69,7 +81,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarGroup>
           <SidebarGroupLabel>메뉴</SidebarGroupLabel>
           <SidebarMenu>
-            {NAV.map((group) => {
+            {visibleNav.map((group) => {
               const Icon = ICONS[group.icon] ?? Layers
               const active =
                 pathname === group.url ||
@@ -108,8 +120,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
       <SidebarFooter>
         <div className="px-2 py-1.5 text-xs text-muted-foreground">
-          <div className="font-medium text-sidebar-foreground">매그나텍</div>
-          <div>본선 데모 · 합성데이터</div>
+          <div className="font-medium text-sidebar-foreground">
+            {userLabel ?? "매그나텍"}
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span>본선 데모 · 합성데이터</span>
+            <form action={logout}>
+              <button type="submit" className="underline hover:text-sidebar-foreground">
+                로그아웃
+              </button>
+            </form>
+          </div>
         </div>
       </SidebarFooter>
     </Sidebar>

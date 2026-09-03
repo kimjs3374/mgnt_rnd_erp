@@ -99,6 +99,15 @@ export const NAV: NavGroup[] = [
       { title: "업체", url: "/vendors" },
     ],
   },
+  {
+    // 2026-09-04 로그인 도입과 함께 추가. 최고관리자(role=admin)에게만 보인다
+    // (components/app-sidebar.tsx 에서 role 로 필터). 여기서는 항상 넣어 둔다 —
+    // 안 그러면 /admin/users 브레드크럼(crumbsFor)이 이 항목을 못 찾는다.
+    title: "관리자",
+    url: "/admin/users",
+    icon: "ShieldCheck",
+    items: [{ title: "계정 승인", url: "/admin/users" }],
+  },
 ]
 
 /** 과제 상세 하위 경로 → 탭 이름. 브레드크럼과 ProjectTabs 가 같은 표를 본다. */

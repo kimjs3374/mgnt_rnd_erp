@@ -2,8 +2,11 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { ChatPanel } from "@/components/chat-panel"
+import { getCurrentUser } from "@/lib/current-user"
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  const user = await getCurrentUser()
+
   return (
     <div
       className="[--header-height:56px] [--sidebar-width:239px]"
@@ -20,7 +23,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             안쪽 표가 넓어질 때 본문이 같이 넓어지고 **페이지 전체에 가로 스크롤이 생긴다.**
             사이드바는 고정폭이므로 줄어들 쪽은 본문이어야 한다. */}
         <div className="flex min-w-0 flex-1">
-          <AppSidebar />
+          <AppSidebar role={user.role} userLabel={user.인증 ? user.이름 : null} />
           <SidebarInset className="flex min-w-0 flex-1 flex-col">{children}</SidebarInset>
         </div>
       </SidebarProvider>

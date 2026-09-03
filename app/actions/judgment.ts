@@ -1,7 +1,7 @@
 "use server"
 
 import { getCurrentUser, 미인증_업로더 } from "@/lib/current-user"
-import { 판정기록, 비슷한사례 } from "@/lib/judgment-ai.mjs"
+import { 판정기록, 비슷한사례, 판정이력 } from "@/lib/judgment-ai.mjs"
 
 /**
  * 판정 + 코멘트를 의미 학습(judgment_semantic)에 남긴다 — LLM 을 부르지 않는다.
@@ -71,4 +71,28 @@ export async function findSimilarJudgments(
   const r = await 비슷한사례(q)
   if (!r.ok) return { ok: false, matches: [], error: r.error }
   return { ok: true, matches: r.matches as SimilarJudgment[] }
+}
+
+export type JudgmentHistoryRow = {
+  id: number
+  announcement_id: number | null
+  텍스트: string
+  판정: string
+  특징키: string | null
+  사유: string | null
+  답변자: string
+  created_at: string
+}
+
+/**
+ * 이 공고에 실제로 남긴 판정+코멘트 이력. findSimilarJudgments() 와 달리 임베딩
+ * 유사도 문턱을 거치지 않는다 — announcement_id 로 정확히 필터하므로 방금 남긴
+ * 것도 빠짐없이 보인다(사용자 지적 2026-09-04: "이력 남긴거 확인이 안되냐").
+ */
+export async function getJudgmentHistory(
+  announcementId: number,
+): Promise<{ ok: boolean; rows: JudgmentHistoryRow[]; error?: string }> {
+  const r = await 판정이력(announcementId)
+  if (!r.ok) return { ok: false, rows: [], error: r.error }
+  return { ok: true, rows: r.rows as JudgmentHistoryRow[] }
 }

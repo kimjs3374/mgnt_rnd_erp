@@ -1,12 +1,14 @@
 "use client"
 
 import * as React from "react"
-import { Sparkles, Search, PenLine } from "lucide-react"
+import { Sparkles, Search, PenLine, History } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   submitJudgmentComment,
   findSimilarJudgments,
+  getJudgmentHistory,
   type SimilarJudgment,
+  type JudgmentHistoryRow,
   type 판정값,
 } from "@/app/actions/judgment"
 
@@ -18,6 +20,12 @@ import {
  *
  * ⚠ 임베딩 호출은 몇 초 걸릴 수 있다(격리된 venv, 모델을 매번 새로 올린다) — 자동으로
  *   부르지 않는다. "비슷한 사례" 조회도 사람이 눌러야 시작한다.
+ *
+ * ⚠ "이 공고에 남긴 이력"(아래)은 다르다 — 임베딩을 계산하지 않는 단순 DB 조회라
+ *   느릴 이유가 없다. 사용자 지적(2026-09-04): "왜 이력 남긴거 확인이 안되냐
+ *   확인할수 있어야지?" — 저장은 되는데 화면에 다시 보여주는 데가 없었다. 그래서
+ *   이건 마운트 시 자동으로 부른다(judgment/history, announcement_id 정확 필터 —
+ *   비슷한 사례처럼 유사도 문턱을 못 넘어 누락되는 일이 없다).
  */
 const 판정_선택지: { v: 판정값; label: string }[] = [
   { v: "가능", label: "가능" },
@@ -35,6 +43,12 @@ function 유사도색(sim: number): string {
 
 function 날짜표시(iso: string): string {
   return iso.slice(0, 10)
+}
+
+function 판정색(v: string): string {
+  if (v === "가능") return "text-[var(--success-fg)]"
+  if (v === "불가") return "text-destructive"
+  return "text-foreground"
 }
 
 export function JudgmentNote({
@@ -56,6 +70,27 @@ export function JudgmentNote({
   const [사례, set사례] = React.useState<SimilarJudgment[] | null>(null)
   const [사례로딩, set사례로딩] = React.useState(false)
   const [사례오류, set사례오류] = React.useState<string | null>(null)
+
+  const [이력, set이력] = React.useState<JudgmentHistoryRow[] | null>(null)
+  const [이력로딩, set이력로딩] = React.useState(true)
+  const [이력오류, set이력오류] = React.useState<string | null>(null)
+
+  const 이력불러오기 = React.useCallback(() => {
+    set이력로딩(true)
+    set이력오류(null)
+    getJudgmentHistory(announcementId).then((r) => {
+      set이력로딩(false)
+      if (!r.ok) {
+        set이력오류(r.error ?? "이력 조회 실패")
+        return
+      }
+      set이력(r.rows)
+    })
+  }, [announcementId])
+
+  React.useEffect(() => {
+    이력불러오기()
+  }, [이력불러오기])
 
   const 사례찾기 = (질의: string) =>
     start(async () => {
@@ -85,6 +120,7 @@ export function JudgmentNote({
         set텍스트("")
         set특징키("")
         set사유("")
+        이력불러오기()
       } else {
         setMsg({ ok: false, text: r.error ?? "저장 실패" })
       }
@@ -92,7 +128,54 @@ export function JudgmentNote({
 
   return (
     <div className="rounded-lg bg-background/60 p-3.5 text-[13px]">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex items-center gap-1.5 font-semibold">
+        <History className="size-4" />
+        이 공고에 남긴 이력
+        {이력 && 이력.length > 0 && (
+          <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-normal text-muted-foreground">
+            {이력.length}건
+          </span>
+        )}
+      </div>
+
+      {이력로딩 && <p className="mt-2 text-xs text-muted-foreground">불러오는 중…</p>}
+      {이력오류 && (
+        <p className="mt-2 text-xs text-destructive">
+          {이력오류}{" "}
+          <button type="button" className="underline" onClick={이력불러오기}>
+            다시 시도
+          </button>
+        </p>
+      )}
+      {이력 && !이력로딩 && (
+        <div className="mt-2">
+          {이력.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              이 공고에는 아직 남긴 판정 근거가 없다 — 아래 "판정 근거 남기기"로 첫 이력을 남긴다.
+            </p>
+          ) : (
+            <ul className="grid gap-1.5">
+              {이력.map((h) => (
+                <li key={h.id} className="rounded-md border bg-card p-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={`font-semibold ${판정색(h.판정)}`}>{h.판정}</span>
+                    <span className="text-[11px] text-muted-foreground">
+                      {h.답변자} · {날짜표시(h.created_at)}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-muted-foreground">"{h.텍스트}"</p>
+                  {h.사유 && <p className="mt-0.5 text-[12px]">{h.사유}</p>}
+                  {h.특징키 && (
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">{h.특징키}</p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t pt-3">
         <div className="flex items-center gap-1.5 font-semibold">
           <Sparkles className="size-4" />
           의미로 찾는 과거 판정 사례

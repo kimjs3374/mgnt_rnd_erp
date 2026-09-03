@@ -188,6 +188,25 @@ def find_similar(text: str, top_k: int = 5, min_sim: float = 0.40) -> list[dict[
     return scored[:top_k]
 
 
+def history_for_announcement(announcement_id: int) -> list[dict[str, Any]]:
+    """이 공고에 남긴 판정+코멘트 이력을 그대로 돌려준다 — 임베딩 유사도가 아니라
+    announcement_id 로 정확히 필터한다.
+
+    사용자 지적(2026-09-04): "왜 이력 남긴거 확인이 안되냐 확인할수 있어야지?" —
+    find_similar() 는 전체 공고를 대상으로 한 **의미 유사도** 검색이라 min_sim(0.40)
+    문턱을 못 넘으면 방금 자기가 남긴 코멘트도 안 보일 수 있었다. 이건 그거랑 다르게
+    "이 공고에 실제로 뭘 남겼는지"를 정확히 보여준다 — 임베딩을 계산하지 않으니
+    background fill_embedding() 이 아직 안 끝났어도(임베딩이 null 이어도) 바로 보인다.
+    """
+    if not announcement_id:
+        return []
+    return rest.select(
+        "judgment_semantic",
+        f"select=id,announcement_id,텍스트,판정,특징키,사유,답변자,created_at"
+        f"&announcement_id=eq.{int(announcement_id)}&order=created_at.desc&limit=50",
+    )
+
+
 def main() -> None:
     """CLI 시험용. python3 bot/semantic_learn.py 찾기 "문장" """
     if len(sys.argv) < 2:

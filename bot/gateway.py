@@ -104,7 +104,7 @@ class Handler(BaseHTTPRequestHandler):
                                            "/document/read", "/company/read",
                                            "/rules/score", "/rules/batch",
                                            "/rules/answer", "/judgment/record",
-                                           "/judgment/similar"]})
+                                           "/judgment/similar", "/judgment/history"]})
             return
         self._send(404, {"ok": False, "error": f"그런 경로가 없다: {self.path}"})
 
@@ -146,6 +146,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._judgment_record(body)
             elif path == "/judgment/similar":
                 self._judgment_similar(body)
+            elif path == "/judgment/history":
+                self._judgment_history(body)
             else:
                 self._send(404, {"ok": False, "error": f"그런 경로가 없다: {path}"})
         except LookupError as e:
@@ -395,6 +397,23 @@ class Handler(BaseHTTPRequestHandler):
             self._send(500, {"ok": False, "error": f"{type(e).__name__}: {e}"})
             return
         self._send(200, {"ok": True, "matches": matches})
+
+    def _judgment_history(self, body: dict) -> None:
+        """이 공고에 실제로 남긴 판정+코멘트 이력. find_similar() 와 달리 임베딩
+        유사도가 아니라 announcement_id 로 정확히 필터한다 — 사용자 지적(2026-09-04):
+        "왜 이력 남긴거 확인이 안되냐 확인할수 있어야지?"."""
+        import semantic_learn  # noqa: PLC0415
+        announcement_id = body.get("announcement_id")
+        if not announcement_id:
+            self._send(400, {"ok": False, "error": "announcement_id 가 필요하다"})
+            return
+        try:
+            rows = semantic_learn.history_for_announcement(int(announcement_id))
+        except Exception as e:
+            log.error("judgment/history 실패: %s\n%s", e, traceback.format_exc())
+            self._send(500, {"ok": False, "error": f"{type(e).__name__}: {e}"})
+            return
+        self._send(200, {"ok": True, "rows": rows})
 
 
 def main() -> None:

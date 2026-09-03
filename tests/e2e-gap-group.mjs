@@ -91,6 +91,37 @@ try {
     확인(배경있음, "과제 머리에 배경색이 깔린다")
   }
 
+  // ②-2 **열이 실제로 맞는가.** 이 화면의 요점은 「여러 줄을 세로로 훑는다」이다.
+  //     폭이 고정돼 있지 않으면 거래처 이름 길이에 따라 금액이 밀린다 — 눈으로 말고 좌표로 본다.
+  const 정렬 = await page.evaluate(() => {
+    const 상자 = document.querySelector('[data-slot="dialog-content"]')
+    const 줄들 = [...(상자?.querySelectorAll("li") ?? [])]
+      .map((li) => li.firstElementChild)
+      .filter((d) => d && d.children.length >= 6)
+    const 자리 = (i) => 줄들.map((d) => Math.round(d.children[i].getBoundingClientRect().right))
+    return { 줄수: 줄들.length, 금액오른쪽: 자리(2), 확보오른쪽: 자리(4) }
+  })
+  if (정렬.줄수 < 2) {
+    log("· 한 과제에 줄이 " + 정렬.줄수 + "개뿐이라 정렬 비교는 건너뛴다")
+  } else {
+    확인(
+      new Set(정렬.금액오른쪽).size === 1,
+      "금액이 세로로 맞는다 (오른쪽 끝 " + [...new Set(정렬.금액오른쪽)].join(" · ") + ")",
+    )
+    확인(
+      new Set(정렬.확보오른쪽).size === 1,
+      "확보수가 세로로 맞는다 (" + [...new Set(정렬.확보오른쪽)].join(" · ") + ")",
+    )
+  }
+  const 상자글 = await page.evaluate(
+    () => document.querySelector('[data-slot="dialog-content"]')?.innerText ?? "",
+  )
+  확인(상자글.includes("확보"), "「확보」 열 머리말이 있다 — 0/4 가 무슨 수인지 말해 준다")
+  확인(
+    !상자글.includes("빠진 서류"),
+    "「빠진 서류 N장」을 안 적는다 — 들어가면 그 화면이 말해 준다(사용자 지시)",
+  )
+
   // ③ 기존 동작
   const 링크 = await page.evaluate(() => {
     const 상자 = document.querySelector('[data-slot="dialog-content"]')

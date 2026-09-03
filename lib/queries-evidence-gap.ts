@@ -114,6 +114,8 @@ export async function getEvidenceGaps(): Promise<{
       cur.빈집행ids.push(Number(e.id))
       cur.상세.push({
         집행_id: Number(e.id),
+        필수종: 칸.length,
+        확보종: 칸.filter((id) => 있는것.has(id)).length,
         일자: e.일자 ?? null,
         거래처: e.거래처 ?? null,
         합계: e.합계 == null ? null : Number(e.합계),
@@ -136,6 +138,8 @@ export async function getEvidenceGaps(): Promise<{
       // 다 채웠거나 면제로 정리된 건도 **면제 내역은 보여준다** — 「왜 정상인가」가 거기 있다.
       cur.상세.push({
         집행_id: Number(e.id),
+        필수종: 칸.length,
+        확보종: 칸.filter((id) => 있는것.has(id)).length,
         일자: e.일자 ?? null,
         거래처: e.거래처 ?? null,
         합계: e.합계 == null ? null : Number(e.합계),

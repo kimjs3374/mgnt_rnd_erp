@@ -43,11 +43,23 @@ try {
   확인("과제 관리 카드 있음 (수행 과제·사업 아님)", 제목들.includes("과제 관리"))
   확인("오늘 처리할 것 카드로 합쳐짐 (셋으로 안 쪼개짐)", 제목들.includes("오늘 처리할 것"))
 
-  // 갈래 제목은 <h2> 가 아니라 링크다. 본문 텍스트로 확인한다.
   const 본문 = await p.evaluate(() => document.body.innerText)
-  확인("비목 확정 갈래 있음", 본문.includes("비목 확정"))
-  확인("챙길 서류 갈래 있음 (빠진 서류 아님)", 본문.includes("챙길 서류") && !본문.includes("빠진 서류"))
-  확인("제출 전 점검 갈래 있음", 본문.includes("제출 전 점검"))
+
+  // 오늘 처리할 것 — 6차 개편: 갈래 전체 이름(비목 확정 등)은 이제 안 뜨고
+  // 짧은 배지(대기·서류·점검)만 쓴다. 0건 갈래는 배지째로 아예 안 보인다.
+  const 오늘카드 = await p.evaluate(() => {
+    const h2 = [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === "오늘 처리할 것")
+    return h2?.closest("div.rounded-lg")?.textContent ?? ""
+  })
+  확인(
+    "오늘 처리할 것 - 갈래 전체 이름은 안 뜨고 짧은 배지만 씀",
+    !오늘카드.includes("비목 확정") && !오늘카드.includes("챙길 서류") && !오늘카드.includes("제출 전 점검"),
+  )
+  확인(
+    "오늘 처리할 것 - 내용 또는 빈 상태 문구가 있음",
+    ["대기", "서류", "점검"].some((v) => 오늘카드.includes(v)) || 오늘카드.includes("지금 손댈 것이 없습니다"),
+    오늘카드.replace(/\s+/g, " ").trim().slice(0, 80),
+  )
   확인("부제 삭제됨", !본문.includes("오늘 손대야 할 것만 모았다"))
   확인("일간/주간/월간 전환 없음", !본문.includes("일간") && !본문.includes("주간"))
   확인("달력 접기 없음", !본문.includes("달력 접기") && !본문.includes("달력 펼치기"))
@@ -202,6 +214,32 @@ try {
     "탭별 「전체 보기」가 신청중/수행중 단계 경로로",
     과제카드.전체보기.every((h) => h === "/projects" || h === "/projects/applying"),
     과제카드.전체보기.join(", "),
+  )
+
+  // 페이지 넘김 줄이 페이지가 하나뿐이어도 항상 떠서 "1 / 1" 로 보이는가.
+  // 신청중(적음, 보통 1페이지)·수행중(많음, 보통 2페이지)을 오가도 이 줄이 있다 없다
+  // 하면 안 된다 — 그래서 탭을 바꾼 전후로 카드 높이가 같은지까지 같이 본다.
+  const 과제카드높이 = () =>
+    p.evaluate(() => {
+      const h2 = [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === "과제 관리")
+      const card = h2?.closest("div.rounded-lg")
+      const pager = [...(card?.querySelectorAll("span") ?? [])].find((s) => /^\d+ \/ \d+$/.test(s.textContent.trim()))
+      return { 높이: card?.getBoundingClientRect().height ?? null, 페이지표기: pager?.textContent.trim() ?? null }
+    })
+  const 수행중상태 = await 과제카드높이()
+  await p.evaluate(() => {
+    const h2 = [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === "과제 관리")
+    const card = h2?.closest("div.rounded-lg")
+    ;[...(card?.querySelectorAll('[role="tab"]') ?? [])].find((b) => b.textContent.trim().startsWith("신청중"))?.click()
+  })
+  await 잠깐(300)
+  const 신청중상태 = await 과제카드높이()
+  console.log(`  (수행중 페이지표기 ${수행중상태.페이지표기} · 신청중 페이지표기 ${신청중상태.페이지표기})`)
+  확인("페이지 넘김 줄이 페이지 1개뿐일 때도 뜸(1 / 1)", 신청중상태.페이지표기 === "1 / 1")
+  확인(
+    "탭을 바꿔도 과제 관리 카드 높이가 그대로",
+    수행중상태.높이 != null && 신청중상태.높이 != null && Math.abs(수행중상태.높이 - 신청중상태.높이) < 1,
+    `수행중 ${수행중상태.높이}px → 신청중 ${신청중상태.높이}px`,
   )
 
   // 왼쪽 달력 카드 세로 길이 == 오른쪽(과제 관리 + 오늘 처리할 것) 합계.

@@ -82,6 +82,19 @@ export function CalendarBoard({
     return 대상.flatMap((d) => (날짜별.get(d) ?? []).map((r) => ({ ...r, 날짜: d })))
   }, [선택, 날짜별, today])
 
+  /**
+   * ★ 지난 일정은 달력에서 안 보인다 — 지난달 칸에 있기 때문이다.
+   * 「일정 착오를 막는다」가 목적인 화면에서 이미 놓친 것이 숨으면 안 된다.
+   * 어느 달을 보고 있든 패널 맨 위에 세운다. 없으면 아예 안 그린다.
+   */
+  const 지난것 = React.useMemo(
+    () =>
+      rows
+        .filter((r) => r.d_day != null && r.d_day < 0)
+        .sort((a, b) => (b.d_day ?? 0) - (a.d_day ?? 0)),
+    [rows],
+  )
+
   const 이동 = (delta: number) => {
     const t = new Date(Date.UTC(기준.y, 기준.m - 1 + delta, 1))
     set기준({ y: t.getUTCFullYear(), m: t.getUTCMonth() + 1 })
@@ -232,6 +245,33 @@ export function CalendarBoard({
               </h3>
               <span className="text-xs text-muted-foreground">{패널행.length}건</span>
             </div>
+
+            {!선택 && 지난것.length > 0 && (
+              <div className="mb-2 rounded border border-destructive/30 bg-destructive/5 p-2">
+                <h4 className="mb-1 text-xs font-medium text-destructive">
+                  지난 일정 {지난것.length}건
+                </h4>
+                <ul className="space-y-0.5">
+                  {지난것.map((r) => (
+                    <li key={"od" + r.종류 + r.참조키}>
+                      <Link
+                        href={r.링크}
+                        className="flex items-center gap-2 rounded px-1 py-0.5 hover:bg-muted"
+                      >
+                        <i
+                          className={cn("size-2 shrink-0 rounded-full", 색깔(r.종류).dot)}
+                          aria-hidden
+                        />
+                        <span className="min-w-0 flex-1 truncate text-[13px]">{r.제목}</span>
+                        <span className="shrink-0 text-xs tabular-nums text-destructive">
+                          {Math.abs(r.d_day!)}일 지남
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {패널행.length === 0 ? (
               <p className="py-6 text-center text-[13px] text-muted-foreground">

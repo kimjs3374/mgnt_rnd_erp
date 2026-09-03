@@ -106,9 +106,17 @@ try {
     const 모달 = await page.evaluate(
       () => document.querySelector('[data-slot="dialog-content"]')?.innerText ?? "",
     )
-    for (const k of ["증빙 서류", "견적서", "지출결의서", "거래명세서", "검수조서"]) {
+    // 집행 건별 세트 5종. 순서는 구매의뢰서 → 지출결의서 → 거래명세서 → 세금계산서 → 검수조서.
+    // (「견적서」는 실무 이름인 「구매의뢰서」로 바꿨다 — db/100_evidence_expense_set.sql)
+    for (const k of ["증빙 서류", "구매의뢰서", "지출결의서", "거래명세서", "세금계산서", "검수조서"]) {
       log(`  ${모달.includes(k) ? "✓" : "✗"} ${k}`)
     }
+    // 폴더 번호(2·3·5·7)는 화면에 안 나와야 한다. 정렬에만 쓴다.
+    log(`  ${/\d\s*·\s*구매의뢰서/.test(모달) ? "✗" : "✓"} 서류명 앞에 번호가 없다`)
+    const 차례 = ["구매의뢰서", "거래명세서", "세금계산서", "검수조서"].map((k) => 모달.indexOf(k))
+    log(
+      `  ${차례.every((v, i) => v >= 0 && (i === 0 || v > 차례[i - 1])) ? "✓" : "✗"} 세금계산서가 거래명세서 뒤·검수조서 앞`,
+    )
     const zip = await page.evaluate(
       () =>
         [...document.querySelectorAll('[data-slot="dialog-content"] a')].find((a) =>

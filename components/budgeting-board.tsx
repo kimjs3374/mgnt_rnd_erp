@@ -80,9 +80,79 @@ export function BudgetingBoard({
 }) {
   const router = useRouter()
   const [대상, set대상] = React.useState<BudgetingRow | null>(null)
+  const [검색, set검색] = React.useState("")
+  const [단계필터, set단계필터] = React.useState<계상단계 | "전체" | "미완료">("전체")
+
+  /**
+   * 검색은 **화면에서** 거른다. 선정 과제는 많아야 수십 건이라 서버를 다시 다녀올 이유가 없고,
+   * 한 글자마다 서버 액션을 부르면 대회장 네트워크에서 눈에 띄게 느려진다.
+   * 찾는 대상은 과제명·과제코드·**공고명**까지다 — 「그 공고로 받은 과제가 뭐였지」가 실제 질문이다.
+   */
+  const 걸러진 = React.useMemo(() => {
+    const q = 검색.trim().toLowerCase()
+    return rows.filter((r) => {
+      if (단계필터 === "미완료" ? r.단계 === "완료" : 단계필터 !== "전체" && r.단계 !== 단계필터) {
+        return false
+      }
+      if (!q) return true
+      return [r.과제명, r.과제코드 ?? "", r.공고명 ?? ""].some((v) => v.toLowerCase().includes(q))
+    })
+  }, [rows, 검색, 단계필터])
+
+  const 단계옵션: (계상단계 | "전체" | "미완료")[] = [
+    "전체",
+    "미완료",
+    "사업비_미확정",
+    "미계상",
+    "진행중",
+    "초과",
+    "완료",
+  ]
 
   return (
     <>
+      <div className="flex flex-wrap items-center gap-2 border-b p-3">
+        <Input
+          placeholder="과제명 · 과제코드 · 공고명 검색"
+          className="h-7 w-72 text-[13px]"
+          value={검색}
+          onChange={(e) => set검색(e.target.value)}
+        />
+        <span className="text-xs text-muted-foreground">단계</span>
+        <select
+          className="h-7 rounded-md border bg-background px-2 text-[12.5px]"
+          value={단계필터}
+          onChange={(e) => set단계필터(e.target.value as 계상단계 | "전체" | "미완료")}
+        >
+          {단계옵션.map((v) => (
+            <option key={v} value={v}>
+              {v === "전체" ? "전체" : v === "미완료" ? "손이 필요한 것만" : 단계이름[v]}
+            </option>
+          ))}
+        </select>
+        <span className="text-xs text-muted-foreground tabular-nums">
+          {걸러진.length}/{rows.length}건
+        </span>
+        {(검색 || 단계필터 !== "전체") && (
+          <Button
+            type="button"
+            variant="ghost"
+            className="ml-auto h-7 text-[12.8px]"
+            onClick={() => {
+              set검색("")
+              set단계필터("전체")
+            }}
+          >
+            ↺ 초기화
+          </Button>
+        )}
+      </div>
+
+      {걸러진.length === 0 ? (
+        <p className="p-6 text-center text-[13px] text-muted-foreground">
+          조건에 맞는 과제가 없습니다. 검색어나 단계를 바꿔 보세요.
+        </p>
+      ) : (
       <Table>
         <TableHeader>
           <TableRow className="hover:bg-transparent">
@@ -96,7 +166,7 @@ export function BudgetingBoard({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {rows.map((r) => (
+          {걸러진.map((r) => (
             <TableRow key={r.id} className="h-[38px] text-[13px]">
               <TableCell className="font-medium">
                 <Link href={`/projects/${r.id}`} className="underline-offset-2 hover:underline">
@@ -166,6 +236,7 @@ export function BudgetingBoard({
           ))}
         </TableBody>
       </Table>
+      )}
 
       {대상 && (
         <ContractAmountDialog

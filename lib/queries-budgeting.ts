@@ -151,3 +151,125 @@ export async function getBudgetingRows() {
 
   return { rows, error, 기관유형, 규칙수: 규칙.rows.length }
 }
+
+/* ------------------------------------------------------------------------- *
+ * 관심 공고 — 계상보다 **앞 단계**다. 그래서 화면에서도 위에 둔다.
+ * ------------------------------------------------------------------------- */
+
+export type WatchRow = {
+  공고_id: number
+  사업명: string
+  소관부처: string | null
+  접수종료: string | null
+  사업유형: string | null
+  출처: string
+  메모: string | null
+  /** 공고 상세 경로. IRIS·NTIS 는 과제사업 쪽, 기업마당·K-Startup 은 지원사업 쪽 화면이 맡는다. */
+  상세경로: string
+  /** 접수 마감까지 남은 날. 음수면 지났다. 마감일이 없으면 null. */
+  남은일: number | null
+  /** 이 공고로 이미 지원 등록한 과제 중 **가장 앞선 것**. 없으면 아직 안 넣은 것이다. */
+  지원과제: { id: number; 과제명: string; 상태: string; 선정결과: string | null; 단계: 계상단계 | null } | null
+  /** 같은 공고로 등록된 과제 수. 2 이상이면 화면이 「외 N건」을 붙인다. */
+  지원건수: number
+}
+
+/** KST 오늘(YYYY-MM-DD). 서버·클라이언트가 같은 값을 내야 해서 직접 계산한다. */
+function 오늘KST() {
+  const k = new Date(Date.now() + 9 * 60 * 60 * 1000)
+  const p = (n: number) => String(n).padStart(2, "0")
+  return `${k.getUTCFullYear()}-${p(k.getUTCMonth() + 1)}-${p(k.getUTCDate())}`
+}
+
+function 남은날(마감: string | null): number | null {
+  if (!마감) return null
+  const a = Date.parse(`${마감}T00:00:00Z`)
+  const b = Date.parse(`${오늘KST()}T00:00:00Z`)
+  if (Number.isNaN(a) || Number.isNaN(b)) return null
+  return Math.round((a - b) / 86400000)
+}
+
+/**
+ * 관심 표시한 공고 + **그 공고로 지원했는지**까지.
+ *
+ * 계상 화면 맨 위에 두는 이유: 계상은 흐름의 **끝**이고 관심 공고는 **처음**이다.
+ * 「지금 챙겨야 할 것」을 한 화면에서 보려면 앞 단계가 위에 있어야 한다 —
+ * 마감이 지나가는 공고는 계상할 과제보다 급하다.
+ *
+ * ⚠ 과제사업(IRIS) 공고만 거르지 않는다. 관심은 **사람이 직접 표시한 것**이라
+ *   여기서 걸러 버리면 표시해 둔 것이 사라진 것처럼 보인다. 대신 사업유형·출처를 같이 보여
+ *   어느 쪽 공고인지 알 수 있게 한다(CLAUDE.md §0.5 — 지원사업이 중심, R&D 는 그중 한 유형).
+ */
+export async function getWatchlistAnnouncements() {
+  const [관심, 공고, 과제, 예산] = await Promise.all([
+    safeSelect<{ 종류: string; 참조_id: number; 메모: string | null; created_at: string }>(
+      "watchlist",
+      () => db.from("watchlist").select("*"),
+    ),
+    safeSelect<{
+      id: number
+      사업명: string
+      소관부처: string | null
+      접수종료: string | null
+      사업유형: string | null
+      출처: string
+    }>("announcements", () => db.from("announcements").select("*")),
+    safeSelect<ProjectRowRaw>("projects", () => db.from("projects").select("*")),
+    getAllBudgets(),
+  ])
+
+  const 공고맵 = new Map(공고.rows.map((a) => [a.id, a]))
+  const 배정 = new Map<number, number>()
+  for (const b of 예산.rows) 배정.set(b.과제_id, (배정.get(b.과제_id) ?? 0) + Number(b.배정액 ?? 0))
+
+  const rows: WatchRow[] = 관심.rows
+    .filter((w) => w.종류 === "공고")
+    .map((w) => {
+      const a = 공고맵.get(w.참조_id)
+      if (!a) return null
+
+      // ⚠ 한 공고에 과제가 여러 개일 수 있다(연차·컨소시엄·재신청). `find` 로 아무거나 집으면
+      //   화면이 매번 다른 걸 보여준다. **가장 앞선 것**을 고른다 — 선정 > 심사중 > 미선정,
+      //   같으면 최근 것(id 큰 것). 여러 건이면 그 사실도 같이 말한다.
+      const 후보 = 과제.rows.filter((x) => x.공고_id === a.id)
+      const 점수 = (x: ProjectRowRaw) =>
+        x.선정결과 === "미선정" ? 0 : x.상태 === "신청중" ? 1 : 2
+      후보.sort((x, y) => 점수(y) - 점수(x) || y.id - x.id)
+      const p = 후보[0] ?? null
+      const 과제사업 = a.출처 === "IRIS" || a.출처 === "NTIS"
+      return {
+        공고_id: a.id,
+        사업명: a.사업명,
+        소관부처: a.소관부처,
+        접수종료: a.접수종료,
+        사업유형: a.사업유형,
+        출처: a.출처,
+        메모: w.메모,
+        상세경로: 과제사업 ? `/project-announcements/${a.id}` : `/announcements/${a.id}`,
+        남은일: 남은날(a.접수종료),
+        지원건수: 후보.length,
+        지원과제: p
+          ? {
+              id: p.id,
+              과제명: p.과제명,
+              상태: p.상태,
+              선정결과: p.선정결과,
+              // 아직 선정 전이면 계상 단계를 말하지 않는다 — 없는 단계를 있는 척하지 않는다.
+              단계:
+                p.상태 === "신청중" || p.선정결과 === "미선정"
+                  ? null
+                  : 단계판정(Number(p.총사업비 ?? 0), 배정.get(p.id) ?? 0),
+            }
+          : null,
+      }
+    })
+    .filter((r): r is WatchRow => r != null)
+
+  // 마감이 가까운 것이 위로. 마감이 지났거나 없는 것은 아래로 민다.
+  rows.sort((a, b) => {
+    const 점 = (r: WatchRow) => (r.남은일 == null ? 1e9 : r.남은일 < 0 ? 1e8 - r.남은일 : r.남은일)
+    return 점(a) - 점(b)
+  })
+
+  return { rows, error: 관심.error ?? 공고.error ?? null }
+}

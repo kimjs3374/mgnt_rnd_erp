@@ -1,7 +1,8 @@
 import { PageShell, Card, Stat, EmptyState } from "@/components/page-shell"
 import { DbError } from "@/components/db-error"
 import { BudgetingBoard } from "@/components/budgeting-board"
-import { getBudgetingRows, 단계이름 } from "@/lib/queries-budgeting"
+import { WatchlistStrip } from "@/components/watchlist-strip"
+import { getBudgetingRows, getWatchlistAnnouncements, 단계이름 } from "@/lib/queries-budgeting"
 import { won } from "@/lib/queries"
 
 export const dynamic = "force-dynamic"
@@ -20,7 +21,10 @@ export const dynamic = "force-dynamic"
  *   같은 일을 두 화면에 두면 한쪽만 고쳐진다.
  */
 export default async function ProjectBudgetingPage() {
-  const { rows, error, 기관유형, 규칙수 } = await getBudgetingRows()
+  const [{ rows, error, 기관유형, 규칙수 }, 관심] = await Promise.all([
+    getBudgetingRows(),
+    getWatchlistAnnouncements(),
+  ])
 
   const 셈 = (단계: string) => rows.filter((r) => r.단계 === 단계).length
   const 미확정 = 셈("사업비_미확정")
@@ -38,6 +42,10 @@ export default async function ProjectBudgetingPage() {
       description="선정된 과제가 사업비를 잡을 때까지를 한 자리에서 본다. 공고에서 온 건은 그 공고의 재원 분담 규정이 그대로 적용된다."
     >
       {error && <DbError what="과제 계상" error={error} />}
+      {관심.error && <DbError what="관심 공고" error={관심.error} />}
+
+      {/* 관심 공고가 먼저다 — 마감이 지나가는 공고는 계상할 과제보다 급하다. */}
+      <WatchlistStrip rows={관심.rows} />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat

@@ -1,5 +1,6 @@
-import { PageShell, Card, Stat } from "@/components/page-shell"
+import { PageShell, Card, Stat, EmptyState } from "@/components/page-shell"
 import { StatusBadge } from "@/components/status-badge"
+import { DbError } from "@/components/db-error"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -10,18 +11,22 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { LEDGER, won, dday } from "@/lib/mock"
+import { getLedger, won } from "@/lib/queries"
+
+// 대장은 늘 최신이어야 한다. 빌드 시점에 굳히지 않는다.
+export const dynamic = "force-dynamic"
 
 /**
  * 지원사업 대장 — 이 시스템의 중심 화면.
- * 케이오시가 엑셀로 관리하던 「정부과제 Master 관리대장」을 대체한다.
- * 붙일 곳: app.v_program_ledger 뷰 하나만 읽으면 된다.
+ * app.v_program_ledger 뷰 하나만 읽는다. 케이오시가 엑셀로 관리하던 관리대장을 대체한다.
  */
-export default function ProgramsPage() {
-  const 총지원금 = LEDGER.reduce((s, r) => s + (r.지원금액 ?? 0), 0)
-  const 총사용 = LEDGER.reduce((s, r) => s + r.사용금액, 0)
-  const 점검 = LEDGER.reduce((s, r) => s + r.미처리점검, 0)
-  const 서류 = LEDGER.reduce((s, r) => s + r.미확보서류, 0)
+export default async function ProgramsPage() {
+  const { rows, error } = await getLedger()
+
+  const 총지원금 = rows.reduce((s, r) => s + (r.지원금액 ?? 0), 0)
+  const 총사용 = rows.reduce((s, r) => s + (r.사용금액 ?? 0), 0)
+  const 점검 = rows.reduce((s, r) => s + (r.미처리점검 ?? 0), 0)
+  const 서류 = rows.reduce((s, r) => s + (r.미확보서류 ?? 0), 0)
 
   return (
     <PageShell
@@ -41,16 +46,24 @@ export default function ProgramsPage() {
         <>
           <Input placeholder="사업명·기관 검색" className="h-7 w-56 text-[13px]" />
           <span className="text-xs text-muted-foreground">상태</span>
-          <Button type="button" variant="outline" className="h-7 text-[12.8px]">전체</Button>
+          <Button type="button" variant="outline" className="h-7 text-[12.8px]">
+            전체
+          </Button>
           <Button type="button" variant="ghost" className="ml-auto h-7 text-[12.8px]">
             ↺ 초기화
           </Button>
         </>
       }
     >
+      {error && <DbError what="지원사업 대장" error={error} />}
+
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="사업 수" value={LEDGER.length} sub="검토 · 심사 · 수행 · 종료" />
-        <Stat label="지원금액 합계" value={won(총지원금)} sub={`사용 ${won(총사용)}`} />
+        <Stat label="사업 수" value={rows.length} sub="검토 · 심사 · 수행 · 종료" />
+        <Stat
+          label="지원금액 합계"
+          value={won(총지원금)}
+          sub={`사용 ${won(총사용)}`}
+        />
         <Stat
           label="미처리 점검"
           value={점검}
@@ -66,35 +79,43 @@ export default function ProgramsPage() {
       </div>
 
       <Card>
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead className="w-[280px]">사업명 ⇅</TableHead>
-              <TableHead>기관 ⇅</TableHead>
-              <TableHead>유형</TableHead>
-              <TableHead>마감일 ⇅</TableHead>
-              <TableHead className="text-right">지원금액</TableHead>
-              <TableHead className="text-right">사용금액</TableHead>
-              <TableHead>결과</TableHead>
-              <TableHead>상태</TableHead>
-              <TableHead className="text-right">점검</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {LEDGER.map((r) => {
-              const d = dday(r.마감일)
-              return (
+        {rows.length === 0 && !error ? (
+          <EmptyState
+            title="등록된 지원사업이 없습니다"
+            hint="공고에서 신청을 시작하거나 관리대장을 가져오면 여기에 쌓입니다."
+          />
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="w-[280px]">사업명 ⇅</TableHead>
+                <TableHead>기관 ⇅</TableHead>
+                <TableHead>유형</TableHead>
+                <TableHead>마감일 ⇅</TableHead>
+                <TableHead className="text-right">지원금액</TableHead>
+                <TableHead className="text-right">사용금액</TableHead>
+                <TableHead>결과</TableHead>
+                <TableHead>상태</TableHead>
+                <TableHead className="text-right">점검</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((r) => (
                 <TableRow key={r.id} className="h-[38px] text-[13px]">
                   <TableCell className="font-medium">{r.사업명}</TableCell>
-                  <TableCell className="text-muted-foreground">{r.기관}</TableCell>
-                  <TableCell className="text-muted-foreground">{r.사업유형}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {r.기관 ?? "—"}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {r.사업유형 ?? "—"}
+                  </TableCell>
                   <TableCell className="tabular-nums">
                     {r.마감일 ? (
                       <span>
                         {r.마감일}
-                        {d != null && d >= 0 && (
+                        {r.d_day != null && r.d_day >= 0 && (
                           <span className="ml-1 text-xs text-muted-foreground">
-                            D-{d}
+                            D-{r.d_day}
                           </span>
                         )}
                       </span>
@@ -110,7 +131,7 @@ export default function ProgramsPage() {
                     {won(r.사용금액)}
                   </TableCell>
                   <TableCell>
-                    <StatusBadge value={r.선정결과} />
+                    {r.선정결과 ? <StatusBadge value={r.선정결과} /> : "—"}
                   </TableCell>
                   <TableCell>
                     <StatusBadge value={r.상태} />
@@ -123,10 +144,10 @@ export default function ProgramsPage() {
                     )}
                   </TableCell>
                 </TableRow>
-              )
-            })}
-          </TableBody>
-        </Table>
+              ))}
+            </TableBody>
+          </Table>
+        )}
       </Card>
     </PageShell>
   )

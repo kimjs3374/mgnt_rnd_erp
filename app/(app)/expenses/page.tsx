@@ -1,5 +1,6 @@
-import { PageShell, Card } from "@/components/page-shell"
+import { PageShell, Card, EmptyState } from "@/components/page-shell"
 import { StatusBadge, ConfidenceBadge } from "@/components/status-badge"
+import { DbError } from "@/components/db-error"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -10,14 +11,35 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { EXPENSES, won } from "@/lib/mock"
+import { getExpenses, won } from "@/lib/queries"
+import { getLabels, categoryLabel } from "@/lib/labels"
+
+export const dynamic = "force-dynamic"
+
+/** 품목 jsonb 에서 사람이 읽을 이름을 뽑는다. 형태가 흔들려도 화면이 죽지 않게. */
+function itemLabel(품목: unknown): string {
+  if (Array.isArray(품목)) {
+    const names = 품목
+      .map((i) =>
+        i && typeof i === "object" && "품목명" in i
+          ? String((i as Record<string, unknown>).품목명)
+          : i && typeof i === "object" && "name" in i
+            ? String((i as Record<string, unknown>).name)
+            : null,
+      )
+      .filter(Boolean)
+    if (names.length) return names.join(", ")
+  }
+  return "—"
+}
 
 /**
  * 집행 ★ — 우선순위에서 끝까지 지키는 화면.
- * 붙일 곳: app.expenses + app.decisions.
- * 다음 단계: 행 클릭 → 상세 모달(증빙·근거·유사 3건·정정 이력) → [비목 수정] 모달.
+ * 다음: 행 클릭 → 상세(증빙·근거·유사 3건) → [비목 수정] 모달(정정 사유 필수).
  */
-export default function ExpensesPage() {
+export default async function ExpensesPage() {
+  const [{ rows, error }, labels] = await Promise.all([getExpenses(), getLabels()])
+
   return (
     <PageShell
       title="집행"
@@ -47,45 +69,65 @@ export default function ExpensesPage() {
         </>
       }
     >
+      {error && <DbError what="집행 내역" error={error} />}
+
       <Card>
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead>일자 ⇅</TableHead>
-              <TableHead>거래처 ⇅</TableHead>
-              <TableHead>품목</TableHead>
-              <TableHead className="text-right">합계 ⇅</TableHead>
-              <TableHead>비목 › 세부항목</TableHead>
-              <TableHead className="text-center">확신도</TableHead>
-              <TableHead>상태 ⇅</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {EXPENSES.map((e) => (
-              <TableRow key={e.id} className="h-[38px] cursor-pointer text-[13px]">
-                <TableCell className="tabular-nums text-muted-foreground">
-                  {e.일자}
-                </TableCell>
-                <TableCell className="font-medium">{e.거래처}</TableCell>
-                <TableCell>{e.품목}</TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {won(e.합계)}
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {e.비목}
-                  <span className="mx-1">›</span>
-                  <span className="text-foreground">{e.세부항목}</span>
-                </TableCell>
-                <TableCell className="text-center">
-                  <ConfidenceBadge value={e.확신도} />
-                </TableCell>
-                <TableCell>
-                  <StatusBadge value={e.상태} />
-                </TableCell>
+        {rows.length === 0 && !error ? (
+          <EmptyState
+            title="집행 내역이 없습니다"
+            hint="Slack 채널에 증빙을 올리면 봇이 판독해 여기에 「검토대기」로 쌓습니다."
+          />
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>일자 ⇅</TableHead>
+                <TableHead>거래처 ⇅</TableHead>
+                <TableHead>품목</TableHead>
+                <TableHead className="text-right">합계 ⇅</TableHead>
+                <TableHead>비목 › 세부항목</TableHead>
+                <TableHead className="text-center">확신도</TableHead>
+                <TableHead>상태 ⇅</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {rows.map((e) => (
+                <TableRow key={e.id} className="h-[38px] cursor-pointer text-[13px]">
+                  <TableCell className="tabular-nums text-muted-foreground">
+                    {e.일자 ?? "—"}
+                  </TableCell>
+                  <TableCell className="font-medium">{e.거래처 ?? "—"}</TableCell>
+                  <TableCell>{itemLabel(e.품목)}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {won(e.합계)}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {(() => {
+                      const l = categoryLabel(labels, e.비목_대분류, e.비목_세부항목)
+                      return (
+                        <>
+                          {l.main}
+                          {l.sub && (
+                            <>
+                              <span className="mx-1">›</span>
+                              <span className="text-foreground">{l.sub}</span>
+                            </>
+                          )}
+                        </>
+                      )
+                    })()}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <ConfidenceBadge value={e.ai_확신도} />
+                  </TableCell>
+                  <TableCell>
+                    <StatusBadge value={e.상태} />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
       </Card>
 
       <p className="text-xs text-muted-foreground">

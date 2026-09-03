@@ -5,6 +5,7 @@ import { Card } from "@/components/page-shell"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { saveCompany, type SaveResult } from "@/app/actions/company"
+import { parseCompanyDocument, type ParseResult } from "@/app/actions/company-parse"
 
 export type CompanyValues = {
   결산연도: number | null
@@ -45,44 +46,108 @@ type Field = {
  */
 const 신원: Field[] = [
   { name: "회사명", label: "회사명", hint: "화면·문서에 찍히는 이름" },
-  { name: "사업자등록번호", label: "사업자등록번호", hint: "증빙 판독의 거래 방향을 여기서 확정한다(우리가 아닌 쪽이 거래처). 비면 「보류」" },
+  {
+    name: "사업자등록번호",
+    label: "사업자등록번호",
+    hint: "증빙 판독의 거래 방향을 여기서 확정한다(우리가 아닌 쪽이 거래처). 비면 「보류」",
+  },
   { name: "대표자", label: "대표자", hint: "신청서 초안" },
   { name: "설립일", label: "설립일", hint: "업력 요건(창업 N년 이내)", kind: "date" },
 ]
 
 const 대조: Field[] = [
   { name: "소재지", label: "소재지", hint: "사람이 읽는 주소", 대조에쓰임: true },
-  { name: "지역코드", label: "지역코드", hint: "공고 지역과 대조하는 값. 쉼표로 여러 개. 예: 전남광주", kind: "list", 대조에쓰임: true },
+  {
+    name: "지역코드",
+    label: "지역코드",
+    hint: "공고 지역과 대조하는 값. 쉼표로 여러 개. 예: 전남광주",
+    kind: "list",
+    대조에쓰임: true,
+  },
   { name: "기업규모", label: "기업규모", hint: "중소기업 · 중견기업 · 소상공인", 대조에쓰임: true },
-  { name: "지원대상_유형", label: "지원대상 유형", hint: "공고의 지원대상과 대조. 쉼표로 여러 개. 예: 중소기업", kind: "list", 대조에쓰임: true },
-  { name: "업종명", label: "업종", hint: "LLM 1차 거르기에 쓰인다. 쉼표로 여러 개", kind: "list", 대조에쓰임: true },
+  {
+    name: "지원대상_유형",
+    label: "지원대상 유형",
+    hint: "공고의 지원대상과 대조. 쉼표로 여러 개. 예: 중소기업",
+    kind: "list",
+    대조에쓰임: true,
+  },
+  {
+    name: "업종명",
+    label: "업종",
+    hint: "LLM 1차 거르기에 쓰인다. 쉼표로 여러 개",
+    kind: "list",
+    대조에쓰임: true,
+  },
   { name: "주요제품", label: "주요제품", hint: "LLM 1차 거르기에 쓰인다" },
-  { name: "ksic_코드", label: "업종코드(KSIC)", hint: "사업자등록증에서 확인한 뒤에만 채운다. 쉼표로 여러 개", kind: "list" },
+  {
+    name: "ksic_코드",
+    label: "업종코드(KSIC)",
+    hint: "사업자등록증에서 확인한 뒤에만 채운다. 쉼표로 여러 개",
+    kind: "list",
+  },
 ]
 
 const 재무: Field[] = [
-  { name: "결산연도", label: "결산연도", hint: "어느 해 기준인지. 없으면 아래 수치가 뜻이 없다", kind: "number" },
+  {
+    name: "결산연도",
+    label: "결산연도",
+    hint: "어느 해 기준인지. 없으면 아래 수치가 뜻이 없다",
+    kind: "number",
+  },
   { name: "매출액", label: "매출액(원)", hint: "표준 재무제표", kind: "number" },
   { name: "매출증가율", label: "매출증가율(%)", hint: "표준 재무제표", kind: "number" },
   { name: "부채비율", label: "부채비율(%)", hint: "표준 재무제표", kind: "number" },
   { name: "rnd_집약도", label: "R&D 집약도(%)", hint: "기술기업개요표", kind: "number" },
   { name: "종업원수", label: "종업원 수", hint: "4대보험 가입자명부", kind: "number" },
-  { name: "기업부설연구소", label: "기업부설연구소 보유", hint: "연구소 인정서", kind: "check" },
-  { name: "자본전액잠식", label: "자본전액잠식 해당", hint: "해당하면 대부분의 사업에서 신청 자격이 없다", kind: "check" },
+  {
+    name: "기업부설연구소",
+    label: "기업부설연구소 보유",
+    hint: "연구소 인정서",
+    kind: "check",
+  },
+  {
+    name: "자본전액잠식",
+    label: "자본전액잠식 해당",
+    hint: "해당하면 대부분의 사업에서 신청 자격이 없다",
+    kind: "check",
+  },
 ]
 
-function 값문자열(v: CompanyValues[keyof CompanyValues]): string {
+function 값문자열(v: unknown): string {
   if (v == null) return ""
   if (Array.isArray(v)) return v.join(", ")
   if (typeof v === "boolean") return ""
   return String(v)
 }
 
-function Row({ f, values }: { f: Field; values: CompanyValues }) {
-  const v = values[f.name]
+function Row({
+  f,
+  values,
+  판독값,
+  근거,
+}: {
+  f: Field
+  values: CompanyValues
+  /** 서류 판독으로 읽은 값. 있으면 그 값을 칸에 넣고 「서류에서 읽음」을 표시한다. */
+  판독값?: Record<string, unknown>
+  근거?: Record<string, string>
+}) {
+  const 읽음 = 판독값 != null && f.name in 판독값
+  const v = 읽음
+    ? (판독값![f.name] as CompanyValues[keyof CompanyValues])
+    : values[f.name]
+  const 이_근거 = 근거?.[f.name]
+  const 기존 = values[f.name]
+  // 서류가 읽은 값이 지금 저장된 값과 다르면 그것도 보여준다 — 덮어쓰기 전에 알아야 한다.
+  const 바뀜 = 읽음 && 값문자열(기존) !== "" && 값문자열(기존) !== 값문자열(v)
 
   return (
-    <div className="flex flex-wrap items-center gap-3 px-4 py-2.5 text-[13px]">
+    <div
+      className={`flex flex-wrap items-center gap-3 px-4 py-2.5 text-[13px] ${
+        읽음 ? "bg-[var(--success)]/15" : ""
+      }`}
+    >
       <label htmlFor={f.name} className="w-44 shrink-0 text-muted-foreground">
         {f.label}
         {f.대조에쓰임 && (
@@ -100,6 +165,8 @@ function Row({ f, values }: { f: Field; values: CompanyValues }) {
           id={f.name}
           name={f.name}
           type="checkbox"
+          // 판독 결과가 오면 key 가 바뀌어 defaultChecked 가 다시 먹는다.
+          key={`${f.name}-${읽음 ? "ai" : "db"}-${String(v)}`}
           defaultChecked={v === true}
           className="size-4 accent-primary"
         />
@@ -109,13 +176,97 @@ function Row({ f, values }: { f: Field; values: CompanyValues }) {
           name={f.name}
           type={f.kind === "number" ? "number" : f.kind === "date" ? "date" : "text"}
           step={f.kind === "number" ? "any" : undefined}
+          // ⚠ key 를 안 주면 defaultValue 가 안 바뀐다 — React 는 마운트할 때만 읽는다.
+          //   판독 결과가 화면에 반영되지 않는 원인이 이것이다(에러도 안 난다).
+          key={`${f.name}-${읽음 ? "ai" : "db"}-${값문자열(v)}`}
           defaultValue={값문자열(v)}
           placeholder="—"
           className="h-7 w-64 text-[13px]"
         />
       )}
 
-      <span className="flex-1 text-xs text-muted-foreground">{f.hint}</span>
+      <span className="flex-1 text-xs text-muted-foreground">
+        {읽음 ? (
+          <>
+            <span className="font-medium text-[var(--success-fg)]">서류에서 읽음</span>
+            {바뀜 && (
+              <span className="ml-1 text-[var(--warning-fg)]">
+                · 기존 {값문자열(기존)} 에서 바뀜
+              </span>
+            )}
+            {이_근거 && <span className="ml-1 italic">「{이_근거}」</span>}
+          </>
+        ) : (
+          f.hint
+        )}
+      </span>
+    </div>
+  )
+}
+
+/**
+ * 서류를 올려 프로필을 채운다.
+ *
+ * ⚠ 판독 결과를 **DB 에 바로 쓰지 않는다.** 폼 칸에만 채워 놓고 사람이 「저장」을 누른다 —
+ *   이 값들로 신청 자격을 판정하기 때문이다. 모델이 매출액 단위를 한 자리 틀리면
+ *   자격이 없는 공고에 계획서를 쓰게 된다. 항목이 열 개가 넘어 하나만 틀려도 판정이 뒤집힌다.
+ *   서류함(app/actions/documents.ts)은 발급일 하나라 확신도가 높으면 자동 확정하지만
+ *   여기는 그렇게 하지 않는다.
+ *
+ * 별도 <form> 이다. 프로필 저장 폼 안에 두면 파일 input 이 같이 제출되고
+ * 판독 버튼이 프로필을 저장해 버린다.
+ */
+function ParseUploader({ onParsed }: { onParsed: (r: ParseResult) => void }) {
+  const [state, action, pending] = React.useActionState<ParseResult | null, FormData>(
+    parseCompanyDocument,
+    null,
+  )
+
+  // 판독이 끝나면 부모에게 값을 올려보낸다.
+  React.useEffect(() => {
+    if (state?.ok) onParsed(state)
+  }, [state, onParsed])
+
+  return (
+    <div className="rounded-lg border bg-card p-3">
+      <h2 className="mb-1 text-sm font-semibold">서류로 채우기</h2>
+      <p className="mb-2 text-xs text-muted-foreground">
+        사업자등록증 · 표준재무제표증명 · 중소기업확인서 · 기업부설연구소 인정서 등을 올리면
+        읽어서 아래 칸을 채운다. <b>바로 저장되지 않는다</b> — 값을 확인하고 「저장」을 눌러야 한다.
+      </p>
+      <form action={action} className="flex flex-wrap items-center gap-2">
+        <input
+          type="file"
+          name="file"
+          required
+          accept=".pdf,.png,.jpg,.jpeg,.gif,.webp"
+          className="h-7 max-w-[320px] text-[12.8px] file:mr-2 file:h-6 file:rounded-md file:border file:bg-background file:px-2 file:text-[12.8px]"
+        />
+        {/* ⚠ type="submit" 을 빼면 shadcn 기본값(type="button")이라 아무 반응이 없다. */}
+        <Button type="submit" variant="outline" className="h-7 text-[12.8px]" disabled={pending}>
+          {pending ? "판독 중… (20~40초)" : "올려서 판독"}
+        </Button>
+        <span className="text-xs text-muted-foreground">
+          pdf · 이미지만 (hwp 는 서류함에서 보관)
+        </span>
+      </form>
+
+      {state && (
+        <div
+          className={
+            state.ok
+              ? "mt-2 rounded-md border p-2 text-xs"
+              : "mt-2 rounded-md border border-destructive/40 p-2 text-xs text-destructive"
+          }
+        >
+          {state.message}
+          {state.서류함등록 && (
+            <span className="ml-1 text-muted-foreground">
+              · 서류함의 「{state.서류함등록}」에도 등록했다
+            </span>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -131,62 +282,79 @@ export function CompanyForm({ values }: { values: CompanyValues }) {
     saveCompany,
     null,
   )
+  const [판독, set판독] = React.useState<ParseResult | null>(null)
 
-  const 대조미입력 = [...대조].filter((f) => {
+  const 판독값 = 판독?.값
+  const 근거 = 판독?.근거
+
+  // 판독으로 채워진 값까지 세어서 「아직 비었다」를 말한다 — 채워 놓고 경고하면 거짓말이 된다.
+  const 대조미입력 = 대조.filter((f) => {
+    if (!f.대조에쓰임) return false
+    if (판독값 && f.name in 판독값) return false
     const v = values[f.name]
-    return f.대조에쓰임 && (v == null || (Array.isArray(v) && v.length === 0))
+    return v == null || (Array.isArray(v) && v.length === 0)
   }).length
 
+  const 행 = (f: Field) => (
+    <Row key={f.name} f={f} values={values} 판독값={판독값} 근거={근거} />
+  )
+
   return (
-    <form action={action} className="flex flex-col gap-4">
-      <input type="hidden" name="출처_문서" defaultValue={values.출처_문서 ?? ""} />
+    <div className="flex flex-col gap-4">
+      <ParseUploader onParsed={set판독} />
 
-      {대조미입력 > 0 && (
-        <p className="rounded-lg border bg-card p-3 text-[13px] text-[var(--warning-fg)]">
-          ● 표시 항목 {대조미입력}개가 비어 있다 — 공고 탐색이 그만큼 못 거른다.
-        </p>
-      )}
+      <form action={action} className="flex flex-col gap-4">
+        <input type="hidden" name="출처_문서" defaultValue={values.출처_문서 ?? ""} />
 
-      <Section title="신원" desc="신청서 초안과 증빙 판독이 쓰는 값">
-        {신원.map((f) => (
-          <Row key={f.name} f={f} values={values} />
-        ))}
-      </Section>
-
-      <Section
-        title="자격 대조"
-        desc="● 표시가 공고 탐색의 「우리 회사 조건」이 실제로 대조하는 값이다"
-      >
-        {대조.map((f) => (
-          <Row key={f.name} f={f} values={values} />
-        ))}
-      </Section>
-
-      <Section
-        title="재무"
-        desc="공고의 자격 요건(매출 규모·부채비율 한도 등)과 대조된다. 모르면 비워 둔다 — 추측으로 채우면 자격이 없는 공고에 계획서를 쓰게 된다"
-      >
-        {재무.map((f) => (
-          <Row key={f.name} f={f} values={values} />
-        ))}
-      </Section>
-
-      <div className="flex items-center gap-3">
-        {/* type="submit" 을 빼면 조용히 아무 일도 안 일어난다. */}
-        <Button type="submit" className="h-7 text-[12.8px]" disabled={pending}>
-          {pending ? "저장 중…" : "저장"}
-        </Button>
-        {state && (
-          <span
-            className={
-              state.ok ? "text-xs text-muted-foreground" : "text-xs text-destructive"
-            }
-          >
-            {state.message}
-          </span>
+        {판독값 && (
+          <p className="rounded-lg border bg-card p-3 text-[13px]">
+            서류에서 읽은 <b>{Object.keys(판독값).length}개 항목</b>이 아래에 채워져 있다(초록 배경).
+            <b className="text-[var(--warning-fg)]"> 아직 저장되지 않았다</b> — 값을 확인하고
+            「저장」을 눌러야 DB 에 들어간다. 틀린 값은 그 자리에서 고치면 된다.
+          </p>
         )}
-      </div>
-    </form>
+
+        {대조미입력 > 0 && (
+          <p className="rounded-lg border bg-card p-3 text-[13px] text-[var(--warning-fg)]">
+            ● 표시 항목 {대조미입력}개가 비어 있다 — 공고 탐색이 그만큼 못 거른다.
+          </p>
+        )}
+
+        <Section title="신원" desc="신청서 초안과 증빙 판독이 쓰는 값">
+          {신원.map(행)}
+        </Section>
+
+        <Section
+          title="자격 대조"
+          desc="● 표시가 공고 탐색의 「우리 회사 조건」이 실제로 대조하는 값이다"
+        >
+          {대조.map(행)}
+        </Section>
+
+        <Section
+          title="재무"
+          desc="공고의 자격 요건(매출 규모·부채비율 한도 등)과 대조된다. 모르면 비워 둔다 — 추측으로 채우면 자격이 없는 공고에 계획서를 쓰게 된다"
+        >
+          {재무.map(행)}
+        </Section>
+
+        <div className="flex items-center gap-3">
+          {/* type="submit" 을 빼면 조용히 아무 일도 안 일어난다. */}
+          <Button type="submit" className="h-7 text-[12.8px]" disabled={pending}>
+            {pending ? "저장 중…" : "저장"}
+          </Button>
+          {state && (
+            <span
+              className={
+                state.ok ? "text-xs text-muted-foreground" : "text-xs text-destructive"
+              }
+            >
+              {state.message}
+            </span>
+          )}
+        </div>
+      </form>
+    </div>
   )
 }
 

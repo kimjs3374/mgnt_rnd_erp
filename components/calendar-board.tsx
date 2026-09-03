@@ -134,40 +134,51 @@ export function CalendarBoard({
 
   return (
     <div className="flex flex-col rounded-lg border bg-card">
-      {/* ── 머리 ─────────────────────────────────────────── */}
-      <div className="flex items-center gap-2 border-b px-4 py-2.5">
-        <h2 className="mr-auto text-sm font-semibold">일정</h2>
-        <button
-          type="button"
-          onClick={() => 이동(-1)}
-          aria-label="이전 달"
-          className="flex size-6 items-center justify-center rounded-full border text-muted-foreground hover:bg-muted hover:text-foreground"
-        >
-          ‹
-        </button>
-        <span className="min-w-[68px] text-center text-[15px] font-medium tabular-nums">
-          {cy}.{pad(cm)}
-        </span>
-        <button
-          type="button"
-          onClick={() => 이동(1)}
-          aria-label="다음 달"
-          className="flex size-6 items-center justify-center rounded-full border text-muted-foreground hover:bg-muted hover:text-foreground"
-        >
-          ›
-        </button>
-        {달접두 !== today.slice(0, 7) && (
+      {/* ── 머리 ─────────────────────────────────────────────
+          2026-09-03 개편(6차): 「오늘」 버튼이 나타났다 사라지면서 ‹ 월 › 이 좌우로
+          밀리는 게 지적됐다(당연하다 — 한 줄 flex 라 오른쪽 내용이 줄면 왼쪽 그룹이
+          가장자리로 밀린다). 가운데 월 이동은 **절대 위치로 화면 가운데 고정**하고,
+          오른쪽 「오늘」은 없을 때도 자리를 차지하게 `invisible` 로 둔다.
+          그러면 셋 중 뭐가 나타나든 사라지든 가운데는 흔들리지 않는다. */}
+      <div className="relative flex items-center border-b px-4 py-2.5">
+        <h2 className="text-sm font-semibold">일정</h2>
+
+        <div className="absolute left-1/2 flex -translate-x-1/2 items-center gap-2">
           <button
             type="button"
-            onClick={() => {
-              set커서(today)
-              set선택(null)
-            }}
-            className="ml-1 text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => 이동(-1)}
+            aria-label="이전 달"
+            className="flex size-6 items-center justify-center rounded-full border text-muted-foreground hover:bg-muted hover:text-foreground"
           >
-            오늘
+            ‹
           </button>
-        )}
+          <span className="min-w-[68px] text-center text-[15px] font-medium tabular-nums">
+            {cy}.{pad(cm)}
+          </span>
+          <button
+            type="button"
+            onClick={() => 이동(1)}
+            aria-label="다음 달"
+            className="flex size-6 items-center justify-center rounded-full border text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            ›
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            set커서(today)
+            set선택(null)
+          }}
+          disabled={달접두 === today.slice(0, 7)}
+          className={cn(
+            "ml-auto text-xs text-muted-foreground hover:text-foreground",
+            달접두 === today.slice(0, 7) && "invisible",
+          )}
+        >
+          오늘
+        </button>
       </div>
 
       {error ? (

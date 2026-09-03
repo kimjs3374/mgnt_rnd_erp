@@ -87,7 +87,23 @@ try {
     `단계 값이 셋 중 하나다 (${[...new Set(단계열 ?? [])].join(" · ")})`,
   )
 
-  확인(await 고르기("단계로 걸러내기", "수행중"), "단계로 거르는 자리가 있다")
+  // 2026-09-04 부터 단계 필터는 드롭다운이 아니라 **토글 칩**이다(여러 개를 동시에 켤 수 있어야
+  // 해서 — "신청중이랑 수행중만" 같은 요청, `e2e-stage-multiselect.mjs` 가 그 다중 선택 자체를
+  // 본다). 여기서는 신청중·사업종료를 꺼서 수행중만 남기는 걸로 「거르는 자리가 있다」를 확인한다.
+  async function 단계칩끄기(이름) {
+    return page.evaluate((n) => {
+      const b = [...document.querySelectorAll('[role="group"][aria-label="단계로 걸러내기"] button')].find(
+        (x) => x.textContent.trim() === n,
+      )
+      if (!b) return false
+      b.click()
+      return true
+    }, 이름)
+  }
+  const 눌림1 = await 단계칩끄기("신청중")
+  const 눌림2 = await 단계칩끄기("사업종료")
+  확인(눌림1 && 눌림2, "단계로 거르는 자리가 있다")
+  await 잠깐(400)
   const 수행만 = await 열읽기("단계")
   확인(
     !!수행만 && 수행만.length === 셈.수행중 && 수행만.every((v) => v === "수행중"),

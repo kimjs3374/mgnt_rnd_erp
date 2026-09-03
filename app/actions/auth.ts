@@ -19,7 +19,7 @@ type UserRow = {
   password_hash: string
   name: string
   role: "member" | "admin"
-  status: "pending" | "approved" | "rejected"
+  status: "pending" | "approved" | "rejected" | "suspended"
 }
 
 export async function login(formData: FormData): Promise<ActionResult> {
@@ -60,6 +60,9 @@ export async function login(formData: FormData): Promise<ActionResult> {
   }
   if (data.status === "rejected") {
     return { ok: false, error: "가입이 반려된 계정입니다. 관리자에게 문의하세요." }
+  }
+  if (data.status === "suspended") {
+    return { ok: false, error: "정지된 계정입니다. 관리자에게 문의하세요." }
   }
 
   resetRateLimit(userKey)

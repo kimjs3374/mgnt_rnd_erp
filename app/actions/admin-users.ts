@@ -9,6 +9,8 @@ export type IssueTempPasswordResult =
   | { ok: true; tempPassword: string }
   | { ok: false; error: string }
 
+export type ActionResult = { ok: true } | { ok: false; error: string }
+
 async function requireAdmin() {
   const user = await getCurrentUser()
   if (!user.인증 || user.role !== "admin") {
@@ -84,4 +86,101 @@ export async function issueTempPassword(formData: FormData): Promise<IssueTempPa
   //   비밀번호를 admin이 읽기도 전에 화면에서 지워진다(실측: 12초 대기해도 못 읽음).
   //   다음에 페이지를 새로 열면 어차피 빠져 있으니 revalidate가 없어도 데이터는 정확하다.
   return { ok: true, tempPassword }
+}
+
+/** status='approved'인 admin 수. excludeId를 주면 그 계정은 세지 않는다(그 계정을 바꾸는 중이라서). */
+async function countActiveAdmins(excludeId?: number): Promise<number> {
+  let q = db.from("users").select("id", { count: "exact", head: true }).eq("role", "admin").eq("status", "approved")
+  if (excludeId) q = q.neq("id", excludeId)
+  const { count } = await q
+  return count ?? 0
+}
+
+/**
+ * 권한 부여/회수 — member ⇄ admin. 바뀔 때마다 role_change_log에 남는다.
+ * 두 가지를 막는다: (1) 본인 권한을 스스로 바꾸는 것, (2) 마지막 남은 admin을 강등시키는 것.
+ * 안 막으면 관리자가 자기 실수로 아무도 관리자 화면에 못 들어오는 상태를 만들 수 있다.
+ */
+export async function changeUserRole(formData: FormData): Promise<ActionResult> {
+  const admin = await requireAdmin()
+  const id = Number(formData.get("id"))
+  const newRole = String(formData.get("role") ?? "")
+  if (!id || (newRole !== "member" && newRole !== "admin")) {
+    return { ok: false, error: "잘못된 요청입니다." }
+  }
+  if (id === Number(admin.id)) {
+    return { ok: false, error: "본인의 권한은 스스로 변경할 수 없습니다." }
+  }
+
+  const { data: target } = await db.from("users").select("role, status").eq("id", id).maybeSingle()
+  if (!target) return { ok: false, error: "계정을 찾을 수 없습니다." }
+  if (target.role === newRole) return { ok: true }
+
+  if (target.role === "admin" && newRole === "member" && target.status === "approved") {
+    const remaining = await countActiveAdmins(id)
+    if (remaining === 0) {
+      return { ok: false, error: "최소 한 명의 최고관리자는 남아 있어야 합니다." }
+    }
+  }
+
+  const { error } = await db.from("users").update({ role: newRole }).eq("id", id)
+  if (error) {
+    console.error("[admin-users] 권한 변경 실패:", error.message)
+    return { ok: false, error: "권한 변경에 실패했습니다." }
+  }
+
+  await db.from("role_change_log").insert({
+    user_id: id,
+    old_role: target.role,
+    new_role: newRole,
+    changed_by: Number(admin.id),
+  })
+
+  revalidatePath("/admin/users")
+  return { ok: true }
+}
+
+/** 계정 정지. 로그인 자체를 막는다(app/actions/auth.ts의 login()이 status==='suspended'를 거부). */
+export async function suspendUser(formData: FormData): Promise<ActionResult> {
+  const admin = await requireAdmin()
+  const id = Number(formData.get("id"))
+  if (!id) return { ok: false, error: "잘못된 요청입니다." }
+  if (id === Number(admin.id)) {
+    return { ok: false, error: "본인 계정은 스스로 정지할 수 없습니다." }
+  }
+
+  const { data: target } = await db.from("users").select("role, status").eq("id", id).maybeSingle()
+  if (!target) return { ok: false, error: "계정을 찾을 수 없습니다." }
+
+  if (target.role === "admin" && target.status === "approved") {
+    const remaining = await countActiveAdmins(id)
+    if (remaining === 0) {
+      return { ok: false, error: "최소 한 명의 최고관리자는 남아 있어야 합니다." }
+    }
+  }
+
+  const { error } = await db.from("users").update({ status: "suspended" }).eq("id", id)
+  if (error) {
+    console.error("[admin-users] 계정 정지 실패:", error.message)
+    return { ok: false, error: "계정 정지에 실패했습니다." }
+  }
+
+  revalidatePath("/admin/users")
+  return { ok: true }
+}
+
+/** 정지 해제 — approved로 되돌린다. */
+export async function reactivateUser(formData: FormData): Promise<ActionResult> {
+  await requireAdmin()
+  const id = Number(formData.get("id"))
+  if (!id) return { ok: false, error: "잘못된 요청입니다." }
+
+  const { error } = await db.from("users").update({ status: "approved" }).eq("id", id)
+  if (error) {
+    console.error("[admin-users] 정지 해제 실패:", error.message)
+    return { ok: false, error: "정지 해제에 실패했습니다." }
+  }
+
+  revalidatePath("/admin/users")
+  return { ok: true }
 }

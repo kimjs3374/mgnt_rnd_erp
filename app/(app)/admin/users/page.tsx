@@ -3,6 +3,7 @@ import { db } from "@/lib/db"
 import { getCurrentUser } from "@/lib/current-user"
 import { approveUser, rejectUser } from "@/app/actions/admin-users"
 import { AdminResetRequests } from "@/components/admin-reset-requests"
+import { AdminAccounts } from "@/components/admin-accounts"
 import { Button } from "@/components/ui/button"
 
 export const dynamic = "force-dynamic"
@@ -22,6 +23,17 @@ type ResetRequest = {
   name: string
   email: string | null
   reset_requested_at: string
+}
+
+type Account = {
+  id: number
+  username: string
+  name: string
+  email: string | null
+  phone: string | null
+  role: "member" | "admin"
+  status: "approved" | "rejected" | "suspended"
+  last_login_at: string | null
 }
 
 export default async function AdminUsersPage() {
@@ -46,6 +58,14 @@ export default async function AdminUsersPage() {
     .order("reset_requested_at", { ascending: true })
     .returns<ResetRequest[]>()
   const resetRequests = resetData ?? []
+
+  const { data: accountsData, error: accountsError } = await db
+    .from("users")
+    .select("id, username, name, email, phone, role, status, last_login_at")
+    .neq("status", "pending")
+    .order("username", { ascending: true })
+    .returns<Account[]>()
+  const accounts = accountsData ?? []
 
   return (
     <div className="space-y-8 p-4">
@@ -109,6 +129,18 @@ export default async function AdminUsersPage() {
           </table>
         </div>
       )}
+
+      <div>
+        <h2 className="text-lg font-semibold">전체 계정 · 권한 관리</h2>
+        <p className="text-sm text-muted-foreground">
+          역할을 바꾸거나 계정을 정지/해제합니다. 본인 계정과 마지막 남은 최고관리자는 보호됩니다.
+        </p>
+      </div>
+
+      {accountsError && (
+        <p className="text-sm text-destructive">목록을 불러오지 못했습니다: {accountsError.message}</p>
+      )}
+      {!accountsError && <AdminAccounts accounts={accounts} />}
 
       <div>
         <h2 className="text-lg font-semibold">비밀번호 재설정 요청</h2>

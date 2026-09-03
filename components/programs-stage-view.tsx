@@ -69,7 +69,7 @@ export async function ProgramsStageView({ 단계 }: { 단계: 사업단계 | "�
       actions={
         <>
           <Button
-            type="button"
+            nativeButton={false}
             variant="outline"
             className="h-7 text-[12.8px]"
             render={<a href="/api/programs/xlsx" />}
@@ -77,7 +77,11 @@ export async function ProgramsStageView({ 단계 }: { 단계: 사업단계 | "�
             ⤓ Excel
           </Button>
           {/* 대장에 줄이 생기는 유일한 경로는 공고 지원이다(app/actions/apply.ts). */}
-          <Button type="button" className="h-7 text-[12.8px]" render={<Link href="/announcements" />}>
+          <Button
+            nativeButton={false}
+            className="h-7 text-[12.8px]"
+            render={<Link href="/announcements" />}
+          >
             + 공고에서 등록
           </Button>
         </>

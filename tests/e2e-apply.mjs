@@ -72,10 +72,11 @@ try {
   t = await 본문()
   log(`${t.includes(과제명) ? "✓" : "✗"} 지원사업 대장에 뜬다`)
 
-  // 과제사업 대장에는 아직 안 떠야 정상인가? — 같은 테이블이라 뜬다. 상태로 구분한다.
+  // 과제사업 대장에는 아직 뜨면 안 된다 — 같은 테이블이지만 선정 전이라 걸러진다.
   await page.goto(`${BASE}/projects`, { waitUntil: "networkidle0", timeout: 60000 })
   t = await 본문()
-  log(`과제사업 대장 표시: ${t.includes(과제명) ? "뜬다(상태=신청)" : "안 뜬다"}`)
+  log(`${t.includes(과제명) ? "✗" : "✓"} 선정 전에는 과제사업 대장에 안 뜬다`)
+  log(`${t.includes("아직 선정되지 않은") ? "✓" : "✗"} 몇 건이 빠졌는지 알려 준다`)
 
   // 선정 처리
   await page.goto(`${BASE}/announcements/${공고}`, { waitUntil: "networkidle0", timeout: 60000 })
@@ -97,6 +98,15 @@ try {
   log(`${t.includes("과제사업 대장에 뜨고") ? "✓" : "✗"} 선정 기록 + 다음 할 일 안내`)
   log(`${t.includes("상태 수행중") ? "✓" : "✗"} 상태가 수행중으로 바뀐다`)
   log(`${t.includes("연구비 계상 시작") ? "✓" : "✗"} 계상으로 가는 링크가 생긴다`)
+
+  // 이제야 과제사업 대장으로 넘어온다. 이 두 줄이 「선정되면 연동된다」의 실제 증거다.
+  await page.goto(`${BASE}/projects`, { waitUntil: "networkidle0", timeout: 60000 })
+  t = await 본문()
+  log(`${t.includes(과제명) ? "✓" : "✗"} 선정 후 과제사업 대장에 넘어온다`)
+
+  await page.goto(`${BASE}/programs`, { waitUntil: "networkidle0", timeout: 60000 })
+  t = await 본문()
+  log(`${t.includes(과제명) ? "✓" : "✗"} 지원사업 대장에는 그대로 남는다(생애주기는 한 줄로 이어진다)`)
 
   console.log(`\n  정리용: ./db/psql.sh -c "delete from app.projects where 과제명='${과제명}'"`)
   log(errors.length ? `⚠ 콘솔 오류 ${errors.length}건: ${errors.slice(0, 2).join(" | ")}` : "✓ 콘솔 오류 없음")

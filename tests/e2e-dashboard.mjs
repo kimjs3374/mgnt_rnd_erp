@@ -49,31 +49,31 @@ try {
   확인("공고 확인이 첫 카드", 제목들[0] === "공고 확인")
   확인("일정 카드 있음", 제목들.includes("일정"))
   확인("통합 관리 카드 있음 (수행 과제·사업 아님)", 제목들.includes("통합 관리"))
-  확인("오늘 처리할 것 카드로 합쳐짐 (셋으로 안 쪼개짐)", 제목들.includes("오늘 처리할 것"))
+  확인("확인 및 조치 카드로 합쳐짐 (셋으로 안 쪼개짐)", 제목들.includes("확인 및 조치"))
 
   const 본문 = await p.evaluate(() => document.body.innerText)
 
-  // 오늘 처리할 것 — 6차 개편: 갈래 전체 이름(비목 확정 등)은 이제 안 뜨고
+  // 확인 및 조치 — 6차 개편: 갈래 전체 이름(비목 확정 등)은 이제 안 뜨고
   // 짧은 배지(대기·서류·점검)만 쓴다. 0건 갈래는 배지째로 아예 안 보인다.
   const 오늘카드 = await p.evaluate(() => {
-    const h2 = [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === "오늘 처리할 것")
+    const h2 = [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === "확인 및 조치")
     return h2?.closest("div.rounded-lg")?.textContent ?? ""
   })
   확인(
-    "오늘 처리할 것 - 갈래 전체 이름은 안 뜨고 짧은 배지만 씀",
+    "확인 및 조치 - 갈래 전체 이름은 안 뜨고 짧은 배지만 씀",
     !오늘카드.includes("비목 확정") && !오늘카드.includes("챙길 서류") && !오늘카드.includes("제출 전 점검"),
   )
   확인(
-    "오늘 처리할 것 - 내용 또는 빈 상태 문구가 있음",
+    "확인 및 조치 - 내용 또는 빈 상태 문구가 있음",
     ["대기", "서류", "점검"].some((v) => 오늘카드.includes(v)) || 오늘카드.includes("지금 손댈 것이 없습니다"),
     오늘카드.replace(/\s+/g, " ").trim().slice(0, 80),
   )
   // 7차 개편: 「외 N건」(안 눌리던 <p>) 이 없어지고 갈래별 페이지 넘김으로 바뀌었다.
-  확인("오늘 처리할 것에 「외 N건」(안 눌리는 텍스트) 없음", !/외\s*\d+\s*건/.test(오늘카드))
+  확인("확인 및 조치에 「외 N건」(안 눌리는 텍스트) 없음", !/외\s*\d+\s*건/.test(오늘카드))
 
   // 9차 개편: "없음"이 "처리할 게 없다"로 오독됐던 것 — 원래 값 대신 행동 문구로 바꿨다.
   // 「없음」이라는 원래 값이 카드 어디에도 그대로 노출되면 안 된다(전부 "발급 필요"로 바뀐다).
-  확인("오늘 처리할 것에 원래 값 「없음」이 그대로 안 뜸(행동 문구로 바뀜)", !오늘카드.includes("없음"))
+  확인("확인 및 조치에 원래 값 「없음」이 그대로 안 뜸(행동 문구로 바뀜)", !오늘카드.includes("없음"))
   if (오늘카드.includes("서류")) {
     확인(
       "챙길 서류 - 「발급 필요」(행동 문구)가 뜸",
@@ -92,7 +92,7 @@ try {
   // ⚠ 버튼은 카드에 딱 하나만 있어야 한다(갈래마다 있던 것 없어짐).
   const 오늘카드정보 = () =>
     p.evaluate(() => {
-      const h2 = [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === "오늘 처리할 것")
+      const h2 = [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === "확인 및 조치")
       const card = h2?.closest("div.rounded-lg")
       return {
         버튼수: card?.querySelectorAll('button[aria-label$="다음 페이지"]').length ?? 0,
@@ -101,28 +101,28 @@ try {
       }
     })
   const 정보전 = await 오늘카드정보()
-  확인("오늘 처리할 것에 페이지 넘김 버튼이 있어도 하나뿐", 정보전.버튼수 <= 1, `버튼 ${정보전.버튼수}개`)
+  확인("확인 및 조치에 페이지 넘김 버튼이 있어도 하나뿐", 정보전.버튼수 <= 1, `버튼 ${정보전.버튼수}개`)
 
   if (정보전.버튼수 === 1) {
     await p.evaluate(() => {
-      const h2 = [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === "오늘 처리할 것")
+      const h2 = [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === "확인 및 조치")
       h2?.closest("div.rounded-lg")?.querySelector('button[aria-label$="다음 페이지"]')?.click()
     })
     await 잠깐(200)
     const 정보후 = await 오늘카드정보()
     확인(
-      "오늘 처리할 것의 페이지 넘김 버튼이 실제로 목록을 바꿈(예전엔 <p>라 안 눌렸다)",
+      "확인 및 조치의 페이지 넘김 버튼이 실제로 목록을 바꿈(예전엔 <p>라 안 눌렸다)",
       정보전.첫줄 !== null && 정보후.첫줄 !== null && 정보전.첫줄 !== 정보후.첫줄,
       `${정보전.첫줄} → ${정보후.첫줄}`,
     )
     // 8차 개편: 마지막 페이지가 항목 수보다 적어도 빈 줄로 채워 카드 테두리가 안 움직여야 한다.
     확인(
-      "페이지를 넘겨도 오늘 처리할 것 카드 테두리가 안 움직임(빈 줄로 채움)",
+      "페이지를 넘겨도 확인 및 조치 카드 테두리가 안 움직임(빈 줄로 채움)",
       정보전.높이 != null && 정보후.높이 != null && Math.abs(정보전.높이 - 정보후.높이) < 1,
       `${정보전.높이}px → ${정보후.높이}px`,
     )
   } else {
-    console.log("  (오늘 처리할 것 항목이 5건 이하라 페이지 넘김 버튼이 안 뜸 - 정상)")
+    console.log("  (확인 및 조치 항목이 5건 이하라 페이지 넘김 버튼이 안 뜸 - 정상)")
   }
 
   확인("부제 삭제됨", !본문.includes("오늘 손대야 할 것만 모았다"))
@@ -310,21 +310,21 @@ try {
     `수행중 ${수행중상태.높이}px → 신청중 ${신청중상태.높이}px`,
   )
 
-  // 왼쪽 달력 카드 세로 길이 == 오른쪽(통합 관리 + 오늘 처리할 것) 합계.
+  // 왼쪽 달력 카드 세로 길이 == 오른쪽(통합 관리 + 확인 및 조치) 합계.
   // CSS Grid 의 items-stretch + flex-1 로 맞춘 것이라 픽셀이 완전히 같아야 한다 —
   // 몇 px 오차(테두리 반올림)는 봐주되 눈에 띄게 어긋나면 잡아낸다.
   const 높이대조 = await p.evaluate(() => {
     const h2 = (t) => [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === t)
     const 달력 = h2("일정")?.closest("div.rounded-lg")
     const 과제 = h2("통합 관리")?.closest("div.rounded-lg")
-    const 오늘 = h2("오늘 처리할 것")?.closest("div.rounded-lg")
+    const 오늘 = h2("확인 및 조치")?.closest("div.rounded-lg")
     if (!달력 || !과제 || !오늘) return null
     const 달력높이 = 달력.getBoundingClientRect().height
     const 오른쪽높이 = 오늘.getBoundingClientRect().bottom - 과제.getBoundingClientRect().top
     return { 달력높이, 오른쪽높이, 차이: Math.abs(달력높이 - 오른쪽높이) }
   })
   확인(
-    "왼쪽 달력과 오른쪽(통합 관리+오늘 처리할 것) 세로 길이가 같음",
+    "왼쪽 달력과 오른쪽(통합 관리+확인 및 조치) 세로 길이가 같음",
     높이대조 != null && 높이대조.차이 <= 2,
     높이대조 ? `달력 ${높이대조.달력높이}px / 오른쪽 ${높이대조.오른쪽높이}px (차이 ${높이대조.차이}px)` : "카드 못 찾음",
   )

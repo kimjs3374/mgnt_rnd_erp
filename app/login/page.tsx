@@ -1,12 +1,20 @@
 "use client"
 
 import { useActionState, useState } from "react"
-import { login, signup, type ActionResult } from "@/app/actions/auth"
+import {
+  login,
+  signup,
+  findUsername,
+  requestPasswordReset,
+  type ActionResult,
+  type FindUsernameResult,
+} from "@/app/actions/auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
 const initialState: ActionResult | null = null
+const initialFindState: FindUsernameResult | null = null
 
 function LoginPanel() {
   const [state, formAction, pending] = useActionState<ActionResult | null, FormData>(async (_prev, formData) => {
@@ -84,8 +92,71 @@ function SignupPanel() {
   )
 }
 
+function FindUsernamePanel() {
+  const [state, formAction, pending] = useActionState<FindUsernameResult | null, FormData>(
+    async (_prev, formData) => (await findUsername(formData)) ?? null,
+    initialFindState,
+  )
+
+  return (
+    <form action={formAction} className="space-y-4">
+      <div className="space-y-1.5">
+        <Label htmlFor="f-name">이름</Label>
+        <Input id="f-name" name="name" required />
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="f-contact">연락처 또는 이메일</Label>
+        <Input id="f-contact" name="contact" placeholder="010-0000-0000 또는 example@mgnt.kr" required />
+      </div>
+      {state && !state.ok && <p className="text-sm text-destructive">{state.error}</p>}
+      {state?.ok && (
+        <p className="rounded-md bg-muted/60 p-3 text-sm">
+          아이디: <span className="font-mono font-medium">{state.masked}</span>
+        </p>
+      )}
+      <Button type="submit" className="w-full justify-center" size="lg" disabled={pending}>
+        {pending ? "조회 중..." : "아이디 찾기"}
+      </Button>
+    </form>
+  )
+}
+
+function ResetPasswordPanel() {
+  const [state, formAction, pending] = useActionState<ActionResult | null, FormData>(async (_prev, formData) => {
+    return await requestPasswordReset(formData)
+  }, initialState)
+
+  if (state?.ok) {
+    return (
+      <div className="py-10 text-center">
+        <p className="text-sm font-medium">요청이 접수됐습니다.</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          관리자 확인 후 새 비밀번호를 별도로 안내해 드립니다.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <form action={formAction} className="space-y-4">
+      <div className="space-y-1.5">
+        <Label htmlFor="r-username">아이디</Label>
+        <Input id="r-username" name="username" autoComplete="username" required />
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="r-email">등록된 이메일</Label>
+        <Input id="r-email" name="email" type="email" placeholder="가입 시 등록한 이메일" required />
+      </div>
+      {state && !state.ok && <p className="text-sm text-destructive">{state.error}</p>}
+      <Button type="submit" className="w-full justify-center" size="lg" disabled={pending}>
+        {pending ? "요청 중..." : "비밀번호 재설정 요청"}
+      </Button>
+    </form>
+  )
+}
+
 export default function LoginPage() {
-  const [tab, setTab] = useState<"login" | "signup">("login")
+  const [tab, setTab] = useState<"login" | "signup" | "find-id" | "reset-pw">("login")
 
   return (
     <div className="flex min-h-full flex-1 items-center justify-center bg-muted/40 p-4">
@@ -96,31 +167,33 @@ export default function LoginPage() {
         </div>
 
         <div className="mb-6 flex gap-4 border-b text-sm">
-          <button
-            type="button"
-            onClick={() => setTab("login")}
-            className={
-              tab === "login"
-                ? "border-b-2 border-primary pb-2 font-medium text-primary"
-                : "pb-2 text-muted-foreground hover:text-foreground"
-            }
-          >
-            로그인
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab("signup")}
-            className={
-              tab === "signup"
-                ? "border-b-2 border-primary pb-2 font-medium text-primary"
-                : "pb-2 text-muted-foreground hover:text-foreground"
-            }
-          >
-            계정 신청
-          </button>
+          {(
+            [
+              ["login", "로그인"],
+              ["signup", "계정 신청"],
+              ["find-id", "아이디 찾기"],
+              ["reset-pw", "비번 찾기"],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setTab(key)}
+              className={
+                tab === key
+                  ? "border-b-2 border-primary pb-2 font-medium text-primary"
+                  : "pb-2 text-muted-foreground hover:text-foreground"
+              }
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
-        {tab === "login" ? <LoginPanel /> : <SignupPanel />}
+        {tab === "login" && <LoginPanel />}
+        {tab === "signup" && <SignupPanel />}
+        {tab === "find-id" && <FindUsernamePanel />}
+        {tab === "reset-pw" && <ResetPasswordPanel />}
       </div>
     </div>
   )

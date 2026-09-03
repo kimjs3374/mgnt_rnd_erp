@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import { db } from "@/lib/db"
 import { getCurrentUser } from "@/lib/current-user"
 import { approveUser, rejectUser } from "@/app/actions/admin-users"
+import { AdminResetRequests } from "@/components/admin-reset-requests"
 import { Button } from "@/components/ui/button"
 
 export const dynamic = "force-dynamic"
@@ -13,6 +14,14 @@ type PendingUser = {
   phone: string | null
   email: string | null
   created_at: string
+}
+
+type ResetRequest = {
+  id: number
+  username: string
+  name: string
+  email: string | null
+  reset_requested_at: string
 }
 
 export default async function AdminUsersPage() {
@@ -30,8 +39,16 @@ export default async function AdminUsersPage() {
 
   const pending = data ?? []
 
+  const { data: resetData, error: resetError } = await db
+    .from("users")
+    .select("id, username, name, email, reset_requested_at")
+    .not("reset_requested_at", "is", null)
+    .order("reset_requested_at", { ascending: true })
+    .returns<ResetRequest[]>()
+  const resetRequests = resetData ?? []
+
   return (
-    <div className="space-y-4 p-4">
+    <div className="space-y-8 p-4">
       <div>
         <h1 className="text-xl font-semibold">계정 승인</h1>
         <p className="text-sm text-muted-foreground">가입 신청한 계정을 승인하거나 반려합니다.</p>
@@ -92,6 +109,18 @@ export default async function AdminUsersPage() {
           </table>
         </div>
       )}
+
+      <div>
+        <h2 className="text-lg font-semibold">비밀번호 재설정 요청</h2>
+        <p className="text-sm text-muted-foreground">
+          이메일 자동 발송은 지원하지 않습니다. 임시 비밀번호를 발급한 뒤 본인에게 직접 전달하세요.
+        </p>
+      </div>
+
+      {resetError && (
+        <p className="text-sm text-destructive">목록을 불러오지 못했습니다: {resetError.message}</p>
+      )}
+      {!resetError && <AdminResetRequests requests={resetRequests} />}
     </div>
   )
 }

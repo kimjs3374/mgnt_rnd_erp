@@ -17,12 +17,14 @@ const TONE: Record<string, Tone> = {
   종료: "done",
   선정: "done",
   유효: "done",
+  확인됨: "done",
 
   검토대기: "pending",
   제출: "pending",
   수행: "pending",
   심사: "pending",
   대기: "pending",
+  미확인: "pending",
 
   반려: "danger",
   탈락: "danger",

@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { PageShell, Card, EmptyState } from "@/components/page-shell"
 import { StatusBadge } from "@/components/status-badge"
 import { DbError } from "@/components/db-error"
@@ -74,7 +75,14 @@ export default async function ProjectAnnouncementsPage() {
                   <TableCell>
                     <span className="text-xs text-muted-foreground">{a.출처}</span>
                   </TableCell>
-                  <TableCell className="font-medium">{a.사업명}</TableCell>
+                  <TableCell className="font-medium">
+                    <Link
+                      href={`/project-announcements/${a.id}`}
+                      className="hover:underline"
+                    >
+                      {a.사업명}
+                    </Link>
+                  </TableCell>
                   <TableCell className="text-muted-foreground">
                     {a.소관부처 ?? a.전문기관 ?? "—"}
                   </TableCell>

@@ -155,6 +155,43 @@ export const getRndAnnouncements = () =>
       .limit(100),
   )
 
+export type AnnouncementDetailRow = AnnouncementRow & {
+  본문: string | null
+  공고문_파일명: string | null
+}
+
+/** 공고 하나의 전체 필드 — 본문·공고문_파일명까지 포함한다. 상세 화면 전용. */
+export const getAnnouncementDetail = (id: number) =>
+  safeSelect<AnnouncementDetailRow>("announcements", () =>
+    db.from("announcements").select("*").eq("id", id).limit(1),
+  )
+
+export type RequiredDocRow = {
+  id: number
+  announcement_id: number
+  서류명: string
+  구분: string | null
+  필수여부: boolean
+  유효기간_문구: string | null
+  원문: string
+  근거문장: string | null
+  ai_확신도: number | null
+  확인상태: string
+}
+
+/**
+ * 공고 하나가 요구하는 서류 목록 — LLM 판독 결과(claude -p 헤드리스, 근거문장 원문 인용).
+ * 구분이 null 인 건 초기 시드 더미 4건(확인 미실행)이고, 값이 있는 건 실제 판독분이다.
+ */
+export const getRequiredDocs = (announcementId: number) =>
+  safeSelect<RequiredDocRow>("ann_required_docs", () =>
+    db
+      .from("ann_required_docs")
+      .select("*")
+      .eq("announcement_id", announcementId)
+      .order("id"),
+  )
+
 /**
  * 공고 확인 보드 — 대시보드의 「공고 확인」 탭이 읽는다.
  * app.v_announcement_board 뷰 하나만 읽는다. 구분·신규·d_day 는 DB 가 계산해서 준다.

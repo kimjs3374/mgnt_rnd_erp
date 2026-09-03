@@ -82,6 +82,14 @@ export function 사업자번호_표기(s: string | null): string {
 export function 사업자번호_점검(raw: string): string | null {
   const d = 사업자번호_숫자만(raw)
   if (!d) return null // 모르는 채로 등록하는 것을 막지 않는다
+  if (d.length === 9) {
+    // 실측: 집행 건에 `268870567`(9자리)이 들어 있다 — 증빙에서 읽을 때 맨 앞 0 이 떨어진다.
+    // **0 을 붙여 짐작하지 않는다.** 어느 자리가 떨어졌는지는 등록증만이 안다.
+    return (
+      `사업자번호는 숫자 10자리인데 9자리입니다. 증빙에서 읽은 번호는 맨 앞 0 이 떨어져 ` +
+      `9자리로 남는 경우가 있습니다 — 사업자등록증을 보고 채우세요.`
+    )
+  }
   if (d.length !== 10) return `사업자번호는 숫자 10자리입니다 — 지금 ${d.length}자리입니다.`
   return null
 }

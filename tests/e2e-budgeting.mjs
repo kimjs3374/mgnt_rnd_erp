@@ -70,6 +70,38 @@ async function 과제지우기(id) {
   return r.status
 }
 
+/**
+ * 관심 공고를 잠시 심는다. **실측 시점에 watchlist 가 0건**이라(사람이 지웠거나 재수집으로
+ * 공고 id 가 다시 매겨졌다) 실데이터에 기대면 이 화면을 검증할 수 없다. 끝나면 지운다.
+ */
+async function 관심심기(공고_id) {
+  const r = await fetch(`${env.SUPABASE_URL}/rest/v1/watchlist`, {
+    method: "POST",
+    headers: 헤더({ Prefer: "resolution=merge-duplicates,return=representation" }),
+    body: JSON.stringify([{ 종류: "공고", 참조_id: 공고_id, 메모: "e2e" }]),
+  })
+  if (!r.ok) throw new Error(`관심 등록 실패 ${r.status}: ${await r.text()}`)
+  return (await r.json())[0].id
+}
+
+async function 관심지우기(id) {
+  const r = await fetch(`${env.SUPABASE_URL}/rest/v1/watchlist?id=eq.${id}`, {
+    method: "DELETE",
+    headers: 헤더(),
+  })
+  return r.status
+}
+
+/** 지원한 과제가 하나도 없는 공고를 하나 고른다 — 「아직 지원 등록 안 함」 갈래를 보려고. */
+async function 미지원공고() {
+  const [과제, 공고] = await Promise.all([
+    pgSelect("projects", "select=공고_id"),
+    pgSelect("announcements", "select=id,사업명&limit=50"),
+  ])
+  const 쓰인 = new Set(과제.map((p) => p.공고_id).filter(Boolean))
+  return 공고.find((a) => !쓰인.has(a.id)) ?? null
+}
+
 const browser = await puppeteer.launch({
   executablePath: "/usr/bin/google-chrome",
   headless: "new",
@@ -108,9 +140,14 @@ const 심을것 = `
 `
 
 let 과제id = null
+let 관심ids = []
+let 미지원 = null
 
 try {
   과제id = await 과제만들기()
+  미지원 = await 미지원공고()
+  관심ids.push(await 관심심기(공고))
+  if (미지원) 관심ids.push(await 관심심기(미지원.id))
   log(`선정 직후 상태를 만든다: id=${과제id} · 총사업비 0`)
 
   await page.goto(`${BASE}/project-budgeting`, { waitUntil: "networkidle0", timeout: 60000 })
@@ -120,6 +157,17 @@ try {
   확인(text.includes("과제 계상"), "화면이 뜬다")
   확인(text.includes(이름), "선정된 과제가 목록에 있다")
 
+  // ⓪ 관심 공고가 **표보다 먼저** 나와야 한다 — 계상보다 앞 단계라 위에 둔다
+  확인(text.includes("관심 공고"), "관심 공고 구역이 있다")
+  확인(
+    text.indexOf("관심 공고") < text.indexOf("사업비 미확정"),
+    "관심 공고가 계상 표보다 위에 있다",
+  )
+  확인(text.includes("선정 ·"), "관심 공고에 지원·선정 상태가 붙는다")
+  if (미지원) {
+    확인(text.includes("아직 지원 등록 안 함"), "지원 안 한 관심 공고는 그렇게 말한다")
+  }
+
   // ① 단계 판정 — 총사업비 0 은 「미계상」이 아니라 「사업비 미확정」이어야 한다
   const 줄 = await page.evaluate(
     (n) => [...document.querySelectorAll("tbody tr")].find((r) => r.textContent.includes(n))?.textContent ?? "",
@@ -127,6 +175,60 @@ try {
   )
   확인(줄.includes("사업비 미확정"), "총사업비 0 은 「사업비 미확정」으로 잡힌다", 줄.slice(0, 70))
   확인(줄.includes("공고 규정 적용"), "공고에서 온 건이라 공고 규정이 붙는다고 표시한다")
+
+  // ①-2 검색 — 과제명·과제코드·공고명으로 좁힌다
+  const 전체행 = await page.evaluate(() => document.querySelectorAll("tbody tr").length)
+  await page.evaluate(() => {
+    const el = document.querySelector('input[placeholder*="검색"]')
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, "계상연동")
+    el.dispatchEvent(new Event("input", { bubbles: true }))
+  })
+  await 잠깐(400)
+  const 검색행 = await page.evaluate(() => document.querySelectorAll("tbody tr").length)
+  확인(검색행 === 1 && 전체행 > 1, `과제명 검색이 ${전체행}행 → ${검색행}행으로 좁힌다`)
+
+  // 과제코드로도 찾혀야 한다 — 사람은 코드로도 뒤진다
+  await page.evaluate((코드) => {
+    const el = document.querySelector('input[placeholder*="검색"]')
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, 코드)
+    el.dispatchEvent(new Event("input", { bubbles: true }))
+  }, 코드)
+  await 잠깐(400)
+  확인(
+    (await page.evaluate(() => document.querySelectorAll("tbody tr").length)) === 1,
+    "과제코드로도 찾힌다",
+  )
+
+  // 없는 말을 넣으면 빈 상태를 말해 준다 — 조용히 빈 표를 보여주지 않는다
+  await page.evaluate(() => {
+    const el = document.querySelector('input[placeholder*="검색"]')
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, "zzzz없는말zzzz")
+    el.dispatchEvent(new Event("input", { bubbles: true }))
+  })
+  await 잠깐(400)
+  확인((await 본문()).includes("조건에 맞는 과제가 없습니다"), "결과가 없으면 이유를 말한다")
+
+  // 초기화
+  await page.evaluate(() => window.__b.누르기("↺ 초기화"))
+  await 잠깐(400)
+  확인(
+    (await page.evaluate(() => document.querySelectorAll("tbody tr").length)) === 전체행,
+    "초기화하면 전부 돌아온다",
+  )
+
+  // 단계 필터 — 「손이 필요한 것만」이면 완료 건이 빠진다
+  await page.evaluate(() => {
+    const s = [...document.querySelectorAll("select")].find((x) =>
+      x.textContent.includes("손이 필요한 것만"),
+    )
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(s, "미완료")
+    s.dispatchEvent(new Event("change", { bubbles: true }))
+  })
+  await 잠깐(400)
+  const 미완료행 = await page.evaluate(() => document.querySelectorAll("tbody tr").length)
+  확인(미완료행 < 전체행 && 미완료행 >= 1, `단계 필터가 ${전체행}행 → ${미완료행}행 (완료 제외)`)
+  await page.evaluate(() => window.__b.누르기("↺ 초기화"))
+  await 잠깐(400)
 
   // ② 협약금액 확정 대화상자
   확인(
@@ -197,12 +299,15 @@ try {
   await browser.close()
   // ⚠ id 로만 지운다. 이름·like 로 지우면 남의 과제를 쓸어 간다.
   if (과제id != null) log(`정리: 과제 ${과제id} 삭제 ${await 과제지우기(과제id)}`)
+  for (const id of 관심ids) log(`정리: 관심 ${id} 삭제 ${await 관심지우기(id)}`)
 }
 
 const 남은 = await pgSelect("projects", `과제코드=eq.${코드}&select=id`)
 확인(남은.length === 0, `테스트가 남긴 과제 ${남은.length}건`)
 const 전체 = await pgSelect("projects", "select=id")
 확인(전체.length === 12, `과제 ${전체.length}건 (시드 12건 그대로)`)
+const 남은관심 = await pgSelect("watchlist", "메모=eq.e2e&select=id")
+확인(남은관심.length === 0, `테스트가 남긴 관심 ${남은관심.length}건`)
 
 console.log(실패 ? `\n✗ ${실패}건 실패` : "\n✓ 전 항목 통과")
 process.exit(실패 ? 1 : 0)

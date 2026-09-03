@@ -1,3 +1,4 @@
+import { CircleDollarSign, Calculator, CheckCircle2, TriangleAlert } from "lucide-react"
 import { PageShell, Card, Stat, EmptyState } from "@/components/page-shell"
 import { DbError } from "@/components/db-error"
 import { BudgetingBoard } from "@/components/budgeting-board"
@@ -49,23 +50,27 @@ export default async function ProjectBudgetingPage() {
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat
+          icon={CircleDollarSign}
           label="사업비 미확정"
           value={미확정}
           sub="선정됐지만 협약 금액이 0이라 비목을 나눌 기준이 없다"
           tone={미확정 > 0 ? "warn" : "default"}
         />
         <Stat
+          icon={Calculator}
           label="계상 전 · 계상 중"
           value={`${미계상} · ${진행중}`}
           sub={남은합 > 0 ? `아직 안 잡은 금액 ${won(남은합)}` : "남은 금액 없음"}
           tone={미계상 + 진행중 > 0 ? "warn" : "default"}
         />
         <Stat
+          icon={CheckCircle2}
           label="계상 완료 · 확정"
           value={`${완료} · ${셈("확정")}`}
-          sub="확정된 건은 관리 위치가 사업 대장이다"
+          sub="확정된 건은 계상 탭이 읽기 전용이 된다 — 다음은 집행·정산"
         />
         <Stat
+          icon={TriangleAlert}
           label="총사업비 초과"
           value={초과}
           sub={초과 > 0 ? "배정이 총사업비를 넘었다 — 계상 화면에서 줄여야 한다" : "없음"}

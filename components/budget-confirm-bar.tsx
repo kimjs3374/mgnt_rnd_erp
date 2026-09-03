@@ -202,9 +202,14 @@ export function BudgetConfirmBar({
         )}
       </div>
 
+      {/* ⚠ 예전 문구는 「관리 위치가 사업 대장으로 넘어갑니다」였는데 **사실이 아니다**
+          (2026-09-04 사용자 지적). 사이드바의 「사업 대장」은 지원사업 쪽 대장(`/programs`)이고
+          과제는 「과제 계상」·「과제 관리」로 갈렸다. 확정 뒤에 실제로 일어나는 일만 적는다. */}
       <p className="mt-1 text-[12.5px] text-muted-foreground">
         다 잡았으면 <b className="text-foreground">[계상 확정]</b>을 누르세요. 확정하면 이 탭은 볼
-        수만 있게 되고, 관리 위치가 <b className="text-foreground">사업 대장</b>으로 넘어갑니다.
+        수만 있게 됩니다 — 다시 고치려면 [확정 해제]를 누르고, 그때 사유가 남습니다. 그다음 할 일은{" "}
+        <b className="text-foreground">집행</b>과 <b className="text-foreground">정산</b>이고 둘 다 이
+        과제 안의 탭입니다.
         {위반수 > 0 && " 한도 경고가 있어도 확정할 수 있습니다 — 협약이 그렇게 된 과제가 있어서 막지 않습니다."}
       </p>
 

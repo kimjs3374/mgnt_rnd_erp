@@ -17,50 +17,58 @@ import type { BoardRow, UndatedRow } from "@/lib/queries"
 /**
  * 공고 확인 보드 — 대시보드 맨 위. **새로 올라온 것만** 본다.
  *
- * 케이오시 현안 1번이 「매일 여러 기관 홈페이지를 확인해 엑셀에 수기 정리」다.
- * 그 사람이 아침에 알고 싶은 건 딱 하나다 — **어제 없던 게 뭐냐.**
- *
- * 2026-09-03 개편(2차)
- *   ① **이미 마감된 공고를 뺀다.** `신규`는 「오늘 게시됐거나 오늘 수집됨」이라
- *      **접수기간이 지난 공고도 신규로 잡힌다.** 실제로 「2026-03-03 마감」짜리가
- *      NEW 를 달고 첫 줄에 있었다. 대시보드 첫 줄이 끝난 공고면 안 된다.
- *   ② **오늘 0건이면 최근 3일로 넓힌다.** 수집이 안 도는 날 첫 카드가 통째로 비면
- *      「고장났다」로 보인다. 넓혔을 때는 그렇다고 화면에 적는다 — 속이지 않는다.
- *   ③ **NEW 배지를 뗐다.** 전부 새 공고라 줄마다 붙으면 아무것도 구분하지 못한다.
- *   ④ **탭마다 5줄.** 그 아래 카드들이 화면 밖으로 밀리지 않게.
- *   ⑤ **사업명을 누르면 공고 상세로 간다.** 탭에 따라 갈린다 —
- *      과제는 `/project-announcements/[id]`, 나머지는 `/announcements/[id]`.
- *      공고 탐색 화면이 둘로 나뉘어 있어서 목적지도 둘이다.
- *   ⑥ **「전체 보기」 링크는 아래 하나뿐이다.** 머리에도 두면 같은 링크가 두 번 나온다.
- *      탭이 비면 링크가 같이 사라지므로 **빈 안내문이 링크를 문다.**
- *
- * ⚠ 탭 목록을 코드에 박지 않는다. 행의 `구분`(= funding_schemes.대분류)에서 만든다.
- *   다만 **0건인 탭은 세우지 않는다** — 빈 탭은 「없다」가 아니라 「고장났다」로 읽힌다.
- * ⚠ 화면에 쓰는 이름만 바꾼다. 「미분류」는 DB 값이고 사용자에겐 「기타」로 보인다.
+ * 2026-09-03 개편(3차) — 공고 탐색이 이미 쓰는 자격판정을 그대로 가져와 붙인다.
+ *   ⚠ 「관련 공고만」을 새로 만들지 않는다. `/announcements`·`/project-announcements`
+ *     가 이미 쓰는 **자격판정**(가능·불가·확인필요·요건미확인, `lib/queries.ts`·
+ *     `lib/queries-programs.ts` 의 `판정계산`)이 있다. 그 결과만 id 로 붙인다
+ *     (`판정` prop, 서버 컴포넌트가 두 함수를 불러 만든 Record). 새 판정 로직을
+ *     만들면 판정이 두 벌이 되고 한쪽만 고쳐지는 사고가 시연장에서 드러난다(§3.6).
+ *   ⚠ 탭은 `구분`(funding_schemes.대분류, 대부분 비어 있다) 대신 **`출처`**로 가른다.
+ *     기업마당·K-Startup → 지원사업, IRIS·NTIS → 과제. 사업유형 컬럼을 안 건드려도
+ *     탭이 바로 채워진다.
+ *   ⚠ 탭은 **0건이어도 항상 보인다.** 눌러 보면 「없습니다」가 뜬다 — 탭이 사라지면
+ *     「없다」가 아니라 「고장났다」로 읽힌다.
+ *   ⚠ 「외 N건 링크」 대신 **페이지 넘김**을 쓴다. 이 카드가 「오늘 새로 올라온 것을
+ *     확인하는 자리」인데 5줄만 보여주고 나머지는 다른 화면으로 떠넘기면 카드의
+ *     목적 자체가 성립하지 않는다. 페이지당 줄 수는 고정해 빈 줄로 채운다 —
+ *     마지막 페이지가 짧다고 카드 키가 들쭉날쭉하면 아래 카드가 흔들린다.
+ *   ⚠ 이미 마감된 공고는 뺀다. `신규`(오늘 게시·수집)는 접수기간이 지난 공고도
+ *     새로 잡는다 — 실제로 마감된 공고가 첫 줄에 뜬 적이 있다.
+ *   ⚠ 오늘 0건이면 최근 3일로 넓히고, 넓혔다는 사실을 화면에 적는다. 속이지 않는다.
  */
 
-const 보이는이름: Record<string, string> = { 미분류: "기타" }
-const 이름 = (구분: string) => 보이는이름[구분] ?? 구분
+const 페이지당 = 5
+
+const 탭목록 = ["과제", "지원사업", "기타"] as const
+type Tab = (typeof 탭목록)[number]
+
+const 탭구분 = (출처: string): Tab => {
+  if (출처 === "기업마당" || 출처 === "K-Startup") return "지원사업"
+  if (출처 === "IRIS" || 출처 === "NTIS") return "과제"
+  return "기타"
+}
 
 /** 과제 공고는 공고 탐색이 따로 있다. 탭에 따라 상세 경로가 갈린다. */
-const 상세경로 = (구분: string, id: number) =>
-  구분 === "과제" ? `/project-announcements/${id}` : `/announcements/${id}`
-const 목록경로 = (구분: string) =>
-  구분 === "과제" ? "/project-announcements" : "/announcements"
+const 상세경로 = (탭: Tab, id: number) =>
+  탭 === "과제" ? `/project-announcements/${id}` : `/announcements/${id}`
+const 목록경로 = (탭: Tab) => (탭 === "과제" ? "/project-announcements" : "/announcements")
+
+export type 자격판정값 = "가능" | "불가" | "확인필요" | "요건미확인"
 
 export function AnnouncementBoard({
   rows,
+  판정,
   undated,
   today,
-  최대 = 5,
   error,
 }: {
   rows: BoardRow[]
+  /** id → 자격판정. `/announcements`·`/project-announcements` 가 쓰는 것과 같은 값. */
+  판정: Record<number, 자격판정값 | undefined>
   /** 관심 표시했는데 마감이 날짜가 아닌 공고(상시·소진시). 버리면 조용히 사라진다. */
   undated: UndatedRow[]
   /** 「오늘」은 서버가 정한다. 심사장 PC 시계를 믿지 않는다. */
   today: string
-  최대?: number
   error?: string | null
 }) {
   // ① 이미 끝난 공고는 새로 올라왔든 말든 뺀다. 할 수 있는 게 없다.
@@ -78,20 +86,42 @@ export function AnnouncementBoard({
     return { 대상: 최근, 넓힘: 최근.length > 0 }
   }, [열린것, today])
 
-  // 0건인 탭은 세우지 않는다.
-  const 탭 = React.useMemo(() => {
-    const m = new Map<string, number>()
-    for (const r of 대상) m.set(r.구분, (m.get(r.구분) ?? 0) + 1)
-    return [...m.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .map(([구분, n]) => ({ 구분, n }))
+  const [active, set액티브] = React.useState<Tab>("지원사업")
+  const [page, set페이지] = React.useState(0)
+  const [가능만, set가능만] = React.useState(false)
+
+  const 탭전환 = (t: Tab) => {
+    set액티브(t)
+    set페이지(0)
+  }
+
+  const 개수 = React.useMemo(() => {
+    const m = new Map<Tab, number>()
+    for (const t of 탭목록) m.set(t, 0)
+    for (const r of 대상) m.set(탭구분(r.출처), (m.get(탭구분(r.출처)) ?? 0) + 1)
+    return m
   }, [대상])
 
-  const [active, setActive] = React.useState<string | null>(null)
-  const 현재 = active && 탭.some((t) => t.구분 === active) ? active : (탭[0]?.구분 ?? null)
+  const 가능개수 = React.useMemo(() => {
+    const m = new Map<Tab, number>()
+    for (const t of 탭목록) m.set(t, 0)
+    for (const r of 대상) {
+      if (판정[r.id] === "가능") {
+        const t = 탭구분(r.출처)
+        m.set(t, (m.get(t) ?? 0) + 1)
+      }
+    }
+    return m
+  }, [대상, 판정])
 
-  const 전체행 = 현재 ? 대상.filter((r) => r.구분 === 현재) : []
-  const 보이는행 = 전체행.slice(0, 최대)
+  const 탭전체행 = React.useMemo(
+    () => 대상.filter((r) => 탭구분(r.출처) === active),
+    [대상, active],
+  )
+  const 필터행 = 가능만 ? 탭전체행.filter((r) => 판정[r.id] === "가능") : 탭전체행
+  const 총페이지 = Math.max(1, Math.ceil(필터행.length / 페이지당))
+  const 현재페이지 = Math.min(page, 총페이지 - 1)
+  const 보이는행 = 필터행.slice(현재페이지 * 페이지당, 현재페이지 * 페이지당 + 페이지당)
 
   return (
     <div className="rounded-lg border bg-card">
@@ -106,6 +136,9 @@ export function AnnouncementBoard({
                 ? `최근 3일에 올라온 공고 ${대상.length}건 — 오늘 새로 올라온 것은 없습니다`
                 : `오늘 새로 올라온 공고 ${대상.length}건`}
         </span>
+        <Link href="/announcements" className="ml-auto text-xs text-primary hover:underline">
+          공고 탐색 전체
+        </Link>
       </div>
 
       {error ? (
@@ -113,75 +146,114 @@ export function AnnouncementBoard({
           공고를 불러오지 못했습니다.
           <span className="mt-1 block text-xs opacity-70">{error}</span>
         </p>
-      ) : 탭.length === 0 ? (
-        <p className="px-4 py-10 text-center text-[13px] text-muted-foreground">
-          최근 3일 안에 새로 올라온 공고가 없습니다 ·{" "}
-          <Link href="/announcements" className="text-primary hover:underline">
-            공고 탐색에서 전체 보기
-          </Link>
-        </p>
       ) : (
         <>
-          <div role="tablist" aria-label="공고 구분" className="flex gap-1 border-b px-2">
-            {탭.map(({ 구분, n }) => (
-              <button
-                key={구분}
-                type="button"
-                role="tab"
-                aria-selected={구분 === 현재}
-                onClick={() => setActive(구분)}
-                className={cn(
-                  "-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2 text-[13px] transition-colors",
-                  구분 === 현재
-                    ? "border-primary font-medium text-foreground"
-                    : "border-transparent text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {이름(구분)}
-                <span className="tabular-nums text-xs text-muted-foreground">{n}</span>
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b px-2">
+            <div role="tablist" aria-label="공고 구분" className="flex gap-1">
+              {탭목록.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  role="tab"
+                  aria-selected={t === active}
+                  onClick={() => 탭전환(t)}
+                  className={cn(
+                    "-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2 text-[13px] transition-colors",
+                    t === active
+                      ? "border-primary font-medium text-foreground"
+                      : "border-transparent text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {t}
+                  <span className="tabular-nums text-xs text-muted-foreground">
+                    {개수.get(t) ?? 0}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {/* 자격판정 「가능」만 걸러 본다. 새 판정 로직이 아니라 있는 값을 거를 뿐이다. */}
+            <button
+              type="button"
+              aria-pressed={가능만}
+              onClick={() => {
+                set가능만((v) => !v)
+                set페이지(0)
+              }}
+              className={cn(
+                "flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors",
+                가능만
+                  ? "border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                  : "border-border text-muted-foreground hover:bg-muted",
+              )}
+            >
+              가능만
+              <span className="tabular-nums">{가능개수.get(active) ?? 0}</span>
+            </button>
           </div>
 
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="w-8" title="관심 표시하면 마감일이 달력에 뜬다">
-                  <span className="sr-only">관심</span>★
-                </TableHead>
-                <TableHead>사업명</TableHead>
-                <TableHead className="w-[170px]">기관</TableHead>
-                <TableHead className="w-[200px]">접수기간</TableHead>
-                <TableHead className="w-[80px]">출처</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {보이는행.map((r) => (
-                <TableRow key={r.id} className="h-[38px] text-[13px]">
-                  <TableCell className="pr-0">
-                    <WatchStar id={r.id} on={r.관심} />
-                  </TableCell>
-                  {/* max-w + min-w-0 이 없으면 truncate 가 안 먹고 표가 가로로 밀린다 */}
-                  <TableCell className="max-w-[1px] font-medium">
-                    <Link
-                      href={상세경로(r.구분, r.id)}
-                      className="block truncate hover:underline"
-                      title={r.사업명}
-                    >
-                      {r.사업명}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="max-w-[1px] truncate text-muted-foreground">
-                    {r.기관 ?? "—"}
-                  </TableCell>
-                  <TableCell className="tabular-nums text-muted-foreground">
-                    <Period row={r} />
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{r.출처}</TableCell>
+          {탭전체행.length === 0 ? (
+            <p className="px-4 py-10 text-center text-[13px] text-muted-foreground">
+              오늘 새로 올라온 {active} 공고가 없습니다
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="w-8" title="관심 표시하면 마감일이 달력에 뜬다">
+                    <span className="sr-only">관심</span>★
+                  </TableHead>
+                  <TableHead>사업명</TableHead>
+                  <TableHead className="w-[170px]">기관</TableHead>
+                  <TableHead className="w-[200px]">접수기간</TableHead>
+                  <TableHead className="w-[80px]">출처</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {보이는행.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="h-[190px] text-center text-[13px] text-muted-foreground">
+                      「가능」 판정 공고가 없습니다
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  <>
+                    {보이는행.map((r) => (
+                      <TableRow key={r.id} className="h-[38px] text-[13px]">
+                        <TableCell className="pr-0">
+                          <WatchStar id={r.id} on={r.관심} />
+                        </TableCell>
+                        {/* max-w + min-w-0 이 없으면 truncate 가 안 먹고 표가 가로로 밀린다 */}
+                        <TableCell className="max-w-[1px] font-medium">
+                          <Link
+                            href={상세경로(active, r.id)}
+                            className="flex min-w-0 items-center gap-1.5 hover:underline"
+                            title={r.사업명}
+                          >
+                            <판정배지 값={판정[r.id]} />
+                            <span className="truncate">{r.사업명}</span>
+                          </Link>
+                        </TableCell>
+                        <TableCell className="max-w-[1px] truncate text-muted-foreground">
+                          {r.기관 ?? "—"}
+                        </TableCell>
+                        <TableCell className="tabular-nums text-muted-foreground">
+                          <Period row={r} />
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{r.출처}</TableCell>
+                      </TableRow>
+                    ))}
+                    {/* 줄 수를 고정한다. 마지막 페이지가 짧다고 카드 키가 흔들리면 아래 카드가 움직인다. */}
+                    {Array.from({ length: 페이지당 - 보이는행.length }).map((_, i) => (
+                      <TableRow key={`filler-${i}`} aria-hidden className="h-[38px]">
+                        <TableCell colSpan={5} />
+                      </TableRow>
+                    ))}
+                  </>
+                )}
+              </TableBody>
+            </Table>
+          )}
 
           {/* 관심 공고인데 마감이 날짜가 아닌 것. 달력에 못 올라가므로 여기서 받는다. */}
           {undated.length > 0 && (
@@ -197,35 +269,73 @@ export function AnnouncementBoard({
                       className="flex items-center gap-2 rounded py-0.5 text-[13px] hover:underline"
                     >
                       <span className="min-w-0 flex-1 truncate">{u.제목}</span>
-                      <span className="shrink-0 text-xs text-muted-foreground">
-                        {u.사유}
-                      </span>
+                      <span className="shrink-0 text-xs text-muted-foreground">{u.사유}</span>
                     </Link>
                   </li>
                 ))}
                 {undated.length > 3 && (
-                  <li className="text-xs text-muted-foreground">
-                    외 {undated.length - 3}건
-                  </li>
+                  <li className="text-xs text-muted-foreground">외 {undated.length - 3}건</li>
                 )}
               </ul>
             </div>
           )}
 
-          <div className="border-t px-4 py-2 text-xs text-muted-foreground">
-            {전체행.length > 보이는행.length && (
-              <>외 {전체행.length - 보이는행.length}건 · </>
-            )}
-            <Link
-              href={현재 ? 목록경로(현재) : "/announcements"}
-              className="text-primary hover:underline"
-            >
-              공고 탐색에서 전체 보기
-            </Link>
-          </div>
+          {탭전체행.length > 0 && (
+            <div className="flex items-center justify-between border-t px-4 py-2 text-xs text-muted-foreground">
+              <span className="tabular-nums">
+                {가능만 ? `가능 ${필터행.length}건` : `${탭전체행.length}건`}
+              </span>
+              {총페이지 > 1 && (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={현재페이지 === 0}
+                    onClick={() => set페이지((p) => p - 1)}
+                    aria-label="이전 페이지"
+                    className="flex size-6 items-center justify-center rounded-full border text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
+                  >
+                    ‹
+                  </button>
+                  <span className="tabular-nums">
+                    {현재페이지 + 1} / {총페이지}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={현재페이지 >= 총페이지 - 1}
+                    onClick={() => set페이지((p) => p + 1)}
+                    aria-label="다음 페이지"
+                    className="flex size-6 items-center justify-center rounded-full border text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
+                  >
+                    ›
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
     </div>
+  )
+}
+
+/** 자격판정 배지 — 공고 탐색과 같은 값을 같은 뜻으로 보여준다. 판정이 없으면 아무것도 안 그린다. */
+function 판정배지({ 값 }: { 값?: 자격판정값 }) {
+  if (!값) return null
+  const 스타일: Record<자격판정값, string> = {
+    가능: "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+    불가: "border-muted-foreground/30 bg-muted text-muted-foreground",
+    확인필요: "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+    요건미확인: "border-border text-muted-foreground/70",
+  }
+  return (
+    <span
+      className={cn(
+        "inline-flex h-4 shrink-0 items-center rounded border px-1 text-[10px] font-medium leading-none",
+        스타일[값],
+      )}
+    >
+      {값}
+    </span>
   )
 }
 

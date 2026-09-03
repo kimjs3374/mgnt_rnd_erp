@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
+// 계상이 확정된 과제는 고칠 수 없다. 화면에서도 막지만 **최종 판정은 서버**다(`db/100` 참조).
+import { 계상잠김 } from "@/app/actions/budget-confirm"
 
 /**
  * 연구비 계상 — 배정액 저장.
@@ -29,6 +31,8 @@ export async function saveBudgetLines(
     if (!Number.isInteger(과제_id) || 과제_id <= 0) {
       return { ok: false, error: "과제를 찾을 수 없다." }
     }
+    const 잠김 = await 계상잠김(과제_id)
+    if (잠김) return { ok: false, error: 잠김 }
 
     const rows = []
     for (const l of lines) {
@@ -72,6 +76,9 @@ export async function deleteBudgetLine(
   재원구분: string,
 ): Promise<ActionResult> {
   try {
+    const 잠김 = await 계상잠김(과제_id)
+    if (잠김) return { ok: false, error: 잠김 }
+
     const { error } = await db
       .from("budgets")
       .delete()

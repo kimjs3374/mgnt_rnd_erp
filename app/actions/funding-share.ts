@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
+// 계상이 확정된 과제는 재원 구성도 못 고친다 — 계상 합계가 재원과 맞춰져 있기 때문이다.
+import { 계상잠김 } from "@/app/actions/budget-confirm"
 
 /**
  * 협약 재원 구성 저장 — 정부출연금 · 민간부담 현금 · 민간부담 현물.
@@ -28,6 +30,8 @@ export async function saveContractShare(
     if (!Number.isInteger(과제_id) || 과제_id <= 0) {
       return { ok: false, error: "과제를 찾을 수 없다." }
     }
+    const 잠김 = await 계상잠김(과제_id)
+    if (잠김) return { ok: false, error: 잠김 }
 
     const 항목 = [
       ["정부지원금", 값.정부지원금],

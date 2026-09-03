@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
 import { 재원별합계, type PersonnelRow } from "@/lib/personnel"
+// 인건비 산출은 계상의 일부다 — 확정된 과제는 여기도 잠긴다.
+import { 계상잠김 } from "@/app/actions/budget-confirm"
 
 /**
  * 개인별 인건비 계상 — 저장 · 삭제 · 인건비 비목 반영.
@@ -48,6 +50,8 @@ const 정수 = (v: unknown) => {
 export async function savePersonnelRows(과제_id: number, rows: 입력[]): Promise<ActionResult> {
   try {
     if (!Number.isInteger(과제_id) || 과제_id <= 0) return { ok: false, error: "과제를 찾을 수 없다." }
+    const 잠김 = await 계상잠김(과제_id)
+    if (잠김) return { ok: false, error: 잠김 }
 
     for (const r of rows) {
       if (!r.표시명?.trim()) return { ok: false, error: "이름(표시명)이 빈 줄이 있습니다." }
@@ -111,6 +115,9 @@ export async function savePersonnelRows(과제_id: number, rows: 입력[]): Prom
 
 export async function deletePersonnelRow(과제_id: number, id: number): Promise<ActionResult> {
   try {
+    const 잠김 = await 계상잠김(과제_id)
+    if (잠김) return { ok: false, error: 잠김 }
+
     const { error } = await db.from("personnel_costs").delete().eq("id", id).eq("과제_id", 과제_id)
     if (error) return { ok: false, error: error.message }
     revalidatePath(`/projects/${과제_id}/budget`)
@@ -134,6 +141,9 @@ export async function applyPersonnelToBudget(
   연차?: number,
 ): Promise<ActionResult> {
   try {
+    const 잠김 = await 계상잠김(과제_id)
+    if (잠김) return { ok: false, error: 잠김 }
+
     const { data, error } = await db
       .from("personnel_costs")
       .select("*")

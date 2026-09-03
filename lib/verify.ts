@@ -172,6 +172,41 @@ export function verify(lines: BudgetLine[], 협약: ContractInfo): Check[] {
   return out
 }
 
+/**
+ * **지금 입력한 금액이 기준의 몇 %인가.** 한도가 걸리는 비목만 값이 나온다.
+ *
+ * 화면이 「입력 18.5% · 한도 20%」로 보여주는 그 숫자다(2026-09-04 사용자 지시).
+ * 한도 금액과 **같은 공식**에서 뽑는다 — 따로 계산하면 둘이 조용히 어긋난다.
+ *
+ * · 연구수당 = 수당 / 수정인건비(인건비 + 학생인건비)
+ * · 간접비   = 총액 역산의 역함수. 한도가 `간접 = 기준액 × r/(100+r)` 이므로
+ *             `r = 100 × 간접 / (기준액 − 간접)` 이다. 기준액은 직접비 − 현물.
+ *
+ * 기준액이 0 이거나(나눌 수 없다) 역산 분모가 0 이하면 **null 을 낸다** — 0% 라고 하지 않는다.
+ * 모르는 것을 숫자로 적으면 사람이 그 숫자를 믿는다(설계원칙 5).
+ */
+export function 실제비율(lines: BudgetLine[], 대상: "연구수당" | "간접비"): number | null {
+  const 비목 = (c: string) => lines.filter((l) => l.비목_대분류 === c)
+  const 소수1 = (n: number) => Math.round(n * 10) / 10
+
+  if (대상 === "연구수당") {
+    const 수정인건비 = sum(비목("PERSONNEL")) + sum(비목("STUDENT"))
+    if (수정인건비 <= 0) return null
+    return 소수1((sum(비목("ALLOWANCE")) / 수정인건비) * 100)
+  }
+
+  const 직접 = lines.filter((l) => 직접비.has(l.비목_대분류))
+  const 기준액 = sum(직접) - sum(직접.filter((l) => l.재원구분 === "현물"))
+  const 간접 = sum(비목("INDIRECT"))
+  const 분모 = 기준액 - 간접
+  if (기준액 <= 0 || 분모 <= 0) return null
+  return 소수1((간접 / 분모) * 100)
+}
+
+/** 비목 코드 → `실제비율` 의 대상 이름. 없으면 그 비목엔 한도 규칙이 없다. */
+export const 한도대상 = (비목_대분류: string): "연구수당" | "간접비" | null =>
+  비목_대분류 === "ALLOWANCE" ? "연구수당" : 비목_대분류 === "INDIRECT" ? "간접비" : null
+
 /** 화면에서 자주 쓰는 요약 — 위반 건수와 「판정 못 한」 건수를 나눠서 센다. */
 export function summarize(checks: Check[]) {
   return {

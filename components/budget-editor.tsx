@@ -25,6 +25,8 @@ import {
   summarize,
   할일들,
   판정하기,
+  실제비율,
+  한도대상,
   손봐야하나,
   type Check,
   type ContractInfo,
@@ -117,6 +119,38 @@ export function BudgetEditor({
   const 정렬된 = [...checks].sort((a, b) => Number(손봐야하나(b)) - Number(손봐야하나(a)))
   const 계상합계 = lines.reduce((s, l) => s + (Number(l.배정액) || 0), 0)
   const 집행합계 = lines.reduce((s, l) => s + (Number(l.집행액) || 0), 0)
+
+  // ⑤ 줄 색칠 — **판정 규칙이 있는 줄만 칠한다**(2026-09-04 사용자 지시).
+  //    규칙 없는 비목을 초록으로 칠하면 「검산했다」는 거짓 신호가 된다(설계원칙 5).
+  //    ⚠ `TableRow` 기본 클래스에 `hover:bg-muted/50` 이 있고 cn(tailwind-merge)을 거치므로
+  //       `hover:` 도 같이 줘야 마우스를 올렸을 때 색이 사라지지 않는다(대장에서 겪었다).
+  const 초록 = "bg-green-100 hover:bg-green-200 dark:bg-green-950 dark:hover:bg-green-900"
+  const 빨강 = "bg-red-100 hover:bg-red-200 dark:bg-red-950 dark:hover:bg-red-900"
+
+  /** 그 비목에 걸리는 한도 검사. 없으면 null — 한도 규칙이 없는 비목이다. */
+  const 줄검사 = (l: Line) => {
+    const 대상 = 한도대상(l.비목_대분류)
+    return 대상 ? (checks.find((c) => c.대상 === 대상) ?? null) : null
+  }
+
+  const 줄색 = (l: Line) => {
+    const c = 줄검사(l)
+    if (c) {
+      const p = 판정하기(c)
+      if (p === "초과") return 빨강
+      if (p === "맞음" || p === "여유") return 초록
+      return "" // 확인필요 — 판정 못 했으면 칠하지 않는다
+    }
+    // 한도 규칙이 없는 비목이라도 **집행이 배정을 넘긴 것**은 규칙 없이도 사실이다.
+    return (Number(l.배정액) || 0) - l.집행액 < 0 ? 빨강 : ""
+  }
+
+  /** 합계 줄 — 협약 총사업비와 맞는지. 협약액이 없으면 칠하지 않는다. */
+  const 합계색 = (() => {
+    const c = checks.find((x) => x.키 === "총액")
+    if (!c || c.통과 == null) return ""
+    return c.통과 ? 초록 : 빨강
+  })()
   const 더러움 = JSON.stringify(lines) !== JSON.stringify(초기값)
 
   const 수정 = (i: number, patch: Partial<Line>) =>
@@ -328,7 +362,9 @@ export function BudgetEditor({
               <TableHead>비목</TableHead>
               <TableHead className="w-[90px]">재원</TableHead>
               <TableHead className="w-[170px] text-right">배정액</TableHead>
-              <TableHead className="w-[92px] text-right">한도%</TableHead>
+              {/* 단위를 대괄호로 구분한다(사용자 지시) — 숫자 칸의 머리글은 단위가 붙어야
+                  「20」이 20% 인지 20원인지 헷갈리지 않는다. 아래 칸에는 입력값의 실제 비율도 같이 찍는다. */}
+              <TableHead className="w-[132px] text-right">한도[%]</TableHead>
               <TableHead className="text-right">집행액</TableHead>
               <TableHead className="text-right">잔액</TableHead>
               <TableHead className="w-[52px]" />
@@ -347,7 +383,10 @@ export function BudgetEditor({
               lines.map((l, i) => {
                 const 잔액 = (Number(l.배정액) || 0) - l.집행액
                 return (
-                  <TableRow key={`${l.비목_대분류}-${l.재원구분}`} className="h-[42px] text-[13px]">
+                  <TableRow
+                    key={`${l.비목_대분류}-${l.재원구분}`}
+                    className={`h-[42px] text-[13px] ${줄색(l)}`}
+                  >
                     <TableCell className="font-medium">
                       {l.비목명 ?? l.비목_대분류}
                       {/* 이 줄이 어디서 오는지 줄에서 바로 보여야 한다. 안 적으면 「왜 못 고치지」가 된다. */}
@@ -396,6 +435,30 @@ export function BudgetEditor({
                       ) : (
                         <span className="block text-right text-muted-foreground">—</span>
                       )}
+                      {/* ④ 한도가 걸리는 비목에는 **지금 입력값이 몇 %인지** 같이 찍는다.
+                          한도만 보이면 「20% 이내」인지 사람이 계산해야 한다.
+                          비율은 `lib/verify.ts` 의 `실제비율()` — 한도 금액과 같은 공식에서 뽑는다.
+                          기준액이 0 이면 「—」다. 0% 라고 적지 않는다(모르면 모른다고 한다). */}
+                      {한도대상(l.비목_대분류) &&
+                        (() => {
+                          const 비율 = 실제비율(lines, 한도대상(l.비목_대분류)!)
+                          const c = 줄검사(l)
+                          const 넘음 = c ? 판정하기(c) === "초과" : false
+                          return (
+                            <span
+                              className={`mt-0.5 block text-right text-[11px] tabular-nums ${
+                                넘음 ? "font-medium text-destructive" : "text-muted-foreground"
+                              }`}
+                              title={
+                                한도대상(l.비목_대분류) === "연구수당"
+                                  ? "연구수당 ÷ 수정인건비(인건비 + 학생인건비)"
+                                  : "간접비 총액 역산 — 100 × 간접비 ÷ (직접비 − 현물 − 간접비)"
+                              }
+                            >
+                              입력 {비율 == null ? "—" : `${비율}%`}
+                            </span>
+                          )
+                        })()}
                     </TableCell>
                     <TableCell className="text-right tabular-nums text-muted-foreground">
                       {won(l.집행액)}
@@ -426,7 +489,12 @@ export function BudgetEditor({
                 )
               })
             )}
-            <TableRow className="h-[38px] bg-secondary/40 text-[13px] font-medium hover:bg-secondary/40">
+            {/* 합계 줄은 협약 총사업비와 맞는지로 칠한다. 협약액이 없으면 칠하지 않는다. */}
+            <TableRow
+              className={`h-[38px] text-[13px] font-medium ${
+                합계색 || "bg-secondary/40 hover:bg-secondary/40"
+              }`}
+            >
               <TableCell colSpan={2}>합계</TableCell>
               <TableCell className="text-right tabular-nums">{won(계상합계)}</TableCell>
               <TableCell />

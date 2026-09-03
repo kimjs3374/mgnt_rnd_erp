@@ -4,11 +4,10 @@ import * as React from "react"
 import { useRouter } from "next/navigation"
 import { Highlighter } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import {
-  markImportantPhrase,
-  문구_특징키,
-  type 문구특징키,
-} from "@/app/actions/lexicon"
+import { markImportantPhrase } from "@/app/actions/lexicon"
+// 특징키 목록은 서버액션 파일이 아니라 여기서 온다 — "use server" 파일은 async 함수만
+// export 할 수 있어서 상수를 거기 두면 클라이언트가 프록시를 받아 죽는다.
+import { 문구_특징키, type 문구특징키 } from "@/lib/lexicon-keys"
 
 /**
  * 공고문에서 **사람이 중요한 문구를 짚는다** — 그 문구가 다음 판독부터 규칙이 된다.

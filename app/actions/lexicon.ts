@@ -4,6 +4,10 @@ import { revalidatePath } from "next/cache"
 import { db, safeSelect } from "@/lib/db"
 import { getCurrentUser, 미인증_업로더 } from "@/lib/current-user"
 import { 문구짚기 } from "@/lib/rules-ai.mjs"
+// ⚠ 특징키 목록은 lib/lexicon-keys.ts 에 둔다 — "use server" 파일은 async 함수만
+//   export 할 수 있어서, 여기서 상수를 내보내면 클라이언트가 배열 대신 서버액션
+//   프록시를 받아 화면이 죽는다(실제로 그렇게 냈다. 그 파일 주석 참고).
+import { 문구_특징키, type 문구특징키 } from "@/lib/lexicon-keys"
 
 /**
  * 공고문에서 **사람이 중요한 문구를 짚는다** — 그 문구가 추출 규칙이 된다.
@@ -20,28 +24,6 @@ import { 문구짚기 } from "@/lib/rules-ai.mjs"
  *   extraction_lexicon  문구가 글자 그대로 있으면 걸린다(부분문자열, 확정)
  * 이건 후자다 — 그래서 게이트로 쓸 수 있고, 걸리면 「불가」가 확정된다.
  */
-
-/** 짚은 문구를 어떤 요건으로 볼 것인가. **게이트로 실제 동작하는 것만** 노출한다
- *  (bot/ann_score.py `_gates()` 가 특징키 존재만으로 「불가」를 내는 자리들). */
-export const 문구_특징키 = [
-  {
-    v: "특정업종전용",
-    label: "이 업종 전용 공고다",
-    help: "예: 「우리시에서 생산·가공되는 농특산품」 · 「일반음식점을 영업 중인 자」 — 우리 업종과 무관하면 불가",
-  },
-  {
-    v: "기관유형_제한",
-    label: "대학·연구기관 전용이다 (기업 참여 불가)",
-    help: "예: 「기업 참여 불가」 · 「대학·출연연구기관만 신청 가능」",
-  },
-  {
-    v: "개인전용_제한",
-    label: "개인의 이력을 요구한다",
-    help: "예: 「폐업 이력이 있는 (예비)재창업자」 — 정상 운영 중인 법인은 해당 없음",
-  },
-] as const
-
-export type 문구특징키 = (typeof 문구_특징키)[number]["v"]
 
 export type MarkResult = {
   ok: boolean

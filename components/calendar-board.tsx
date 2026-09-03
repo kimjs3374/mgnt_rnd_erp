@@ -16,13 +16,16 @@ import type { CalendarRow, UndatedRow } from "@/lib/queries"
  * ⚠ 특히 「확정 대기」를 빠뜨리면 안 된다. 확신도 0.70 미만은 코드가 자동 확정을
  *   막게 해 뒀으므로 사람을 기다리는 줄이 반드시 생기는데, 화면에서 사라지면
  *   그 줄이 쌓이는 것을 아무도 모른다.
+ *
+ * `참조` 는 달력 행과 같은 것을 가리키는 열쇠다(`${참조종류}:${참조키}`).
+ * 달력에 이미 올라간 것을 여기서 또 보여주지 않으려고 쓴다 — 없으면 중복 제거를 안 할 뿐이다.
  */
 export type 대기묶음 = {
   라벨: string
   힌트: string
   링크: string
   건수: number
-  항목: { 키: string; 이름: string; 꼬리: string; 배지?: boolean }[]
+  항목: { 키: string; 이름: string; 꼬리: string; 배지?: boolean; 참조?: string }[]
 }
 
 /**
@@ -40,6 +43,21 @@ export type 대기묶음 = {
  *   - 일간/주간/월간 보기를 붙였다. 셋 다 같은 데이터를 다르게 자를 뿐이다.
  *     「목록」은 따로 두지 않았다 — **접은 상태가 곧 목록 보기**다.
  *
+ * 2026-09-03 개편(4차) — 읽기가 어렵다는 지적을 받고 고친 것. 넷 다 이유가 있다.
+ *   ① **접은 상태에서 카드 폭을 다 쓴다.** 목록이 `max-w-3xl` 이라 오른쪽 40%가 비어 있었고,
+ *      그 탓에 항목 이름과 오른쪽 끝 꼬리표가 600px 떨어져 눈으로 이어지지 않았다.
+ *      왼쪽은 **시간이 있는 것**(지난·이번 주·다가오는), 오른쪽은 **시간이 없는 것**
+ *      (기다리는 일·날짜 미정). 세로 길이가 절반으로 준다.
+ *      ⚠ 펼친 상태의 옆칸(300px)은 좁아서 두 열이 안 된다 — 거기서는 한 열 그대로다.
+ *   ② **「다가오는 일정」은 D-30 까지만 펼친다.** 그보다 먼 것은 접는다.
+ *      반년 뒤 사업종료가 화면의 3/5를 먹고 정작 급한 줄을 덮고 있었다.
+ *      버리지는 않는다 — 「나중」을 누르면 그대로 나온다.
+ *   ③ **글자 크기를 벌리고 중복을 지운다.** 묶음머리·제목·딸림글이 1px 차이라
+ *      뭐가 묶음이고 뭐가 항목인지 안 보였다(11 / 14 / 12 로 벌렸다).
+ *      그리고 같은 서류가 「지난 일정」과 「서류 미확보」에 두 번 나왔다 — `참조` 로 지운다.
+ *   ④ **일정이 없는 범위는 격자를 낮춘다.** 주간 보기가 특히 나빴다. 한 줄짜리 격자가
+ *      세로 220px 를 먹고 그 아래로 흰 공백이 250px 더 있었다.
+ *
  * ⚠ 일정이 없는 달은 접힌 채로 연다. 빈 격자가 세로 460px 를 먹는데 정보가 0이면
  *   「깔끔」이 아니라 「허전」이다. 「아무 일 없으면 조용해야 한다」를 달력에도 적용한다.
  */
@@ -56,6 +74,12 @@ const 색: Record<string, { dot: string; text: string }> = {
 const 종류순서 = ["서류만료", "보고예정", "결과발표", "관심공고", "사업종료"]
 const 기본색 = { dot: "bg-muted-foreground", text: "text-muted-foreground" }
 const 색깔 = (종류: string) => 색[종류] ?? 기본색
+
+/**
+ * 여기까지가 「다가오는」이다. 그 밖은 접는다.
+ * ⚠ 이 숫자를 키우면 D-119 같은 것이 다시 위로 올라와 급한 줄을 덮는다.
+ */
+const 가까움 = 30
 
 const 요일 = ["일", "월", "화", "수", "목", "금", "토"]
 
@@ -80,6 +104,9 @@ const 달더하기 = (s: string, n: number) => {
 }
 const 그달일수 = (y: number, m: number) => new Date(Date.UTC(y, m, 0)).getUTCDate()
 const 짧은날짜 = (s: string) => `${Number(s.slice(5, 7))}/${Number(s.slice(8))}`
+
+/** 달력 행과 「기다리는 일」 항목이 같은 것을 가리키는지 보는 열쇠. */
+const 참조열쇠 = (r: CalendarRow) => `${r.참조종류}:${r.참조키}`
 
 type 보기 = "일간" | "주간" | "월간"
 const 보기들: 보기[] = ["일간", "주간", "월간"]
@@ -151,6 +178,20 @@ export function CalendarBoard({
     const s = 더하기(커서, -요일번호(커서))
     return Array.from({ length: 7 }, (_, i) => 더하기(s, i))
   }, [커서])
+
+  /**
+   * 지금 보고 있는 범위에 실제로 몇 건이 찍히나.
+   * 0이면 격자를 낮추고 한 줄로 알린다 — 빈 격자를 크게 그려 놓으면
+   * 「일정이 없다」가 아니라 「화면이 덜 만들어졌다」로 읽힌다.
+   * ⚠ 월간은 앞뒤 달에서 넘어온 날짜를 세지 않는다. 그 칸은 흐리게 그리는 곁다리다.
+   */
+  const 범위건수 =
+    모드 === "월간"
+      ? 이달건수
+      : (모드 === "주간" ? 주칸 : [커서]).reduce(
+          (n, d) => n + (날짜별.get(d)?.length ?? 0),
+          0,
+        )
 
   const 이동 = (n: number) => {
     set커서(모드 === "월간" ? 달더하기(커서, n) : 더하기(커서, 모드 === "주간" ? 7 * n : n))
@@ -254,38 +295,52 @@ export function CalendarBoard({
           <div className="mt-1 text-xs opacity-70">{error}</div>
         </div>
       ) : !격자 ? (
-        <div className="p-3">
-          <div className="max-w-3xl">
-            <Panel
-              선택={null}
-              날짜별={날짜별}
-              지난것={지난것}
-              이번주것={이번주것}
-              앞으로={앞으로}
-              undated={undated}
-              기다림={기다림}
-              옆칸={false}
-            />
-          </div>
+        /* 접은 상태 = 목록 보기. 카드 폭을 다 쓴다(4차 ①). */
+        <div className="p-4">
+          <Panel
+            선택={null}
+            날짜별={날짜별}
+            지난것={지난것}
+            이번주것={이번주것}
+            앞으로={앞으로}
+            undated={undated}
+            기다림={기다림}
+            옆칸={false}
+          />
         </div>
       ) : (
         <div className="grid lg:grid-cols-[1fr_300px]">
-          <div className="p-3">
+          {/* self-start — 오른쪽 패널이 길다고 왼쪽 격자까지 늘어나면 흰 공백이 생긴다 */}
+          <div className="self-start p-3">
             {모드 === "일간" ? (
               <DayView 날짜={커서} rows={날짜별.get(커서) ?? []} today={today} />
             ) : (
-              <Grid
-                칸={모드 === "월간" ? 월칸 : 주칸}
-                달접두={모드 === "월간" ? 달접두 : null}
-                today={today}
-                선택={선택}
-                날짜별={날짜별}
-                높이={모드 === "월간" ? "min-h-[92px]" : "min-h-[220px]"}
-                onPick={(d, 다른달) => {
-                  if (다른달) set커서(d)
-                  set선택((s) => (s === d ? null : d))
-                }}
-              />
+              <>
+                <Grid
+                  칸={모드 === "월간" ? 월칸 : 주칸}
+                  달접두={모드 === "월간" ? 달접두 : null}
+                  today={today}
+                  선택={선택}
+                  날짜별={날짜별}
+                  높이={
+                    모드 === "월간"
+                      ? "min-h-[92px]"
+                      : 범위건수 > 0
+                        ? "min-h-[220px]"
+                        : "min-h-[56px]" /* 4차 ④ 빈 주는 날짜 줄만 남긴다 */
+                  }
+                  onPick={(d, 다른달) => {
+                    if (다른달) set커서(d)
+                    set선택((s) => (s === d ? null : d))
+                  }}
+                />
+                {범위건수 === 0 && (
+                  <p className="mt-2 text-center text-[13px] text-muted-foreground">
+                    {모드 === "월간" ? `${cy}년 ${cm}월` : 제목}에 걸리는 일정이 없습니다.
+                    <span className="ml-1 opacity-70">옆의 목록은 그대로 있습니다.</span>
+                  </p>
+                )}
+              </>
             )}
           </div>
           {/* 패널이 길어지면 달력보다 카드가 커진다. 옆칸에서는 안에서 스크롤시킨다. */}
@@ -444,7 +499,14 @@ function DayView({
   )
 }
 
-/** 목록 패널. 접힌 상태에서는 넓게, 펼친 상태에서는 오른쪽 세로 칸에 들어간다. */
+/**
+ * 목록 패널.
+ *
+ * 접힌 상태(`옆칸=false`)에서는 카드 폭을 다 쓰고 **두 열**로 나눈다 —
+ * 왼쪽은 시간이 있는 것, 오른쪽은 시간이 없는 것. 성질이 다른 둘을 세로로 쌓으면
+ * 스크롤이 길어지고, 오른쪽 40%가 빈 채로 남아 이름과 꼬리표가 멀어진다.
+ * 펼친 상태(`옆칸=true`)의 300px 칸에서는 두 열이 안 되므로 한 열 그대로다.
+ */
 function Panel({
   선택,
   날짜별,
@@ -464,6 +526,9 @@ function Panel({
   기다림: 대기묶음[]
   옆칸: boolean
 }) {
+  // ⚠ 훅은 조건부 return 보다 먼저. 아래 「날짜를 고른 경우」가 일찍 빠져나간다.
+  const [나중펼침, set나중펼침] = React.useState(false)
+
   if (선택) {
     const 목록 = 날짜별.get(선택) ?? []
     return (
@@ -484,11 +549,15 @@ function Panel({
   const 이번주키 = new Set(이번주것.map((r) => r.종류 + r.참조키 + r.날짜))
   const 나중 = 앞으로.filter((r) => !이번주키.has(r.종류 + r.참조키 + r.날짜))
 
+  // D-30 까지만 펼친다. 그보다 먼 것은 접어 둔다 — 버리는 게 아니라 미루는 것이다.
+  const 가까운 = 나중.filter((r) => (r.d_day ?? 0) <= 가까움)
+  const 먼것 = 나중.filter((r) => (r.d_day ?? 0) > 가까움)
+
   // 「다가오는 일정」을 종류별로 나눈다. 만료된 서류 · 보고 제출 · 결과 발표가
   // 한 덩어리로 섞여 있으면 무엇을 준비해야 하는지가 안 보인다.
   // ⚠ 0건인 종류는 그리지 않는다. 「아무 일 없으면 조용해야 한다」.
   const 그룹 = new Map<string, CalendarRow[]>()
-  for (const r of 나중) {
+  for (const r of 가까운) {
     const g = 그룹.get(r.종류)
     if (g) g.push(r)
     else 그룹.set(r.종류, [r])
@@ -499,7 +568,21 @@ function Panel({
     return (i < 0 ? 99 : i) - (j < 0 ? 99 : j)
   })
 
-  const 대기 = 기다림.filter((g) => g.건수 > 0)
+  /**
+   * 달력에 이미 올라간 것은 「기다리는 일」에서 지운다.
+   * 만료된 서류가 위쪽 「지난 일정」과 아래쪽 「서류 미확보」에 똑같이 나오고 있었다.
+   * ⚠ 건수(`건수`)는 그대로 둔다 — 그건 미리보기 3줄이 아니라 전체 기준이고,
+   *   지운 줄은 아래 「외 N건」이 그대로 받는다.
+   */
+  const 달력에있음 = new Set([...지난것, ...앞으로].map(참조열쇠))
+  const 대기 = 기다림
+    .filter((g) => g.건수 > 0)
+    .map((g) => ({
+      ...g,
+      항목: g.항목.filter((it) => !it.참조 || !달력에있음.has(it.참조)),
+    }))
+
+  const 무기한있음 = 대기.length > 0 || undated.length > 0
   const 아무것도없음 =
     지난것.length === 0 &&
     이번주것.length === 0 &&
@@ -507,11 +590,12 @@ function Panel({
     undated.length === 0 &&
     대기.length === 0
 
-  return (
+  /* ── 왼쪽: 시간이 있는 것 ─────────────────────────────── */
+  const 시간축 = (
     <>
       {지난것.length > 0 && (
-        <div className="mb-2 rounded border border-destructive/30 bg-destructive/5 p-2">
-          <h4 className="mb-1 text-xs font-medium text-destructive">
+        <div className="mb-3 rounded border border-destructive/30 bg-destructive/5 p-2">
+          <h4 className="mb-1 text-[11px] font-semibold tracking-wide text-destructive">
             지난 일정 {지난것.length}건
           </h4>
           <Items rows={지난것} 지남 />
@@ -519,53 +603,94 @@ function Panel({
       )}
 
       {이번주것.length > 0 && (
-        <>
+        <div className="mb-3">
           <Head title="이번 주" n={이번주것.length} />
           <Items rows={이번주것} />
-        </>
+        </div>
       )}
 
-      {그룹순.length > 0 && (
-        <div className={cn(이번주것.length > 0 && "mt-3")}>
-          <Head title="다가오는 일정" n={나중.length} />
+      {(그룹순.length > 0 || 먼것.length > 0) && (
+        <div>
+          <Head title={`다가오는 ${가까움}일`} n={가까운.length} />
+
+          {그룹순.length === 0 && (
+            <p className="px-2 pb-1 text-[13px] text-muted-foreground">
+              {가까움}일 안에 걸리는 것이 없습니다.
+            </p>
+          )}
+
           {그룹순.map((종류) => {
             const list = 그룹.get(종류)!
             return (
-              <div key={종류} className="mb-1.5">
+              <div key={종류} className="mb-2">
                 <div className="flex items-baseline gap-1.5 px-2">
-                  <span className={cn("text-xs font-medium", 색깔(종류).text)}>{종류}</span>
-                  <span className="text-xs tabular-nums text-muted-foreground">
+                  <span className={cn("text-[11px] font-semibold", 색깔(종류).text)}>
+                    {종류}
+                  </span>
+                  <span className="text-[11px] tabular-nums text-muted-foreground">
                     {list.length}
                   </span>
                 </div>
                 <Items rows={list.slice(0, 3)} 날짜표시 />
                 {list.length > 3 && (
-                  <p className="px-2 text-xs text-muted-foreground">외 {list.length - 3}건</p>
+                  <p className="px-2 text-[11px] text-muted-foreground">
+                    외 {list.length - 3}건
+                  </p>
                 )}
               </div>
             )
           })}
+
+          {/* 먼 것 — 접어 둔다. 반년 뒤 일이 급한 줄을 덮지 않게. */}
+          {먼것.length > 0 && (
+            <div className={cn(그룹순.length > 0 && "mt-1")}>
+              <button
+                type="button"
+                onClick={() => set나중펼침((v) => !v)}
+                aria-expanded={나중펼침}
+                className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <span aria-hidden className="text-[9px]">
+                  {나중펼침 ? "▲" : "▼"}
+                </span>
+                {가까움}일 뒤
+                <span className="tabular-nums">{먼것.length}</span>
+              </button>
+              {나중펼침 && <Items rows={먼것} 날짜표시 />}
+            </div>
+          )}
         </div>
       )}
+    </>
+  )
 
+  /* ── 오른쪽: 시간이 없는 것 ───────────────────────────── */
+  const 무기한 = (
+    <>
       {/* ★ 날짜가 없어 달력에 못 올리는 것 — 예전 「손봐야 할 것」 카드가 여기로 들어왔다. */}
       {대기.length > 0 && (
-        <div className="mt-3 border-t pt-2">
-          <h4 className="mb-1.5 text-[13px] font-medium">기다리는 일</h4>
+        <div className={cn(옆칸 && "mt-3 border-t pt-2")}>
+          <h4 className="mb-1.5 text-[11px] font-semibold tracking-wide text-muted-foreground">
+            기다리는 일
+          </h4>
           {대기.map((g) => (
             <div key={g.라벨} className="mb-2">
               <div className="flex items-baseline gap-1.5 px-2">
-                <Link href={g.링크} className="text-xs font-medium hover:underline">
+                <Link href={g.링크} className="text-[13px] font-medium hover:underline">
                   {g.라벨}
                 </Link>
-                <span className="text-xs tabular-nums text-muted-foreground">{g.건수}</span>
-                <span className="truncate text-xs text-muted-foreground">{g.힌트}</span>
+                <span className="text-[11px] tabular-nums text-muted-foreground">
+                  {g.건수}
+                </span>
+                <span className="truncate text-[11px] text-muted-foreground/80">
+                  {g.힌트}
+                </span>
               </div>
               <ul className="space-y-0.5">
                 {g.항목.map((it) => (
                   <li
                     key={it.키}
-                    className="flex items-center gap-2 px-2 py-0.5 text-[13px]"
+                    className="flex items-center gap-2 px-2 py-0.5 text-[14px]"
                   >
                     <span className="min-w-0 flex-1 truncate">{it.이름}</span>
                     <span className="shrink-0">
@@ -578,7 +703,7 @@ function Panel({
                   </li>
                 ))}
                 {g.건수 > g.항목.length && (
-                  <li className="px-2 text-xs text-muted-foreground">
+                  <li className="px-2 text-[11px] text-muted-foreground">
                     외 {g.건수 - g.항목.length}건
                   </li>
                 )}
@@ -590,8 +715,10 @@ function Panel({
 
       {/* 관심 공고인데 마감이 날짜가 아닌 것(상시·소진시). 없애면 조용히 사라진다. */}
       {undated.length > 0 && (
-        <div className="mt-3 border-t pt-2">
-          <h4 className="mb-1 text-xs text-muted-foreground">날짜 미정 {undated.length}건</h4>
+        <div className={cn((옆칸 || 대기.length > 0) && "mt-3 border-t pt-2")}>
+          <h4 className="mb-1 text-[11px] font-semibold tracking-wide text-muted-foreground">
+            날짜 미정 {undated.length}건
+          </h4>
           <ul className="space-y-0.5">
             {undated.map((u) => (
               <li key={u.참조키}>
@@ -599,7 +726,7 @@ function Panel({
                   href={u.링크}
                   className="flex items-center gap-2 rounded px-2 py-1 hover:bg-muted"
                 >
-                  <span className="min-w-0 flex-1 truncate text-[13px]">{u.제목}</span>
+                  <span className="min-w-0 flex-1 truncate text-[14px]">{u.제목}</span>
                   <span className="shrink-0 text-xs text-muted-foreground">{u.사유}</span>
                 </Link>
               </li>
@@ -607,21 +734,48 @@ function Panel({
           </ul>
         </div>
       )}
-
-      {아무것도없음 && (
-        <p className="py-6 text-center text-[13px] text-muted-foreground">
-          지금 손댈 것이 없습니다
-        </p>
-      )}
     </>
+  )
+
+  if (아무것도없음) {
+    return (
+      <p className="py-6 text-center text-[13px] text-muted-foreground">
+        지금 손댈 것이 없습니다
+      </p>
+    )
+  }
+
+  // 옆칸(300px)은 좁아서 두 열이 안 된다. 한 열로 쌓는다.
+  if (옆칸) {
+    return (
+      <>
+        {시간축}
+        {무기한}
+      </>
+    )
+  }
+
+  return (
+    <div
+      className={cn(
+        "grid gap-x-10 gap-y-4",
+        무기한있음 && "md:grid-cols-2 md:items-start",
+      )}
+    >
+      <div>{시간축}</div>
+      {무기한있음 && <div>{무기한}</div>}
+    </div>
   )
 }
 
+/** 묶음 머리. 항목 제목(14px)보다 작고 흐리게 — 뭐가 묶음인지 한눈에 갈리게 한다. */
 function Head({ title, n }: { title: string; n: number }) {
   return (
     <div className="mb-1 flex items-baseline justify-between">
-      <h3 className="text-[13px] font-medium">{title}</h3>
-      <span className="text-xs tabular-nums text-muted-foreground">{n}건</span>
+      <h3 className="text-[11px] font-semibold tracking-wide text-muted-foreground">
+        {title}
+      </h3>
+      <span className="text-[11px] tabular-nums text-muted-foreground">{n}건</span>
     </div>
   )
 }
@@ -645,7 +799,7 @@ function Items({
               aria-hidden
             />
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-[13px]">{r.제목}</span>
+              <span className="block truncate text-[14px]">{r.제목}</span>
               {/* 색만으로 구분하지 않는다 — 종류를 글자로 같이 적는다. 범례를 뺀 이유이기도 하다. */}
               <span className="block truncate text-xs text-muted-foreground">
                 <span className={색깔(r.종류).text}>{r.종류}</span>

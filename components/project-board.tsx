@@ -153,15 +153,17 @@ export function ProjectBoard({
 
           <ul className="flex-1 divide-y">
             {보이는행.map((r) => (
-              <li key={r.id} className="h-14">
+              <li key={r.id} className="h-[52px]">
                 <Link
                   href={`/projects/${r.id}`}
-                  className="flex h-full items-center gap-3 px-2 hover:bg-muted"
+                  className="flex h-full items-center px-2 hover:bg-muted"
                 >
-                  <사업유형배지 코드={r.사업유형} />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] font-medium" title={r.과제명}>
-                      {r.과제명}
+                    <span className="flex items-center gap-1.5">
+                      <사업유형배지 코드={r.사업유형} />
+                      <span className="truncate text-[13px]" title={r.과제명}>
+                        {r.과제명}
+                      </span>
                     </span>
                     <span className="block truncate text-xs text-muted-foreground">
                       {부제(r, 현재)}
@@ -172,7 +174,7 @@ export function ProjectBoard({
             ))}
             {/* 줄 수를 고정한다. 옆 달력 카드보다 짧아서 빈 자리가 남던 것을 없앤다. */}
             {Array.from({ length: 페이지당 - 보이는행.length }).map((_, i) => (
-              <li key={`filler-${i}`} aria-hidden className="h-14" />
+              <li key={`filler-${i}`} aria-hidden className="h-[52px]" />
             ))}
           </ul>
 
@@ -209,25 +211,14 @@ export function ProjectBoard({
 
 /**
  * 과제/지원사업 — 지금은 다 같은 값(NATIONAL_RND)이지만 지자체 사업이 들어오면 갈린다.
- * 참고 그림처럼 크게(사각형) 그리되, 이 대시보드의 다른 배지와 같은 톤(테두리+옅은
- * 배경)을 쓴다 — 하나만 꽉 찬 색이면 이 카드만 튀어 보인다.
+ * 2026-09-04: 한 번 크게(사각형) 키웠다가 되돌렸다 — 원래의 작은 테두리 배지가
+ * 다른 카드들(공고 확인·오늘 처리할 것)의 배지 크기·톤과 더 잘 맞았다(사용자 확인).
  */
 function 사업유형배지({ 코드 }: { 코드: string | null }) {
   if (!코드) return null
   const 이름 = 사업유형이름[코드] ?? 코드
-  const 색 =
-    코드 === "NATIONAL_RND"
-      ? "border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-400"
-      : 코드 === "LOCAL_TP"
-        ? "border-violet-500/40 bg-violet-500/10 text-violet-600 dark:text-violet-400"
-        : "border-border bg-muted text-muted-foreground"
   return (
-    <span
-      className={cn(
-        "flex h-9 w-14 shrink-0 items-center justify-center rounded-md border text-[13px] font-semibold",
-        색,
-      )}
-    >
+    <span className="inline-flex h-4 shrink-0 items-center rounded border border-border px-1 text-[10px] font-medium text-muted-foreground">
       {이름}
     </span>
   )

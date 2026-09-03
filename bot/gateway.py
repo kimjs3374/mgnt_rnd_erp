@@ -102,7 +102,8 @@ class Handler(BaseHTTPRequestHandler):
                                            "/relevance/select", "/eligibility/score",
                                            "/document/read", "/company/read",
                                            "/rules/score", "/rules/batch",
-                                           "/rules/answer"]})
+                                           "/rules/answer", "/judgment/record",
+                                           "/judgment/similar"]})
             return
         self._send(404, {"ok": False, "error": f"그런 경로가 없다: {self.path}"})
 
@@ -140,6 +141,10 @@ class Handler(BaseHTTPRequestHandler):
                 self._rules_batch(body)
             elif path == "/rules/answer":
                 self._rules_answer(body)
+            elif path == "/judgment/record":
+                self._judgment_record(body)
+            elif path == "/judgment/similar":
+                self._judgment_similar(body)
             else:
                 self._send(404, {"ok": False, "error": f"그런 경로가 없다: {path}"})
         except LookupError as e:
@@ -334,6 +339,51 @@ class Handler(BaseHTTPRequestHandler):
             self._send(400, {"ok": False, "error": str(e)})
             return
         self._send(200, r)
+
+    # ── 의미 기반 판정 학습 — 사람이 판정+코멘트를 남기면 임베딩해서 쌓는다 ─────
+    # LLM 을 안 부른다. 로컬 임베딩 모델(격리된 venv)만 쓴다. 첫 호출에 모델을
+    # 디스크에서 새로 올리느라 몇 초 걸릴 수 있다 — 타임아웃을 넉넉히 둔다
+    # (semantic_learn.EMBED_TIMEOUT=60초). 웹 쪽도 그만큼 기다리게 안내한다.
+    def _judgment_record(self, body: dict) -> None:
+        import semantic_learn  # noqa: PLC0415
+        텍스트 = str(body.get("text") or body.get("텍스트") or "").strip()
+        판정 = str(body.get("판정") or "").strip()
+        답변자 = str(body.get("답변자") or "").strip()
+        if not 텍스트 or not 판정 or not 답변자:
+            self._send(400, {"ok": False, "error": "text · 판정 · 답변자 는 필수다"})
+            return
+        try:
+            row = semantic_learn.record_judgment(
+                텍스트, 판정, 답변자,
+                announcement_id=body.get("announcement_id"),
+                특징키=body.get("특징키"), 사유=body.get("사유"),
+            )
+        except ValueError as e:
+            self._send(400, {"ok": False, "error": str(e)})
+            return
+        except Exception as e:
+            log.error("judgment/record 실패: %s\n%s", e, traceback.format_exc())
+            self._send(500, {"ok": False, "error": f"{type(e).__name__}: {e}"})
+            return
+        self._send(200, {"ok": True, "row": {k: v for k, v in row.items() if k != "임베딩"}})
+
+    def _judgment_similar(self, body: dict) -> None:
+        import semantic_learn  # noqa: PLC0415
+        텍스트 = str(body.get("text") or body.get("텍스트") or "").strip()
+        if not 텍스트:
+            self._send(400, {"ok": False, "error": "text 가 필요하다"})
+            return
+        try:
+            matches = semantic_learn.find_similar(
+                텍스트,
+                top_k=int(body.get("top_k") or 5),
+                min_sim=float(body.get("min_sim") or 0.40),
+            )
+        except Exception as e:
+            log.error("judgment/similar 실패: %s\n%s", e, traceback.format_exc())
+            self._send(500, {"ok": False, "error": f"{type(e).__name__}: {e}"})
+            return
+        self._send(200, {"ok": True, "matches": matches})
 
 
 def main() -> None:

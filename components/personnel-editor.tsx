@@ -54,14 +54,21 @@ const 빈줄 = (연차: number, 정렬: number): Draft => ({
 export function PersonnelEditor({
   과제_id,
   초기값,
-  연차목록,
+  협약연수,
 }: {
   과제_id: number
   초기값: PersonnelRow[]
-  /** 과제 기간에서 뽑은 연차. 최소 1개는 온다. */
-  연차목록: number[]
+  /** 협약기간으로 계산한 연수. 탭을 강제하지 않고 안내만 한다(사용자 지시: 기본 1차년도). */
+  협약연수: number
 }) {
-  const [연차, set연차] = React.useState(연차목록[0] ?? 1)
+  // **기본은 1차년도 하나뿐이고, 필요할 때 「+ 연차 추가」로 늘린다.**
+  // 협약이 2년이라도 1차년도만 계상하고 넘어가는 경우가 흔해서, 빈 탭을 미리 벌려두면
+  // 「2차년도가 비어 있다」는 잘못된 인상을 준다.
+  const [최대연차, set최대연차] = React.useState(() =>
+    Math.max(1, ...초기값.map((r) => Number(r.연차) || 1)),
+  )
+  const 연차목록 = Array.from({ length: 최대연차 }, (_, i) => i + 1)
+  const [연차, set연차] = React.useState(1)
   const [rows, setRows] = React.useState<Draft[]>(초기값.map((r) => ({ ...r })))
   const [msg, setMsg] = React.useState<{ ok: boolean; text: string } | null>(null)
   const [상세, set상세] = React.useState(false)
@@ -128,18 +135,40 @@ export function PersonnelEditor({
     <div className="rounded-lg border bg-card p-4">
       <div className="mb-3 flex flex-wrap items-baseline gap-2">
         <span className="text-[13px] font-medium">개인별 인건비 계상</span>
-        <div className="flex gap-1">
-          {연차목록.map((y) => (
-            <Button
-              key={y}
-              type="button"
-              variant={y === 연차 ? "default" : "outline"}
-              className="h-6 px-2 text-[11.5px]"
-              onClick={() => set연차(y)}
-            >
-              {y}차년도
-            </Button>
-          ))}
+        <div className="flex flex-wrap gap-1">
+          {연차목록.map((y) => {
+            const 인원 = rows.filter((r) => Number(r.연차) === y).length
+            return (
+              <Button
+                key={y}
+                type="button"
+                variant={y === 연차 ? "default" : "outline"}
+                className="h-6 px-2 text-[11.5px]"
+                onClick={() => set연차(y)}
+              >
+                {y}차년도{인원 > 0 ? ` ${인원}` : ""}
+              </Button>
+            )
+          })}
+          {/* 협약이 몇 년이든 탭은 1차년도만 열어 둔다. 필요할 때 사람이 늘린다. */}
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-6 px-2 text-[11.5px] text-muted-foreground"
+            onClick={() => {
+              const 다음 = 최대연차 + 1
+              set최대연차(다음)
+              set연차(다음)
+            }}
+            title={협약연수 > 최대연차 ? `협약기간은 ${협약연수}년이다` : undefined}
+          >
+            + 연차 추가
+          </Button>
+          {협약연수 > 최대연차 && (
+            <span className="self-center text-[11px] text-muted-foreground">
+              협약 {협약연수}년
+            </span>
+          )}
         </div>
         <span className="text-xs text-muted-foreground">
           {보이는.length}명 · 합계 <span className="tabular-nums">{won(총합)}</span>원
@@ -358,6 +387,33 @@ export function PersonnelEditor({
         <Button type="button" variant="outline" className="h-7 text-[12.8px]" onClick={줄추가}>
           + 인원 추가
         </Button>
+        {/* 엑셀은 **저장된 값**으로 만든다(서버가 DB 를 읽는다). 저장 안 한 편집분이 파일로
+            나가면 그 파일과 DB 가 어긋나고, 이 표는 협약서 부속으로 제출된다. */}
+        <a
+          href={`/api/personnel/xlsx?project=${과제_id}&year=${연차}`}
+          className={
+            보이는.length === 0 || 더러움
+              ? "pointer-events-none rounded-md border px-2 py-1 text-[12.8px] text-muted-foreground opacity-50"
+              : "rounded-md border px-2 py-1 text-[12.8px] text-muted-foreground hover:bg-secondary/60"
+          }
+          title={
+            더러움
+              ? "저장하지 않은 변경이 있습니다 — 저장 후 내려받으세요"
+              : "실제 양식 그대로 엑셀로 내려받습니다"
+          }
+        >
+          엑셀 다운로드 ({연차}차년도)
+        </a>
+        <a
+          href={`/api/personnel/xlsx?project=${과제_id}`}
+          className={
+            rows.length === 0 || 더러움
+              ? "pointer-events-none rounded-md border px-2 py-1 text-[12.8px] text-muted-foreground opacity-50"
+              : "rounded-md border px-2 py-1 text-[12.8px] text-muted-foreground hover:bg-secondary/60"
+          }
+        >
+          전체 연차
+        </a>
         <Button
           type="button"
           variant="outline"
@@ -387,6 +443,7 @@ export function PersonnelEditor({
       <p className="mt-2 text-[11px] text-muted-foreground">
         총액 = 월급여 × 참여율 × 참여개월수 · 급여총액 = 월급여 × 12 · 지급은 현금, 미지급은 현물로
         잡힙니다. 「인건비 비목으로 반영」을 누르면 연구비 계상의 인건비 줄이 재원별로 덮어써집니다.
+        엑셀은 실제 계상표 양식(한 사람 두 줄 · 자격·지급구분·총액 세로 병합)으로 나갑니다.
       </p>
     </div>
   )

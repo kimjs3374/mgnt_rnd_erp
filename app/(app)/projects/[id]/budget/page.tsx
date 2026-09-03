@@ -52,7 +52,9 @@ export default async function ProjectBudgetPage({
   ])
   const p = proj.rows[0]
 
-  // 연차 탭 — 협약기간에서 뽑는다. 기간이 없으면 projects.연차 를, 그것도 없으면 1년으로 둔다.
+  // 협약기간이 몇 년인지만 알려준다. **탭은 1차년도만 열고 사람이 늘린다**(사용자 지시) —
+  // 협약이 2년이어도 1차년도만 계상하고 넘어가는 경우가 흔해서, 빈 탭을 미리 벌리면
+  // 「2차년도가 비어 있다」는 잘못된 인상을 준다.
   const 연수 = (() => {
     if (p?.시작일 && p?.종료일) {
       const 일 =
@@ -61,7 +63,6 @@ export default async function ProjectBudgetPage({
     }
     return Math.max(1, Number(p?.연차 ?? 1))
   })()
-  const 연차목록 = Array.from({ length: 연수 }, (_, i) => i + 1)
 
   const 정렬 = new Map(cats.rows.map((c) => [c.코드, c.정렬 ?? 999]))
   const lines: Line[] = budget.rows
@@ -139,7 +140,7 @@ export default async function ProjectBudgetPage({
       {/* 인건비는 사람마다 참여율·월급여가 달라 비목 합계 하나로는 만들 수 없다.
           여기서 개인별로 만들어 위 계상 표의 인건비 줄로 보낸다. */}
       {people.error && <DbError what="개인별 인건비" error={people.error} />}
-      <PersonnelEditor 과제_id={id} 초기값={people.rows} 연차목록={연차목록} />
+      <PersonnelEditor 과제_id={id} 초기값={people.rows} 협약연수={연수} />
 
       {/* 계상한 비목이 곧 준비해야 할 RCMS 증빙 목록이 된다. 그래서 계상 표 바로 아래에 둔다. */}
       {reqs.error && <DbError what="증빙 요건" error={reqs.error} />}

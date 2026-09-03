@@ -66,6 +66,9 @@ const 상태색_범례: { 상태: string; 스와치: string; 이름: string; 설
   { 상태: "종료", 스와치: "bg-red-100 dark:bg-red-950", 이름: "종료", 설명: "끝난 과제입니다 — 문제가 있다는 뜻이 아닙니다." },
 ]
 
+/** 단계 필터가 고를 수 있는 값 전부. 기본은 셋 다 켜진 상태 = 「전체」와 같다. */
+const 단계전체목록: 과제단계[] = ["신청중", "수행중", "사업종료"]
+
 const 전체연도 = "전체"
 const 모두 = "전체"
 const 보기단위 = [10, 20] as const
@@ -135,7 +138,12 @@ export function ProjectsLedger({
 }) {
   const [search, setSearch] = React.useState("")
   const [연도, set연도] = React.useState<string>(전체연도)
-  const [단계필터, set단계필터] = React.useState<string>(모두)
+  /**
+   * 단계 필터 — **여러 개를 동시에 켤 수 있다**(2026-09-04 사용자 지시).
+   * "신청중이랑 수행중만 보고 싶다"처럼 셋 중 두 개를 골라 보는 것이 실제 쓰임이라
+   * 하나만 고르는 드롭다운으로는 안 된다. 기본은 셋 다 켜진 상태 — 그게 「전체」다.
+   */
+  const [단계선택, set단계선택] = React.useState<Set<과제단계>>(() => new Set(단계전체목록))
   const [유형, set유형] = React.useState<string>(모두)
   const [프리셋, set프리셋] = React.useState<string>("전체")
   const [기간시작, set기간시작] = React.useState("")
@@ -169,7 +177,7 @@ export function ProjectsLedger({
     const q = search.trim().toLowerCase()
     const y = 연도 === 전체연도 ? null : Number(연도)
     return rows.filter((r) => {
-      if (전체보기중 && 단계필터 !== 모두 && 단계별[r.id] !== 단계필터) return false
+      if (전체보기중 && !단계선택.has(단계별[r.id])) return false
       if (유형 !== 모두 && (r.사업유형 ?? "") !== 유형) return false
       if (y != null && !연차연도(r.시작일, r.종료일).includes(y)) return false
       if (범위) {
@@ -187,12 +195,12 @@ export function ProjectsLedger({
       return [r.과제명, r.과제코드, r.부처, r.전문기관, r.사업명, 책임자[r.id]]
         .some((v) => (v ?? "").toLowerCase().includes(q))
     })
-  }, [rows, search, 연도, 책임자, 전체보기중, 단계필터, 단계별, 유형, 범위])
+  }, [rows, search, 연도, 책임자, 전체보기중, 단계선택, 단계별, 유형, 범위])
 
   // 조건이 바뀌면 1쪽으로 돌아간다. 3쪽을 보다 걸러서 1쪽밖에 없으면 빈 화면이 뜬다.
   React.useEffect(() => {
     set쪽(1)
-  }, [search, 연도, 크기, 단계필터, 유형, 프리셋, 기간시작, 기간끝])
+  }, [search, 연도, 크기, 단계선택, 유형, 프리셋, 기간시작, 기간끝])
 
   const 쪽수 = 크기 === 쪽없음 ? 1 : Math.max(1, Math.ceil(필터된.length / 크기))
   const 지금쪽 = Math.min(쪽, 쪽수)
@@ -204,7 +212,7 @@ export function ProjectsLedger({
   const 필터걸림 =
     search.trim() !== "" ||
     연도 !== 전체연도 ||
-    단계필터 !== 모두 ||
+    단계선택.size !== 단계전체목록.length ||
     유형 !== 모두 ||
     프리셋 !== "전체" ||
     !!기간시작 ||
@@ -212,12 +220,22 @@ export function ProjectsLedger({
   function 초기화() {
     setSearch("")
     set연도(전체연도)
-    set단계필터(모두)
+    set단계선택(new Set(단계전체목록))
     set유형(모두)
     set프리셋("전체")
     set기간시작("")
     set기간끝("")
     set쪽(1)
+  }
+
+  /** 단계 칩 하나를 켜고 끈다. 마지막 하나까지 끌 수 있다 — 그럼 0건이 뜬다(정직한 결과다). */
+  function 단계토글(s: 과제단계) {
+    set단계선택((prev) => {
+      const next = new Set(prev)
+      if (next.has(s)) next.delete(s)
+      else next.add(s)
+      return next
+    })
   }
 
   // 수행기간이 끝났는데 저장된 상태가 아직 「수행중」인 건 맞추기.
@@ -257,21 +275,31 @@ export function ProjectsLedger({
         </Select>
 
         {/* 단계 필터는 **전체 보기에서만** 낸다. 단계 화면에서는 이미 그 단계만 있어서
-            고를 것이 없다(누를 데 없는 컨트롤을 두지 않는다 — 「종료 숨기기」를 뺀 것과 같은 이유). */}
+            고를 것이 없다(누를 데 없는 컨트롤을 두지 않는다 — 「종료 숨기기」를 뺀 것과 같은 이유).
+            ⚠ 드롭다운에서 **토글 칩**으로 바꿨다(2026-09-04 사용자 지시) — "신청중이랑 수행중만"처럼
+            여러 개를 동시에 보는 게 실제 쓰임이라 하나만 고르는 컨트롤로는 안 됐다. */}
         {전체보기중 && (
-          <Select value={단계필터} onValueChange={(v) => set단계필터(v ?? 모두)}>
-            <SelectTrigger size="sm" className="h-7 w-28 text-[12.8px]" aria-label="단계로 걸러내기">
-              <SelectValue placeholder="단계 전체" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={모두}>단계 전체</SelectItem>
-              {(["신청중", "수행중", "사업종료"] as 과제단계[]).map((s) => (
-                <SelectItem key={s} value={s}>
+          <div role="group" aria-label="단계로 걸러내기" className="flex items-center gap-1">
+            {단계전체목록.map((s) => {
+              const 켜짐 = 단계선택.has(s)
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  aria-pressed={켜짐}
+                  onClick={() => 단계토글(s)}
+                  className={
+                    "h-7 rounded-md border px-2.5 text-[12.8px] transition-colors " +
+                    (켜짐
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-secondary/60")
+                  }
+                >
                   {s}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+                </button>
+              )
+            })}
+          </div>
         )}
 
         {유형목록.length > 1 && (
@@ -434,7 +462,9 @@ export function ProjectsLedger({
                   사업비
                 </TableHead>
                 <TableHead>상태</TableHead>
-                <TableHead className="w-[84px]" />
+                {/* 액션 칸은 가운데 정렬이다 — 단계마다 링크가 하나씩 빠져서
+                    오른쪽에 붙이면 남은 하나가 줄마다 다른 자리에 보인다(사용자 지시). */}
+                <TableHead className="w-[84px] text-center" />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -511,7 +541,7 @@ export function ProjectsLedger({
                     <TableCell>
                       <StatusBadge value={r.상태} />
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-center">
                       {/* 단계마다 할 수 있는 일이 다르다. 못 하는 일의 링크를 걸어 두면
                           「여기서 뭘 해야 하나」를 잘못 알려 준다(`components/project-tabs.tsx` 와 같은 표).
                             · 종료 → 계상 없음(계상은 협약·수행 중에 하는 일)

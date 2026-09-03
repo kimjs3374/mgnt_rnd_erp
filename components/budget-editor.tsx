@@ -13,7 +13,14 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { saveBudgetLines, deleteBudgetLine } from "@/app/actions/budget"
-import { verify, summarize, type ContractInfo } from "@/lib/verify"
+import {
+  verify,
+  summarize,
+  할일들,
+  판정하기,
+  손봐야하나,
+  type ContractInfo,
+} from "@/lib/verify"
 
 export type Line = {
   비목_대분류: string
@@ -74,6 +81,9 @@ export function BudgetEditor({
 
   const checks = verify(lines, 협약)
   const 요약 = summarize(checks)
+  const 할일 = 할일들(checks)
+  // 손봐야 하는 줄을 위로. 다 통과했으면 순서를 흔들지 않는다(원래 순서가 곧 일하는 순서다).
+  const 정렬된 = [...checks].sort((a, b) => Number(손봐야하나(b)) - Number(손봐야하나(a)))
   const 계상합계 = lines.reduce((s, l) => s + (Number(l.배정액) || 0), 0)
   const 집행합계 = lines.reduce((s, l) => s + (Number(l.집행액) || 0), 0)
   const 더러움 = JSON.stringify(lines) !== JSON.stringify(초기값)
@@ -155,8 +165,19 @@ export function BudgetEditor({
       <div className="rounded-lg border bg-card p-4">
         <div className="mb-2 flex flex-wrap items-baseline gap-2">
           <span className="text-[13px] font-medium">한도 검증</span>
+          {/* 손볼 것이 몇 개인지가 먼저다. 「통과 4」는 그 다음에 알아도 되는 숫자다. */}
+          {할일.length > 0 ? (
+            <span className="rounded bg-[var(--warning)] px-1.5 py-0.5 text-xs font-medium text-[var(--warning-fg)]">
+              손볼 것 {할일.length}
+            </span>
+          ) : (
+            <span className="rounded bg-secondary px-1.5 py-0.5 text-xs text-muted-foreground">
+              모두 맞음
+            </span>
+          )}
           <span className="text-xs text-muted-foreground">
-            통과 {요약.통과} · 위반 {요약.위반}
+            검사 {checks.length}건 · 통과 {요약.통과}
+            {요약.위반 > 0 ? ` · 위반 ${요약.위반}` : ""}
             {요약.미판정 > 0 ? ` · 미판정 ${요약.미판정}` : ""}
           </span>
           {더러움 && (
@@ -171,40 +192,85 @@ export function BudgetEditor({
             비목별 배정액을 넣으면 한도를 검산합니다.
           </p>
         ) : (
-          <ul className="space-y-2">
-            {checks.map((c) => (
-              <li key={c.키} className="text-[13px]">
-                <div className="flex flex-wrap items-baseline gap-x-2">
-                  <span
+          <>
+            {/* ★ 「그래서 뭘 해야 하나」를 맨 위에 한 줄씩 적는다.
+                여섯 줄을 읽고 머릿속에서 할 일을 만들게 하지 않는다. */}
+            {할일.length > 0 ? (
+              <ul className="mb-3 space-y-1 rounded-md border border-[var(--warning-fg)]/30 bg-[var(--warning)] px-3 py-2">
+                {할일.map((t) => (
+                  <li
+                    key={`${t.대상}-${t.판정}`}
+                    className="flex flex-wrap items-baseline gap-x-2 text-[13px] text-[var(--warning-fg)]"
+                  >
+                    <span className="font-medium">{t.말}</span>
+                    {t.금액 > 0 && (
+                      <span className="ml-auto text-[15px] font-semibold tabular-nums">
+                        {t.판정 === "부족" ? "+" : "−"}
+                        {won(t.금액)}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mb-3 rounded-md border bg-secondary/40 px-3 py-2 text-[13px] text-muted-foreground">
+                손볼 것이 없습니다 — 계상이 협약 금액과 맞고 한도 안에 있습니다.
+              </p>
+            )}
+
+            <ul className="space-y-1.5">
+              {정렬된.map((c) => {
+                const p = 판정하기(c)
+                const 문제 = p === "부족" || p === "초과"
+                const 배지 =
+                  p === "초과"
+                    ? "bg-destructive/10 text-destructive"
+                    : p === "부족"
+                      ? "bg-[var(--warning)] text-[var(--warning-fg)]"
+                      : p === "확인필요"
+                        ? "bg-[var(--warning)] text-[var(--warning-fg)]"
+                        : "bg-secondary text-muted-foreground"
+                return (
+                  <li
+                    key={c.키}
                     className={
-                      c.통과 === false
-                        ? "text-destructive"
-                        : c.통과 === null
-                          ? "text-[var(--warning-fg)]"
-                          : "text-muted-foreground"
+                      "rounded-md px-2 py-1.5 text-[13px] " +
+                      (문제 || p === "확인필요" ? "bg-secondary/50" : "")
                     }
                   >
-                    {c.통과 === false ? "✗" : c.통과 === null ? "?" : "✓"}
-                  </span>
-                  <span className="font-medium">{c.이름}</span>
-                  <span className="tabular-nums text-muted-foreground">
-                    {won(c.현재)}
-                    {c.기준 != null ? ` / 기준 ${won(c.기준)}` : ""}
-                  </span>
-                  {c.차이 != null && c.차이 !== 0 && (
-                    <span
-                      className={
-                        c.차이 > 0 ? "tabular-nums text-destructive" : "tabular-nums text-muted-foreground"
-                      }
-                    >
-                      {c.차이 > 0 ? `${won(c.차이)} 초과` : `${won(-c.차이)} 미달`}
-                    </span>
-                  )}
-                </div>
-                <div className="pl-5 text-xs text-muted-foreground">{c.근거}</div>
-              </li>
-            ))}
-          </ul>
+                    <div className="flex flex-wrap items-baseline gap-x-2">
+                      {/* 상태를 **말로** 적는다. ✓/✗ 두 가지로는 「한도 안이지만 여유가 있다」를 못 말한다. */}
+                      <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${배지}`}>
+                        {p === "맞음" ? "맞음" : p}
+                      </span>
+                      <span className={문제 ? "font-medium" : ""}>{c.이름}</span>
+                      <span className="tabular-nums text-muted-foreground">
+                        {won(c.현재)}
+                        {c.기준 != null ? ` / 기준 ${won(c.기준)}` : ""}
+                      </span>
+                      {c.차이 != null && c.차이 !== 0 && (
+                        <span
+                          className={
+                            "ml-auto tabular-nums " +
+                            (p === "초과"
+                              ? "font-semibold text-destructive"
+                              : p === "부족"
+                                ? "font-semibold text-[var(--warning-fg)]"
+                                : "text-muted-foreground")
+                          }
+                        >
+                          {p === "여유"
+                            ? `여유 ${won(-c.차이)}`
+                            : `${c.차이 > 0 ? "+" : "−"}${won(Math.abs(c.차이))}`}
+                        </span>
+                      )}
+                    </div>
+                    <div className="pl-1 text-xs text-muted-foreground">{c.근거}</div>
+                  </li>
+                )
+              })}
+            </ul>
+          </>
         )}
       </div>
 

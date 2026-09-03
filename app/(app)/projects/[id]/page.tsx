@@ -1,8 +1,17 @@
 import Link from "next/link"
 import { Card, Stat, EmptyState } from "@/components/page-shell"
 import { DbError } from "@/components/db-error"
+import { FundingShareCard } from "@/components/funding-share-card"
 import { won } from "@/lib/queries"
-import { getProject, getProjectBudget, getProjectExpenses } from "@/lib/queries-project"
+import {
+  getProject,
+  getProjectBudget,
+  getProjectExpenses,
+  getFundingShareRules,
+  getCompanyProfile,
+} from "@/lib/queries-project"
+import { getConfirmState } from "@/lib/queries-confirm"
+import { pickRule, computeShare } from "@/lib/funding-share"
 import { verify, summarize } from "@/lib/verify"
 
 export const dynamic = "force-dynamic"
@@ -22,15 +31,38 @@ export default async function ProjectOverviewPage({
   const { id: raw } = await params
   const id = Number(raw)
 
-  const [proj, budget, exp] = await Promise.all([
+  const [proj, budget, exp, rules, company, confirm] = await Promise.all([
     getProject(id),
     getProjectBudget(id),
     getProjectExpenses(id),
+    getFundingShareRules(),
+    getCompanyProfile(),
+    getConfirmState(id),
   ])
   const p = proj.rows[0]
   // ⚠ 「연구비 계상」(비목·한도)은 국가 R&D 전용이다 — 지원사업 건에는 탭 자체가 없다
   //   (`components/project-tabs.tsx`). 이 개요 카드들도 그 탭을 전제로 하니 같이 가른다.
   const 과제사업 = p?.사업유형 === "NATIONAL_RND"
+
+  // 재원 구성(지원금·자부담금)은 R&D 전용이 아니다 — 정부지원금 대 기관부담(현금·현물)의
+  // 비율은 지자체·TP 지원사업에도 있는 개념이다. 공고·규정으로 자동 계산하는 로직
+  // (`lib/funding-share.ts`)도 사업유형을 안 가린다. 그래서 두 유형 다 여기서 보여주고 고친다
+  // (2026-09-04 사용자 지시 — "지원금 및 자부담금 내역이 들어가면 좋겠고, 잘못 기입되면
+  // 수정할 수 있게"). 5비목 계상·한도검증(연구비 계상 탭)만 R&D 전용으로 남아 있다.
+  const 기관유형 = company.rows[0]?.기업규모 ?? null
+  const 공고_id = (p as { 공고_id?: number | null } | undefined)?.공고_id ?? null
+  const rule = pickRule(rules.rows, { 공고_id, 사업유형: p?.사업유형 ?? null, 기관유형 })
+  const 자동 = computeShare(p?.총사업비 ?? null, rule)
+  const 없는이유 =
+    자동 != null
+      ? null
+      : rules.error
+        ? `재원 분담 규칙을 읽지 못했다: ${rules.error}`
+        : 기관유형 == null
+          ? "회사 프로필에 기업규모가 없어 어느 기관유형 규정을 적용할지 정할 수 없다. 회사 프로필을 먼저 채운다."
+          : rule == null
+            ? `${기관유형} 에 적용할 재원 분담 규칙이 없다.`
+            : "총사업비가 비어 있어 재원을 나눌 수 없다. 아래에서 바로 넣는다."
 
   const 계상 = budget.rows.reduce((s, b) => s + (b.배정액 ?? 0), 0)
   const 집행 = budget.rows.reduce((s, b) => s + Number(b.집행액 ?? 0), 0)
@@ -58,6 +90,8 @@ export default async function ProjectOverviewPage({
       {proj.error && <DbError what="과제" error={proj.error} />}
       {budget.error && <DbError what="예산" error={budget.error} />}
       {exp.error && <DbError what="집행" error={exp.error} />}
+      {company.error && <DbError what="회사 프로필" error={company.error} />}
+      {confirm.error && <DbError what="계상 확정 상태" error={confirm.error} />}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="협약 총사업비" value={won(p?.총사업비)} sub={`정부지원금 ${won(p?.정부지원금)}`} />
@@ -141,60 +175,50 @@ export default async function ProjectOverviewPage({
         </Card>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Card className="p-4">
-          <div className="mb-2 text-[13px] font-medium">집행 상태</div>
-          {exp.rows.length === 0 ? (
-            <p className="text-[13px] text-muted-foreground">
-              집행 건이 없습니다. Slack 채널에 증빙을 올리면 「검토대기」로 쌓입니다.
-            </p>
-          ) : (
-            <ul className="space-y-1 text-[13px]">
-              {[...상태별.entries()].map(([s, n]) => (
-                <li key={s} className="flex justify-between">
-                  <span className="text-muted-foreground">{s}</span>
-                  <span className="tabular-nums">{n}건</span>
-                </li>
-              ))}
-              <li className="flex justify-between border-t pt-1 font-medium">
-                <span>집행 인정</span>
-                <span className="tabular-nums">
-                  {won(
-                    exp.rows
-                      .filter((e) => 집행인정.includes(e.상태))
-                      .reduce((s, e) => s + Number(e.합계 ?? 0), 0),
-                  )}
-                </span>
-              </li>
-            </ul>
-          )}
-        </Card>
-
-        <Card className="p-4">
-          <div className="mb-2 text-[13px] font-medium">협약 구성</div>
+      <Card className="p-4">
+        <div className="mb-2 text-[13px] font-medium">집행 상태</div>
+        {exp.rows.length === 0 ? (
+          <p className="text-[13px] text-muted-foreground">
+            집행 건이 없습니다. Slack 채널에 증빙을 올리면 「검토대기」로 쌓입니다.
+          </p>
+        ) : (
           <ul className="space-y-1 text-[13px]">
-            <li className="flex justify-between">
-              <span className="text-muted-foreground">정부지원금</span>
-              <span className="tabular-nums">{won(p?.정부지원금)}</span>
-            </li>
-            <li className="flex justify-between">
-              <span className="text-muted-foreground">기관부담 현금</span>
-              <span className="tabular-nums">{won(p?.기관부담_현금)}</span>
-            </li>
-            <li className="flex justify-between">
-              <span className="text-muted-foreground">기관부담 현물</span>
-              <span className="tabular-nums">{won(p?.기관부담_현물)}</span>
-            </li>
+            {[...상태별.entries()].map(([s, n]) => (
+              <li key={s} className="flex justify-between">
+                <span className="text-muted-foreground">{s}</span>
+                <span className="tabular-nums">{n}건</span>
+              </li>
+            ))}
             <li className="flex justify-between border-t pt-1 font-medium">
-              <span>총사업비</span>
-              <span className="tabular-nums">{won(p?.총사업비)}</span>
+              <span>집행 인정</span>
+              <span className="tabular-nums">
+                {won(
+                  exp.rows
+                    .filter((e) => 집행인정.includes(e.상태))
+                    .reduce((s, e) => s + Number(e.합계 ?? 0), 0),
+                )}
+              </span>
             </li>
           </ul>
-          <p className="mt-2 text-xs text-muted-foreground">
-            협약서 금액이다. 계상은 이 금액에 맞춰야 하고, 어긋나면 위에 뜬다.
-          </p>
-        </Card>
-      </div>
+        )}
+      </Card>
+
+      {/* 지원금(정부지원금) · 자부담금(기관부담 현금·현물) — 공고·규정으로 자동 계산해
+          채우고, 공고를 잘못 읽어 값이 틀렸으면 여기서 바로 고쳐 저장한다(2026-09-04
+          사용자 지시). R&D 든 지원사업이든 같은 개념·같은 컴포넌트다 — 5비목 계상·한도검증
+          (연구비 계상 탭)만 R&D 전용으로 따로 있다. */}
+      <FundingShareCard
+        과제_id={id}
+        총사업비={p?.총사업비 ?? null}
+        협약={{
+          정부지원금: p?.정부지원금 ?? null,
+          기관부담_현금: p?.기관부담_현금 ?? null,
+          기관부담_현물: p?.기관부담_현물 ?? null,
+        }}
+        자동={자동}
+        없는이유={없는이유}
+        읽기전용={과제사업 && confirm.확정}
+      />
     </>
   )
 }

@@ -36,6 +36,18 @@ import unicodedata
 from dataclasses import dataclass, field
 from typing import Any, Iterable
 
+# r4 → r5 (2026-09-04): 업종 근거 없는 「가능」을 막는다. 실측(id 192·193): 보성군
+# 「일반음식점 시설환경개선 지원사업」이 지역·마감·「중소기업」 태그만으로 60점을
+# 넘겨 「가능」이 됐다 — 업종적합도 가산은 0 이었다. 문서 원문엔 "일반음식점을 영업
+# 중인 자"로 못박혀 있어 이차전지 소재 제조업과 무관했다. 이제 업종적합도 근거가
+# 하나도 없으면 60점을 넘어도 「확인필요」로 내린다(ann_score.py judge() 참조).
+#
+# r3 → r4 (2026-09-04): 첨부문서 수집을 K-Startup·기업마당까지 확장했다
+# (scripts/collect-kstartup-docs.mjs · collect-bizinfo-docs.mjs, LLM 호출 0회).
+# 본문 있는 공고가 53건(6.3%) → 410건(49%)으로 늘었다 — 판정 로직은 그대로이지만
+# 훨씬 많은 공고가 이제 실제 원문 조항으로 판정된다. 요약 폴백(MIN_SUMMARY_CHARS)도
+# 이번에 추가됐다.
+#
 # r2 → r3 (2026-09-03): 지역 게이트의 실측 버그 두 개.
 #   ④ 「관악구청·광명시청·강남구청」이 `(부|처|청)$` 에 걸려 **중앙부처로 분류됐다** —
 #      구청 공고의 지역 게이트가 풀려 「확인필요」로 올라왔다(7건).
@@ -47,11 +59,18 @@ from typing import Any, Iterable
 #   ② 「□ 신청자격」 꼴 제목을 못 읽어 공고 2건의 구역이 전부 None 이었다 → 글머리형 제목 추가
 #   ③ 「기업 참여 불가」(대학·연구기관 전용) 게이트가 아예 없었다 → R-ORG-TYPE-EXCL 추가
 # r1 판정은 지우지 않는다. 나란히 두고 「고쳐서 나아졌는가」를 v_ann_rule_vs_llm 으로 본다.
-ENGINE_VERSION = "r3"
+ENGINE_VERSION = "r5"
 
 # NTIS 본문이 "AB01"(4자)로 들어와 있다. 이 길이로는 조항을 읽을 수 없다.
 # 「짧아서 못 읽었다」와 「읽었는데 조항이 없다」는 다른 상태다 — 섞으면 안 된다.
 MIN_BODY_CHARS = 200
+
+# 첨부 원문(본문)이 없을 때 API 요약(pbanc_ctnt 등)으로 대신 읽는다 — 실측: 836건 중
+# 첨부가 파싱된 건 53건(IRIS 14 + 기업마당 39)뿐이고, 나머지는 수집 파이프라인이
+# 애초에 첨부를 안 받는다(K-Startup·기업마당 상당수). 그런데 기업마당 요약은 짧아도
+# 「☞ 도내 소재 자동차부품 제조 중소기업」처럼 자격요건 문장을 그대로 담고 있다 —
+# 실측으로 확인했다. 요약은 원문보다 훨씬 짧으니 문턱을 낮춘다.
+MIN_SUMMARY_CHARS = 100
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -103,7 +122,7 @@ class Feature:
 # 글머리표. 공고문은 문장이 아니라 이 기호 단위로 읽힌다.
 _BULLET = re.compile(
     r"^[ \t]*("
-    r"[ㅇㅁ○●◦◯□■◇◆▪▫▶►·※*]"          # 한글 공고문에서 실제로 쓰이는 것들
+    r"[ㅇㅁ○●◦◯□■◇◆▪▫▶►·※*☞]"          # 한글 공고문에서 실제로 쓰이는 것들. ☞ 는 기업마당 요약 전용
     r"|[①-⑳]|[㉠-㉻]|[⒈-⒛]"
     r"|\(?\d{1,2}\)"                        # (1) 1)
     r"|\d{1,2}\s*-\s*\d{1,2}\s*\."          # 4-2.
@@ -112,6 +131,23 @@ _BULLET = re.compile(
     r"|[-–—]\s"                             # 줄 맨 앞의 하이픈만. 「제 2026 – 40 호」에 걸리지 않게 한다
     r")"
 )
+
+
+# API 요약(예: 기업마당 pbanc_ctnt)은 줄바꿈이 하나도 없이 통짜 한 줄로 온다(실측 확인:
+# length(요약) 300자대인데 줄바꿈 0개). chunks() 는 줄 시작에서만 글머리를 인식하므로
+# 그대로 두면 전체가 한 덩어리가 되어 "☞ 도내 소재 자동차부품 제조 중소기업" 같은
+# 자격요건 문장이 앞뒤 홍보 문구에 묻혀 규칙이 못 본다. 글머리 기호 앞에 줄바꿈을 넣어
+# 준다 — HWP·PDF 에서 뽑은 진짜 본문(이미 줄바꿈이 있다)에는 건드릴 필요가 없다.
+_INLINE_BULLET_CHARS = "☞ㅇㅁ○●◦◯□■◇◆▪▫▶►※"
+
+
+def _linebreak_bullets(text: str) -> str:
+    out: list[str] = []
+    for i, ch in enumerate(text):
+        if i > 0 and ch in _INLINE_BULLET_CHARS and text[i - 1] != "\n":
+            out.append("\n")
+        out.append(ch)
+    return "".join(out)
 
 
 def strip_ws(s: str) -> str:
@@ -716,14 +752,28 @@ def extract(ann: dict[str, Any], company: dict[str, Any],
     본문 = ann.get("본문") or ""
     쓸만한본문 = len(strip_ws(본문)) >= MIN_BODY_CHARS
 
+    # 첨부 원문이 없거나 너무 짧으면 API 요약으로 대신 읽는다. 실측: 836건 중 첨부가
+    # 파싱된 건 53건(IRIS 14 + 기업마당 39)뿐이다 — 나머지는 수집 단계에서 첨부 자체를
+    # 안 받는다(K-Startup 전부·기업마당 상당수). 근거·확신도는 그대로 남기되, 어느
+    # 컬럼에서 읽었는지(본문출처)는 화면·리포트가 "진짜 첨부문서"와 "API 요약"을
+    # 구분해 말할 수 있게 정직하게 남긴다 — 섞어서 "공고문을 읽었다"고 하지 않는다.
+    본문출처 = "원문"
+    쓸텍스트 = 본문
+    if not 쓸만한본문:
+        요약 = ann.get("요약") or ""
+        if len(strip_ws(요약)) >= MIN_SUMMARY_CHARS:
+            본문출처, 쓸텍스트, 쓸만한본문 = "요약", _linebreak_bullets(요약), True
+        else:
+            본문출처 = None
+
     feats: list[Feature] = []
     feats += meta_features(ann)
     feats += industry_features(ann, company)
 
     구역명: list[str] = []
     if 쓸만한본문:
-        cs = chunks(본문)
-        spans = sections(본문)
+        cs = chunks(쓸텍스트)
+        spans = sections(쓸텍스트)          # 요약은 절 제목이 없어 보통 빈 목록 — 정직한 결과다
         tag_sections(cs, spans)
         구역명 = [s[2] for s in spans]
 
@@ -734,7 +784,9 @@ def extract(ann: dict[str, Any], company: dict[str, Any],
             for f in r.scan(cs):
                 if (f.특징키, f.규칙id) not in 본특징:
                     feats.append(f)
-        feats += scan_documents(cs)
+        if 본문출처 == "원문":
+            feats += scan_documents(cs)     # 제출서류 사전은 요약 텍스트엔 적용하지 않는다 —
+                                             # 요약은 서류 목록을 담을 만큼 길지 않고, 오탐 위험만 있다
 
     # 같은 (특징키, 규칙id) 중복 제거 — 신뢰도 높은 것을 남긴다
     최선: dict[tuple[str, str], Feature] = {}
@@ -747,7 +799,8 @@ def extract(ann: dict[str, Any], company: dict[str, Any],
     return {
         "features": list(최선.values()),
         "본문사용": 쓸만한본문,
-        "본문길이": len(strip_ws(본문)),
+        "본문출처": 본문출처,          # "원문"(첨부 HWP/PDF 파싱) | "요약"(API 요약) | None
+        "본문길이": len(strip_ws(쓸텍스트)) if 쓸만한본문 else 0,
         "구역": 구역명,
         "엔진버전": ENGINE_VERSION,
     }

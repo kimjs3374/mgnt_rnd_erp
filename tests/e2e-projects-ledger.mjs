@@ -54,24 +54,25 @@ try {
   await 잠깐(600)
 
   const 전체 = await 줄수()
-  const 종료 = await 빨강수()
-  log(`처음: ${전체}줄 (종료 ${종료}줄)`)
-  확인(전체 > 0 && 종료 > 0, "표에 줄이 있고 종료된 줄도 있다")
+  log(`수행중: ${전체}줄`)
+  확인(전체 > 0, "표에 줄이 있다")
 
-  // ① 종료 숨김
-  확인(await 누르기("종료 숨기기"), "「종료 숨기기」 버튼이 있다")
+  // ① 단계가 나뉘었으니 **수행중 화면에는 종료가 한 줄도 없어야** 한다.
+  //    (「종료 숨기기」 토글은 그래서 뺐다 — 숨길 것이 애초에 없다.)
+  확인((await 빨강수()) === 0, "수행중 화면에는 연빨강(종료) 줄이 없다")
+
+  // 종료는 사업종료 화면에 모여 있고 거기서 연빨강과 범례가 보인다.
+  await page.goto(`${BASE}/projects/closed`, { waitUntil: "networkidle0", timeout: 60000 })
   await 잠깐(500)
-  const 숨긴뒤 = await 줄수()
-  확인(숨긴뒤 === 전체 - 종료, `종료 ${종료}건이 빠졌다 (${전체} → ${숨긴뒤})`)
-  확인((await 빨강수()) === 0, "연빨강 줄이 하나도 안 남는다")
-  const 눌린상태 = await page.evaluate(
-    () => [...document.querySelectorAll("button")].some((b) => b.getAttribute("aria-pressed") === "true"),
+  const 종료줄 = await 줄수()
+  확인(종료줄 > 0 && (await 빨강수()) === 종료줄, `사업종료 화면은 전부 연빨강이다 (${종료줄}줄)`)
+  확인(
+    (await page.evaluate(() => document.body.innerText)).includes("종료된 과제"),
+    "색이 무엇을 뜻하는지 범례가 있다",
   )
-  확인(눌린상태, "누른 상태가 버튼에 표시된다 (aria-pressed)")
 
-  확인(await 누르기("종료 숨김"), "다시 누를 수 있다")
+  await page.goto(`${BASE}/projects`, { waitUntil: "networkidle0", timeout: 60000 })
   await 잠깐(500)
-  확인((await 줄수()) === 전체, `되돌아온다 (${전체}줄)`)
 
   // ② 수행 연도 — Radix Select 라 트리거를 누르고 항목을 고른다
   const 열림 = await page.evaluate(() => {

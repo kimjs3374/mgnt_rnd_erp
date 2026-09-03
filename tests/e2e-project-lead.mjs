@@ -75,7 +75,9 @@ async function 바꾸기(이름) {
 }
 
 try {
-  await page.goto(`${BASE}/projects`, { waitUntil: "networkidle0", timeout: 60000 })
+  // ⚠ 과제 13 은 **종료된 과제**라 「수행중」(`/projects`)이 아니라 「사업종료」에 있다.
+  //    단계로 나누기 전에는 한 대장에 다 있었다 — 그때 쓴 주소를 그대로 두면 칸을 못 찾는다.
+  await page.goto(`${BASE}/projects/closed`, { waitUntil: "networkidle0", timeout: 60000 })
   await 잠깐(600)
 
   확인(

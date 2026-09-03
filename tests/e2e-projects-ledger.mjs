@@ -66,9 +66,21 @@ try {
   await 잠깐(500)
   const 종료줄 = await 줄수()
   확인(종료줄 > 0 && (await 빨강수()) === 종료줄, `사업종료 화면은 전부 연빨강이다 (${종료줄}줄)`)
+  // ⚠ 범례 **문구**를 박지 않는다. 처음엔 「종료된 과제입니다」 한 줄이었는데
+  //   단계 색이 셋(신청중 호박 · 수행중 하늘 · 종료 연빨강)으로 늘면서 표 형태로 바뀌었다.
+  //   문구를 박아 두면 화면이 좋아질 때마다 테스트가 깨진다 — **있어야 할 것**만 본다:
+  //   ① 색 견본이 있고 ② 「종료」를 가리키며 ③ 빨강이 문제라는 뜻이 아니라고 말한다.
+  const 범례 = await page.evaluate(() => {
+    const 견본 = [...document.querySelectorAll("span")].filter(
+      (s) => s.className.includes("inline-block") && /bg-(red|amber|sky|orange|blue)-/.test(s.className),
+    )
+    return { 견본수: 견본.length, 글: document.body.innerText }
+  })
+  확인(범례.견본수 > 0, `범례에 색 견본이 있다 (${범례.견본수}개)`)
+  확인(범례.글.includes("종료"), "그 색이 「종료」를 가리킨다고 적혀 있다")
   확인(
-    (await page.evaluate(() => document.body.innerText)).includes("종료된 과제"),
-    "색이 무엇을 뜻하는지 범례가 있다",
+    /문제가 있다는 뜻이 아니|끝난 과제입니다/.test(범례.글),
+    "빨강이 문제라는 뜻이 아니라고 말해 준다",
   )
 
   await page.goto(`${BASE}/projects`, { waitUntil: "networkidle0", timeout: 60000 })

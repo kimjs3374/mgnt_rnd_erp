@@ -91,6 +91,17 @@ const 심을것 = `
 `
 
 let 과제id = null
+
+/**
+ * 시작 시점의 과제 수. **「12건」을 박지 않는다.**
+ *
+ * 12 는 시드 개수인데, 공고에서 [지원 등록]을 누르면 대장에 진짜 과제가 늘어난다 —
+ * 그게 이 제품의 기능이다. 숫자를 박아 두면 **사람이 기능을 쓰는 순간 테스트가 빨개지고**,
+ * 다음 사람이 「잔여물이 남았나」 하고 남의 실제 데이터를 지우게 된다(실제로 그럴 뻔했다:
+ * 과제 55 「삼성 EPC 3사 …」는 사람이 화면에서 등록한 건이지 테스트 잔여가 아니었다).
+ * 이 테스트가 봐야 하는 것은 **「내가 만든 것을 내가 다 치웠는가」**뿐이다.
+ */
+const 시작과제수 = (await pgSelect("projects", "select=id")).length
 let 양식ids = []
 
 try {
@@ -247,7 +258,11 @@ try {
   for (const id of 양식ids) log(`정리: 양식 ${id} 삭제 ${await del("form_templates", `id=eq.${id}`)}`)
 }
 
-확인((await pgSelect("projects", "select=id")).length === 12, "과제 12건 (시드 그대로)")
+const 끝과제수 = (await pgSelect("projects", "select=id")).length
+확인(
+  끝과제수 === 시작과제수,
+  `과제 수가 시작과 같다 (${시작과제수} → ${끝과제수}) — 이 테스트가 남긴 것이 없다`,
+)
 확인((await pgSelect("form_templates", "select=id")).length === 0, "테스트가 남긴 양식 0건")
 확인((await pgSelect("budget_confirmations", "select=id")).length === 0, "테스트가 남긴 확정 이력 0건")
 

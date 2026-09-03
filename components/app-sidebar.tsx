@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/sidebar"
 import { NAV } from "@/lib/nav"
 import {
+  Briefcase,
   Building2,
   ClipboardCheck,
   FolderKanban,
@@ -31,6 +32,7 @@ import {
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   LayoutDashboard,
   FolderKanban,
+  Briefcase,
   ReceiptText,
   PieChart,
   ClipboardCheck,

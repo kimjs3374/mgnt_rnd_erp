@@ -20,6 +20,7 @@ export const NAV: NavGroup[] = [
       { title: "공고 탐색", url: "/announcements" },
     ],
   },
+  { title: "과제사업", url: "/projects", icon: "Briefcase" },
   { title: "집행", url: "/expenses", icon: "ReceiptText" },
   { title: "예산", url: "/budget", icon: "PieChart" },
   { title: "정산", url: "/settlement", icon: "ClipboardCheck" },

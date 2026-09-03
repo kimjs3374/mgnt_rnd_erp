@@ -138,6 +138,41 @@ export const getAnnouncements = () =>
       .limit(100),
   )
 
+export type ProjectRow = {
+  id: number
+  과제코드: string | null
+  과제명: string
+  부처: string | null
+  전문기관: string | null
+  사업명: string | null
+  협약번호: string | null
+  사업유형: string | null
+  시작일: string | null
+  종료일: string | null
+  연차: number | null
+  총사업비: number | null
+  정부지원금: number | null
+  기관부담_현금: number | null
+  기관부담_현물: number | null
+  상태: string
+}
+
+/**
+ * 과제사업 — 선정되어 수행된(수행 중인) 과제의 수행 정보.
+ * 「지원사업」이 공고→신청→선정 관점의 뷰라면, 이건 협약 이후 과제 자체의 마스터 정보다.
+ * 시작일이 있는 행만 「수행」으로 본다 — 아직 신청·심사 단계인 건 지원사업 대장에서 본다.
+ */
+export const getProjects = () =>
+  safeSelect<ProjectRow>("projects", () =>
+    db
+      .from("projects")
+      // ⚠ 컬럼을 나열하면 supabase-js 의 타입 파서가 한글 식별자에서 막힌다(getExpenses 참고).
+      //    런타임이 아니라 컴파일 문제라 * 로 받고 타입으로 좁힌다.
+      .select("*")
+      .not("시작일", "is", null)
+      .order("시작일", { ascending: false }),
+  )
+
 /** 원화 표기. null 은 「—」로 둔다. 0 과 「모름」을 구분한다. */
 export const won = (n: number | null | undefined) =>
   n == null ? "—" : "₩" + Number(n).toLocaleString("ko-KR")

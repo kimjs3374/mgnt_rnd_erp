@@ -1,18 +1,27 @@
 import { PageShell, Card, Stat, EmptyState } from "@/components/page-shell"
 import { StatusBadge } from "@/components/status-badge"
 import { DbError } from "@/components/db-error"
-import { getLedger, getBudget, getExpenses, getDocuments, won } from "@/lib/queries"
+import { AnnouncementBoard } from "@/components/announcement-board"
+import {
+  getLedger,
+  getBudget,
+  getExpenses,
+  getDocuments,
+  getAnnouncementBoard,
+  won,
+} from "@/lib/queries"
 import Link from "next/link"
 
 export const dynamic = "force-dynamic"
 
 export default async function DashboardPage() {
-  // 네 갈래를 동시에 부른다. 하나가 실패해도 나머지는 그려진다.
-  const [ledger, budget, expenses, docs] = await Promise.all([
+  // 다섯 갈래를 동시에 부른다. 하나가 실패해도 나머지는 그려진다.
+  const [ledger, budget, expenses, docs, board] = await Promise.all([
     getLedger(),
     getBudget(),
     getExpenses(),
     getDocuments(),
+    getAnnouncementBoard(),
   ])
 
   const 배정 = budget.rows.reduce((s, b) => s + (b.배정액 ?? 0), 0)
@@ -30,8 +39,14 @@ export default async function DashboardPage() {
     ["만료", "만료임박", "없음", "확인필요", "공고확인필요"].includes(d.상태),
   )
 
-  const errors = [ledger, budget, expenses, docs]
-    .map((r, i) => ({ e: r.error, what: ["대장", "예산", "집행", "서류함"][i] }))
+  // 오늘 새로 올라온 공고 — 케이오시 현안 1번이 「매일 확인」이라 KPI 자리에 올린다.
+  const 신규공고 = board.rows.filter((r) => r.신규).length
+
+  const errors = [ledger, budget, expenses, docs, board]
+    .map((r, i) => ({
+      e: r.error,
+      what: ["대장", "예산", "집행", "서류함", "공고"][i],
+    }))
     .filter((x) => x.e)
 
   return (
@@ -40,7 +55,13 @@ export default async function DashboardPage() {
         <DbError key={x.what} what={x.what} error={x.e!} />
       ))}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <Stat
+          label="오늘 새 공고"
+          value={신규공고}
+          sub={`수집 ${board.rows.length}건 중`}
+          tone={신규공고 > 0 ? "warn" : "default"}
+        />
         <Stat
           label="예산 소진율"
           value={`${소진율}%`}
@@ -60,6 +81,9 @@ export default async function DashboardPage() {
         />
         <Stat label="진행 중 사업" value={진행중} sub={`전체 ${ledger.rows.length}건`} />
       </div>
+
+      {/* 생애주기의 입구. 「어제 없던 게 뭐냐」에 먼저 답한다. */}
+      <AnnouncementBoard rows={board.rows} />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>

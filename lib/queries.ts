@@ -138,6 +138,46 @@ export const getAnnouncements = () =>
       .limit(100),
   )
 
+/**
+ * 공고 확인 보드 — 대시보드의 「공고 확인」 탭이 읽는다.
+ * app.v_announcement_board 뷰 하나만 읽는다. 구분·신규·d_day 는 DB 가 계산해서 준다.
+ * 「오늘」 판정을 브라우저 시계로 하지 않는 이유: 심사장 PC 의 시간대를 믿을 수 없고,
+ * 서버 DB 는 UTC 라 뷰 안에서 Asia/Seoul 로 환산해 두었다.
+ */
+export type BoardRow = {
+  id: number
+  출처: string
+  출처_id: string | null
+  사업명: string
+  기관: string | null
+  지역: string | null
+  사업유형: string | null
+  사업유형명: string | null
+  구분: string // 과제 | 지원사업 | 미분류
+  공고일: string | null
+  수집일: string | null
+  날짜출처: string // 공고일 | 수집일
+  기준일: string | null
+  신규: boolean
+  접수시작: string | null
+  접수종료: string | null
+  마감유형: string
+  d_day: number | null
+  파싱상태: string
+  공고문_url: string | null
+}
+
+export const getAnnouncementBoard = () =>
+  safeSelect<BoardRow>("v_announcement_board", () =>
+    db
+      .from("v_announcement_board")
+      // 새로 올라온 것이 위로. 그다음 마감이 임박한 순.
+      .select("*")
+      .order("기준일", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(200),
+  )
+
 export type ProjectRow = {
   id: number
   과제코드: string | null

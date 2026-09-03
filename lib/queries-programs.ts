@@ -69,6 +69,21 @@ const 대상_별칭: Record<string, string[]> = {
   마을기업: ["마을기업"],
 }
 
+/**
+ * 접수가 이미 끝났는지 — **마감유형이 `dated`(날짜 마감)일 때만** 따진다.
+ * 상시·소진시·완료시 공고는 마감일이 없으므로 지나갈 수가 없다(실측: 비-dated 39건 전부 마감 전).
+ *
+ * bot/ann_score.py 의 첫 게이트(`put("접수마감", 남음 >= 0, …, 신뢰도 1.0)`)와 같은 규칙·같은
+ * 순서다 — 규칙엔진과 화면이 같은 공고를 다르게 말하면 안 된다.
+ *
+ * 「오늘」은 서버가 정한다(이 파일은 서버 전용). 심사장 PC 시계를 믿지 않는다.
+ */
+function 접수마감됨(접수종료: string | null, 마감유형: string | null): boolean {
+  if (!접수종료) return false
+  if ((마감유형 ?? "dated") !== "dated") return false
+  return 접수종료 < new Date().toISOString().slice(0, 10)
+}
+
 /** 지역을 모르는 공고(null)는 걸러내지 않는다 — 「불가」로 잘못 판정하면 조용히 버려진다. */
 function 지역해당(공고지역: string[] | null, 회사지역: string[]): boolean | null {
   if (!공고지역 || 공고지역.length === 0 || 회사지역.length === 0) return null
@@ -109,6 +124,21 @@ type RawRow = Record<string, unknown> & {
  * 「불가」로 잘못 판정하면 신청할 수 있는 공고를 조용히 버린다(설계원칙 5).
  */
 function 판정계산(row: RawRow, company: CompanyFilter | null): AnnouncementRow["자격판정"] {
+  const 판정 = 판정사슬(row, company)
+  // 접수가 끝났으면 자격을 따질 것도 없다 — 신청 자체가 불가능하다.
+  // 사용자 지적(2026-09-04): "관련공고가 너무 말도안되게 늘어났어" — 실측하니 「가능」
+  // 349건 중 256건이 이미 마감된 공고였다(K-Startup 500건이 새로 들어오며 드러났다).
+  // 마감일 비교는 계산으로 확정되는 자리다(CLAUDE.md 설계원칙 1) — 규칙엔진(bot/ann_score.py)은
+  // 이미 첫 게이트로 이걸 보고 있었는데 화면 쪽 판정계산에만 빠져 있었다.
+  // 사슬보다 **뒤**에 두는 이유는 「해당없음」만은 살려야 하기 때문이다 — 그건 "애초에
+  // 지원사업이 아니다"라는 뜻이라 마감 여부와 축이 다르다.
+  if (판정 !== "해당없음" && 접수마감됨((row.접수종료 as string) ?? null, (row.마감유형 as string) ?? null)) {
+    return "불가"
+  }
+  return 판정
+}
+
+function 판정사슬(row: RawRow, company: CompanyFilter | null): AnnouncementRow["자격판정"] {
   // ① 확정 판정이 있으면 그것이 답이다.
   const 결정 = row.eligibility_decisions ?? []
   if (결정.length > 0) {

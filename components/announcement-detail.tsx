@@ -224,6 +224,13 @@ export async function AnnouncementDetail({
   const 다운로드url = a?.공고문_bucket_url ?? a?.공고문_url ?? null
   const 톤 = a ? 자격판정_톤[a.자격판정] : null
   const 판정아이콘 = 톤?.icon
+  // 접수가 끝나서 「불가」가 된 건은 이유가 다르다 — 요건이 안 맞아서가 아니다.
+  // 판정을 여기서 다시 계산하지 않고(그건 lib/queries.ts 의 판정계산 몫이다) 이유만 가른다.
+  const 마감으로불가 =
+    a?.자격판정 === "불가" &&
+    !!a.접수종료 &&
+    (a.마감유형 ?? "dated") === "dated" &&
+    a.접수종료 < new Date().toISOString().slice(0, 10)
 
   return (
     <PageShell
@@ -284,10 +291,12 @@ export async function AnnouncementDetail({
                         톤.titleClass,
                       )}
                     >
-                      {자격판정_라벨[a.자격판정]}
+                      {마감으로불가 ? "접수 마감" : 자격판정_라벨[a.자격판정]}
                     </div>
                     <p className="mt-1.5 max-w-lg text-sm text-muted-foreground">
-                      {자격판정_설명[a.자격판정]}
+                      {마감으로불가
+                        ? `접수가 ${a.접수종료}에 끝났습니다 — 자격 요건과 무관하게 지금은 신청할 수 없습니다.`
+                        : 자격판정_설명[a.자격판정]}
                     </p>
                   </div>
                 </div>

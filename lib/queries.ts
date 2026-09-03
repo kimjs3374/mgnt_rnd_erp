@@ -228,6 +228,20 @@ type RawAnnouncementRow = Omit<
 }
 
 /**
+ * 접수가 이미 끝났는지 — **마감유형이 `dated`(날짜 마감)일 때만** 따진다. 상시·소진시·
+ * 완료시 공고는 마감일이 없으므로 지나갈 수가 없다.
+ *
+ * lib/queries-programs.ts 에 같은 함수가 있다 — 그 파일이 이 파일을 안 건드리는 방침이라
+ * (그 파일 맨 위 주석) 4줄짜리 순수 계산을 양쪽에 둔다. 규칙은 bot/ann_score.py 의 첫
+ * 게이트(`put("접수마감", 남음 >= 0, …, 신뢰도 1.0)`)와 같다 — 셋이 어긋나면 안 된다.
+ */
+function 접수마감됨(접수종료: string | null, 마감유형: string | null): boolean {
+  if (!접수종료) return false
+  if ((마감유형 ?? "dated") !== "dated") return false
+  return 접수종료 < new Date().toISOString().slice(0, 10)
+}
+
+/**
  * 자격판정 등급 계산 — 우선순위: ① 확정 판정(eligibility_decisions, LLM 점수든 사람
  * 확정이든 최신 것) ② 요건은 읽었는데 확정이 없다(ann_requirements 만 있음) ③ 요건미확인.
  *
@@ -239,6 +253,16 @@ type RawAnnouncementRow = Omit<
  *   판정계산(지원사업 쪽, 팀원 작성)은 이미 이 순서가 맞았다 — 그쪽과 맞춘다.
  */
 function 판정계산(row: RawAnnouncementRow): AnnouncementRow["자격판정"] {
+  const 판정 = 판정사슬(row)
+  // 접수가 끝났으면 자격을 따질 것도 없다 — 신청 자체가 불가능하다(lib/queries-programs.ts
+  // 의 판정계산과 같은 게이트다. 목록과 상세가 같은 공고를 다르게 말하면 안 된다).
+  // 사슬보다 **뒤**에 두는 이유는 「해당없음」만은 살려야 하기 때문이다 — 그건 "애초에
+  // 지원사업이 아니다"라는 뜻이라 마감 여부와 축이 다르다.
+  if (판정 !== "해당없음" && 접수마감됨(row.접수종료, row.마감유형)) return "불가"
+  return 판정
+}
+
+function 판정사슬(row: RawAnnouncementRow): AnnouncementRow["자격판정"] {
   if (row.eligibility_decisions.length > 0) {
     const 최신 = row.eligibility_decisions.reduce((a, b) =>
       a.created_at > b.created_at ? a : b,

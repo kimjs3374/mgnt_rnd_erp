@@ -15,26 +15,24 @@ import { cn } from "@/lib/utils"
  *   ⚠ **갈래마다 색을 다르게 준 작은 배지**로 구분한다(대기=인디고·서류=청록·
  *     점검=슬레이트 — 이 앱에서 아직 안 쓴 색들이다).
  *
- * 2026-09-04 개편(7차) — 「외 N건」이 `<p>`라서 눌러도 아무 일이 안 났다(실사용 지적).
- *   B안 채택: 세 갈래를 한 카드에서 동시에 보는 건 그대로 두고, 갈래마다 자체
- *   페이지 넘김(‹ n/m ›)을 둔다. `항목` 은 미리보기가 아니라 그 갈래의 전체 목록이다.
+ * 2026-09-04 개편(9차) — 오른쪽 값을 「행동 문구」로 바꿨다(없음→발급 필요 등).
+ *   `StatusBadge`(다른 화면과 공유하는 컴포넌트·어휘)는 안 건드리고 이 카드
+ *   안에서만 매핑한다(`행동문구()`).
  *
- * 2026-09-04 개편(8차) — 페이지가 여러 장인 그룹만 마지막 페이지를 빈 줄로 채워
- *   페이지당 줄 수를 유지한다(그래야 카드 테두리가 안 움직인다).
- *
- * 2026-09-04 개편(9차) — 「없음이 처리할 게 없다는 뜻으로 읽혔다」(실사용 지적).
- *   오른쪽에 **원래 값(상태·비목명·건수)을 그대로 보여주던 걸 「행동 문구」로 바꿨다.**
- *   ⚠ 「없음」은 이 카드의 빈 상태 문구("지금 손댈 것이 없습니다")와 글자가 겹쳐서
- *     "처리할 게 없다"로 오독됐다 — 실은 "서류가 아직 없다(발급 안 됨)"는 뜻이었다.
- *     세 갈래 다 같은 문제의 다른 얼굴이었다: 오른쪽 값이 **사실**만 말하고
- *     **뭘 해야 하는지**는 안 썼다("연구시설·장비 및 재료비"는 AI 제안일 뿐 "확정하라"가
- *     없고, "3건"은 통과한 3건인지 막힌 3건인지 안 갈렸다).
- *   ⚠ `StatusBadge`(다른 화면과 공유하는 컴포넌트·어휘)는 안 건드린다. 「없음」→
- *     「발급 필요」로 문구를 바꾸면 그 컴포넌트의 색 사전(TONE)에 없는 값이 되어
- *     색이 어긋난다. 그래서 이 카드 **안에서만** 원래 값(`꼬리`)을 보고 행동 문구로
- *     한 번 더 매핑해서 그린다(`행동문구()`) — 원본 값·다른 화면은 그대로다.
- *   ⚠ 서류만 색을 준다(만료가 없음보다 급하다는 걸 구분해야 하니까). 대기·점검은
- *     급한 정도가 갈리지 않는 고정 문구라 색 없이 회색 텍스트로 충분하다.
+ * 2026-09-04 개편(10차) — **갈래별 페이지 넘김을 버리고 카드 전체 통합 페이지로
+ * 바꿨다.**
+ *   ⚠ 그룹마다 따로 페이지를 넘기면 **그룹 하나의 높이는 고정돼도, 여러 그룹이
+ *     동시에 여러 페이지가 되면 전체 합은 계속 늘어난다**(대기 6건+서류 6건이면
+ *     각자 4줄씩 고정이어도 합쳐서 8줄이 카드에 들어간다). 그룹이 늘수록 카드가
+ *     다시 커진다 — 애초에 카드 크기를 고정하려던 목적과 어긋난다.
+ *   ⚠ 그래서 **모든 갈래의 항목을 한 줄로 펼쳐 놓고 카드 전체가 한 페이지당
+ *     고정 줄 수(`페이지당`)로 넘어간다.** 데이터가 아무리 많아져도 한 페이지에
+ *     보이는 줄 수는 항상 같다 — 카드 높이가 데이터양과 완전히 무관해진다.
+ *   ⚠ **그룹이 페이지 중간에서 갈릴 수 있다**(예: 2페이지에 대기 마지막 1건과
+ *     서류 앞부분이 같이 보임). 각 줄 앞의 갈래 배지가 항상 붙어 있어서 어느
+ *     갈래인지는 줄마다 바로 알 수 있다 — 그룹 경계가 안 맞아도 헷갈리지 않는다.
+ *   ⚠ 페이지 넘김 버튼은 카드에 **딱 하나**다. 여러 갈래가 동시에 여러 페이지일
+ *     때 버튼이 여러 개 뜨는 것보다 하나가 낫다는 판단(2026-09-04 사용자 확인).
  */
 export type 큐항목 = {
   키: string
@@ -48,7 +46,6 @@ export type 큐갈래 = {
   라벨: string
   링크: string
   건수: number
-  /** 이 갈래의 전체 목록. 미리보기로 자르지 않는다 — 페이지 넘김이 나머지를 보여준다. */
   항목: 큐항목[]
 }
 
@@ -86,14 +83,25 @@ function 행동문구(갈래: string, 꼬리: string): 행동 {
   return { 문구: 꼬리 }
 }
 
-const 페이지당 = 4
+/** 통합 목록의 한 줄 — 원래 갈래 정보를 들고 다닌다(배지·링크·색을 찾으려면 필요하다). */
+type 통합행 = { 갈래: string; 링크: string } & 큐항목
+
+const 페이지당 = 5
 
 export function TodoCard({ 갈래들 }: { 갈래들: 큐갈래[] }) {
   const 걸린것 = 갈래들.filter((g) => g.건수 > 0)
   const 총건수 = 갈래들.reduce((n, g) => n + g.건수, 0)
 
-  // 갈래별로 따로 둔다 — 한 갈래를 넘겨도 다른 갈래 페이지가 같이 안 밀린다.
-  const [페이지, set페이지] = React.useState<Record<string, number>>({})
+  // 모든 갈래를 한 줄 목록으로 펼친다 — 순서는 갈래 순서(대기→서류→점검)를 유지한다.
+  const 전체행: 통합행[] = React.useMemo(
+    () => 걸린것.flatMap((g) => g.항목.map((it) => ({ 갈래: g.라벨, 링크: g.링크, ...it }))),
+    [걸린것],
+  )
+
+  const [페이지, set페이지] = React.useState(0)
+  const 총페이지 = Math.max(1, Math.ceil(전체행.length / 페이지당))
+  const 현재페이지 = Math.min(페이지, 총페이지 - 1)
+  const 보이는행 = 전체행.slice(현재페이지 * 페이지당, 현재페이지 * 페이지당 + 페이지당)
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden rounded-lg border bg-card">
@@ -108,88 +116,88 @@ export function TodoCard({ 갈래들 }: { 갈래들: 큐갈래[] }) {
         </p>
       ) : (
         <div className="flex-1 overflow-y-auto p-2">
-          {걸린것.map((g, gi) => {
-            const 스타일 = 갈래스타일[g.라벨] ?? {
-              짧은: g.라벨.slice(0, 2),
+          {보이는행.map((it, i) => {
+            const 스타일 = 갈래스타일[it.갈래] ?? {
+              짧은: it.갈래.slice(0, 2),
               색: "border-border text-muted-foreground",
             }
-            const 총페이지 = Math.max(1, Math.ceil(g.항목.length / 페이지당))
-            const 현재페이지 = Math.min(페이지[g.라벨] ?? 0, 총페이지 - 1)
-            const 보이는 = g.항목.slice(현재페이지 * 페이지당, 현재페이지 * 페이지당 + 페이지당)
-            const 넘기기 = (delta: number) =>
-              set페이지((p) => ({ ...p, [g.라벨]: 현재페이지 + delta }))
+            const 행동 = 행동문구(it.갈래, it.꼬리)
+            // 갈래가 바뀌는 지점에만 구분선을 둔다 — 페이지 중간에서 갈래가 갈려도
+            // 줄마다 배지가 있어서 헷갈리진 않지만, 선으로 한 번 더 갈라 준다.
+            const 갈래바뀜 = i > 0 && 보이는행[i - 1].갈래 !== it.갈래
 
             return (
-              <div key={g.라벨} data-group={g.라벨} className={cn(gi > 0 && "mt-1.5")}>
-                {보이는.map((it) => {
-                  const 행동 = 행동문구(g.라벨, it.꼬리)
-                  return (
-                    <Link
-                      key={it.키}
-                      href={g.링크}
-                      title={it.꼬리 !== 행동.문구 ? `원래 값: ${it.꼬리}` : undefined}
-                      className="flex h-7 items-center gap-2 rounded px-1 hover:bg-muted"
-                    >
-                      <span
-                        className={cn(
-                          "inline-flex h-4 shrink-0 items-center rounded border px-1 text-[10px] font-medium leading-none",
-                          스타일.색,
-                        )}
-                      >
-                        {스타일.짧은}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-[13px]">{it.이름}</span>
-                      {행동.색 ? (
-                        <span
-                          className={cn(
-                            "inline-flex h-5 shrink-0 items-center rounded border px-1.5 text-[11px] font-medium leading-none",
-                            행동.색,
-                          )}
-                        >
-                          {행동.문구}
-                        </span>
-                      ) : (
-                        <span className="shrink-0 text-xs text-muted-foreground">{행동.문구}</span>
-                      )}
-                    </Link>
-                  )
-                })}
-                {/* 페이지가 여러 장인 그룹만 빈 줄로 채운다 — 마지막 페이지가 짧다고
-                    카드 내용량이 줄면 flex-1 계산이 흔들려 카드 테두리가 움직인다. */}
-                {총페이지 > 1 &&
-                  Array.from({ length: 페이지당 - 보이는.length }).map((_, i) => (
-                    <div key={`filler-${i}`} aria-hidden className="h-7" />
-                  ))}
-
-                {/* 갈래 하나에 항목이 페이지당 수보다 많을 때만 뜬다. 「외 N건」 대신 이게 전체를 보여준다. */}
-                {총페이지 > 1 && (
-                  <div className="flex items-center justify-end gap-1.5 px-1 pt-0.5 text-[11px] text-muted-foreground">
-                    <button
-                      type="button"
-                      disabled={현재페이지 === 0}
-                      onClick={() => 넘기기(-1)}
-                      aria-label={`${g.라벨} 이전 페이지`}
-                      className="flex size-4 items-center justify-center rounded-full border text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
-                    >
-                      ‹
-                    </button>
-                    <span className="tabular-nums">
-                      {현재페이지 + 1} / {총페이지}
-                    </span>
-                    <button
-                      type="button"
-                      disabled={현재페이지 >= 총페이지 - 1}
-                      onClick={() => 넘기기(1)}
-                      aria-label={`${g.라벨} 다음 페이지`}
-                      className="flex size-4 items-center justify-center rounded-full border text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
-                    >
-                      ›
-                    </button>
-                  </div>
+              <Link
+                key={it.키}
+                href={it.링크}
+                data-group={it.갈래}
+                title={it.꼬리 !== 행동.문구 ? `원래 값: ${it.꼬리}` : undefined}
+                className={cn(
+                  "flex h-7 items-center gap-2 rounded px-1 hover:bg-muted",
+                  // ⚠ margin 이 아니라 border 를 쓴다. margin-top 은 줄 높이 바깥에 공간을
+                  //   더하는데, 페이지마다 그 페이지 안에서 갈래가 몇 번 바뀌는지가 달라서
+                  //   페이지 넘길 때마다 카드 높이가 246px→240px 로 흔들렸다(실측).
+                  //   border 는 h-7 박스 안에서(box-border) 자리를 차지해 높이가 안 늘어난다.
+                  갈래바뀜 && "border-t border-border/50",
                 )}
-              </div>
+              >
+                <span
+                  className={cn(
+                    "inline-flex h-4 shrink-0 items-center rounded border px-1 text-[10px] font-medium leading-none",
+                    스타일.색,
+                  )}
+                >
+                  {스타일.짧은}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-[13px]">{it.이름}</span>
+                {행동.색 ? (
+                  <span
+                    className={cn(
+                      "inline-flex h-5 shrink-0 items-center rounded border px-1.5 text-[11px] font-medium leading-none",
+                      행동.색,
+                    )}
+                  >
+                    {행동.문구}
+                  </span>
+                ) : (
+                  <span className="shrink-0 text-xs text-muted-foreground">{행동.문구}</span>
+                )}
+              </Link>
             )
           })}
+
+          {/* 줄 수를 고정한다 — 데이터가 아무리 많아져도 카드 안 표시 줄 수는 항상 같다. */}
+          {Array.from({ length: 페이지당 - 보이는행.length }).map((_, i) => (
+            <div key={`filler-${i}`} aria-hidden className="h-7" />
+          ))}
+        </div>
+      )}
+
+      {/* 카드에 페이지 넘김 버튼은 하나뿐이다 — 갈래마다 따로 두면 갈래가 늘수록
+          버튼도 늘고 카드 안 표시 줄 수도 같이 늘어난다. */}
+      {총페이지 > 1 && (
+        <div className="flex items-center justify-end gap-2 border-t px-4 py-2 text-xs text-muted-foreground">
+          <button
+            type="button"
+            disabled={현재페이지 === 0}
+            onClick={() => set페이지((p) => p - 1)}
+            aria-label="이전 페이지"
+            className="flex size-6 items-center justify-center rounded-full border text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
+          >
+            ‹
+          </button>
+          <span className="tabular-nums">
+            {현재페이지 + 1} / {총페이지}
+          </span>
+          <button
+            type="button"
+            disabled={현재페이지 >= 총페이지 - 1}
+            onClick={() => set페이지((p) => p + 1)}
+            aria-label="다음 페이지"
+            className="flex size-6 items-center justify-center rounded-full border text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
+          >
+            ›
+          </button>
         </div>
       )}
     </div>

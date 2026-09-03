@@ -56,3 +56,12 @@ def select(table: str, query: str = "") -> list[dict]:
     if r.status_code >= 400:
         raise RuntimeError(f"select {table} 실패 {r.status_code}: {r.text[:300]}")
     return r.json()
+
+
+def delete(table: str, match: dict[str, Any]) -> None:
+    params = "&".join(f"{k}=eq.{v}" for k, v in match.items())
+    if not params:
+        raise ValueError("조건 없는 delete 는 막는다")  # 테이블을 통째로 비우는 사고 방지
+    r = requests.delete(f"{BASE}/rest/v1/{table}?{params}", headers=HDR, timeout=30)
+    if r.status_code >= 400:
+        raise RuntimeError(f"delete {table} 실패 {r.status_code}: {r.text[:300]}")

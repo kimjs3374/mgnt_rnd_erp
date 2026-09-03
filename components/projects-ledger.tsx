@@ -25,7 +25,7 @@ import type { ProjectRow } from "@/lib/queries"
 import { 연차수, 현재연차, 기간표기, 연차연도 } from "@/lib/fiscal-year"
 import { ProjectLeadCell } from "@/components/project-lead-cell"
 import { 종료로표시 } from "@/app/actions/project-stage"
-import type { 과제단계 } from "@/lib/project-stage"
+import type { 과제단계, 보기범위 } from "@/lib/project-stage"
 
 // lib/queries.ts 는 service_role 로 여는 lib/db 를 갖고 있어 클라이언트 번들에 넣지 않는다
 // (CLAUDE.md §3.5). 타입만 가져오고 won() 은 여기서 다시 만든다 — programs-table.tsx 와 같은 이유.
@@ -39,8 +39,32 @@ const 사업유형_라벨: Record<string, string> = {
 }
 
 const 전체연도 = "전체"
+const 모두 = "전체"
 const 보기단위 = [10, 20] as const
-const 전체보기 = 0
+const 쪽없음 = 0
+
+/**
+ * 기간 프리셋. 「수행기간이 이 범위와 **겹치는** 과제」를 고른다 — 시작일이 그 안인 것이 아니다.
+ * 2022~2024 과제는 「올해」로 걸러도 올해 걸쳐 있으면 나와야 한다.
+ */
+const 기간프리셋 = [
+  { v: "전체", label: "기간 전체" },
+  { v: "올해", label: "올해 걸친 것" },
+  { v: "1년", label: "최근 1년" },
+  { v: "3년", label: "최근 3년" },
+] as const
+
+function 프리셋범위(v: string): { 시작: string; 끝: string } | null {
+  const 오늘 = new Date()
+  const iso = (d: Date) => d.toISOString().slice(0, 10)
+  if (v === "올해") return { 시작: `${오늘.getFullYear()}-01-01`, 끝: `${오늘.getFullYear()}-12-31` }
+  if (v === "1년" || v === "3년") {
+    const 앞 = new Date(오늘)
+    앞.setFullYear(앞.getFullYear() - (v === "1년" ? 1 : 3))
+    return { 시작: iso(앞), 끝: iso(오늘) }
+  }
+  return null
+}
 
 /**
  * 과제사업 대장의 표 — 걸러내기 · 연도 · 쪽 나누기.
@@ -58,11 +82,17 @@ export function ProjectsLedger({
   책임자,
   로그인,
   단계,
+  단계별 = {},
   밀린종료 = [],
 }: {
   rows: ProjectRow[]
-  /** 이 화면이 보여주는 단계. 제목·빈 화면 문구가 여기 맞춰 갈린다. */
-  단계?: 과제단계
+  /** 이 화면이 보여주는 범위. 「전체」면 단계 열과 단계 필터가 같이 나온다. */
+  단계?: 보기범위
+  /**
+   * 과제 id → 단계. 단계는 저장값이 아니라 계산값이라(`lib/project-stage.ts`)
+   * 서버가 판정해서 넘긴다 — 화면이 다시 판정하면 두 곳에서 규칙이 갈린다.
+   */
+  단계별?: Record<number, 과제단계>
   /**
    * 수행기간은 끝났는데 저장된 `상태` 가 아직 「수행중」인 과제 id.
    * 사업종료 화면에서만 넘어온다 — 화면이 짚어 주고 사람이 눌러 맞춘다.
@@ -77,8 +107,15 @@ export function ProjectsLedger({
 }) {
   const [search, setSearch] = React.useState("")
   const [연도, set연도] = React.useState<string>(전체연도)
+  const [단계필터, set단계필터] = React.useState<string>(모두)
+  const [유형, set유형] = React.useState<string>(모두)
+  const [프리셋, set프리셋] = React.useState<string>("전체")
+  const [기간시작, set기간시작] = React.useState("")
+  const [기간끝, set기간끝] = React.useState("")
   const [크기, set크기] = React.useState<number>(20)
   const [쪽, set쪽] = React.useState(1)
+
+  const 전체보기중 = 단계 === "전체"
 
   // 실제로 과제가 걸쳐 있는 해만 고를 수 있게 한다. 빈 해를 골라 0건을 보여주지 않는다.
   const 연도목록 = React.useMemo(() => {
@@ -87,34 +124,71 @@ export function ProjectsLedger({
     return [...s].sort((a, b) => b - a)
   }, [rows])
 
+  /** 화면에 실제로 있는 사업유형만 고를 수 있게 한다. 빈 유형을 골라 0건을 보여주지 않는다. */
+  const 유형목록 = React.useMemo(
+    () => [...new Set(rows.map((r) => r.사업유형).filter(Boolean) as string[])].sort(),
+    [rows],
+  )
+
+  // 기간은 프리셋과 직접 입력 중 **나중에 손댄 쪽**이 이긴다(집행 표와 같은 규칙).
+  const 범위 = React.useMemo(() => {
+    if (기간시작 || 기간끝) return { 시작: 기간시작, 끝: 기간끝 }
+    const p = 프리셋범위(프리셋)
+    return p ? p : null
+  }, [프리셋, 기간시작, 기간끝])
+
   const 필터된 = React.useMemo(() => {
     const q = search.trim().toLowerCase()
     const y = 연도 === 전체연도 ? null : Number(연도)
     return rows.filter((r) => {
+      if (전체보기중 && 단계필터 !== 모두 && 단계별[r.id] !== 단계필터) return false
+      if (유형 !== 모두 && (r.사업유형 ?? "") !== 유형) return false
       if (y != null && !연차연도(r.시작일, r.종료일).includes(y)) return false
+      if (범위) {
+        // **겹치면 걸린다.** 시작일이 범위 안인 것만 고르면 2022~2024 과제가 「올해」에서 빠진다 —
+        // 올해도 수행 중인데 안 나오면 「올해 뭘 하고 있나」에 틀린 답을 준다.
+        const s = String(r.시작일 ?? "").slice(0, 10)
+        const e = String(r.종료일 ?? "").slice(0, 10)
+        if (범위.끝 && s && s > 범위.끝) return false
+        if (범위.시작 && e && e < 범위.시작) return false
+        // 날짜가 아예 없는 건은 기간을 걸면 빠진다. 그게 맞다 — 기간 확인 대상이 아니다.
+        if ((범위.시작 || 범위.끝) && (!s || !e)) return false
+      }
       if (!q) return true
       // 연구책임자도 검색에 넣는다 — 「홍길동이 맡은 과제」를 찾는 게 이 열을 붙인 이유다.
       return [r.과제명, r.과제코드, r.부처, r.전문기관, r.사업명, 책임자[r.id]]
         .some((v) => (v ?? "").toLowerCase().includes(q))
     })
-  }, [rows, search, 연도, 책임자])
+  }, [rows, search, 연도, 책임자, 전체보기중, 단계필터, 단계별, 유형, 범위])
 
   // 조건이 바뀌면 1쪽으로 돌아간다. 3쪽을 보다 걸러서 1쪽밖에 없으면 빈 화면이 뜬다.
   React.useEffect(() => {
     set쪽(1)
-  }, [search, 연도, 크기])
+  }, [search, 연도, 크기, 단계필터, 유형, 프리셋, 기간시작, 기간끝])
 
-  const 쪽수 = 크기 === 전체보기 ? 1 : Math.max(1, Math.ceil(필터된.length / 크기))
+  const 쪽수 = 크기 === 쪽없음 ? 1 : Math.max(1, Math.ceil(필터된.length / 크기))
   const 지금쪽 = Math.min(쪽, 쪽수)
   const 보이는 =
-    크기 === 전체보기 ? 필터된 : 필터된.slice((지금쪽 - 1) * 크기, 지금쪽 * 크기)
-  const 처음 = 필터된.length === 0 ? 0 : (지금쪽 - 1) * (크기 === 전체보기 ? 0 : 크기) + 1
-  const 끝 = 크기 === 전체보기 ? 필터된.length : Math.min(지금쪽 * 크기, 필터된.length)
+    크기 === 쪽없음 ? 필터된 : 필터된.slice((지금쪽 - 1) * 크기, 지금쪽 * 크기)
+  const 처음 = 필터된.length === 0 ? 0 : (지금쪽 - 1) * (크기 === 쪽없음 ? 0 : 크기) + 1
+  const 끝 = 크기 === 쪽없음 ? 필터된.length : Math.min(지금쪽 * 크기, 필터된.length)
 
-  const 필터걸림 = search.trim() !== "" || 연도 !== 전체연도
+  const 필터걸림 =
+    search.trim() !== "" ||
+    연도 !== 전체연도 ||
+    단계필터 !== 모두 ||
+    유형 !== 모두 ||
+    프리셋 !== "전체" ||
+    !!기간시작 ||
+    !!기간끝
   function 초기화() {
     setSearch("")
     set연도(전체연도)
+    set단계필터(모두)
+    set유형(모두)
+    set프리셋("전체")
+    set기간시작("")
+    set기간끝("")
     set쪽(1)
   }
 
@@ -154,10 +228,81 @@ export function ProjectsLedger({
           </SelectContent>
         </Select>
 
-        {/* ⚠ 「종료 숨기기」 토글이 여기 있었는데 **뺐다**(2026-09-03).
-            화면이 신청중 · 수행중 · 사업종료로 나뉘면서 한 화면에 종료와 수행중이 섞이지 않는다 —
-            수행중 화면에선 누를 게 없고 사업종료 화면에선 누르면 목록이 통째로 빈다.
-            **숨기는 일은 이제 단계 칩이 한다.** 아무 일도 안 하는 버튼을 화면에 두지 않는다. */}
+        {/* 단계 필터는 **전체 보기에서만** 낸다. 단계 화면에서는 이미 그 단계만 있어서
+            고를 것이 없다(누를 데 없는 컨트롤을 두지 않는다 — 「종료 숨기기」를 뺀 것과 같은 이유). */}
+        {전체보기중 && (
+          <Select value={단계필터} onValueChange={(v) => set단계필터(v ?? 모두)}>
+            <SelectTrigger size="sm" className="h-7 w-28 text-[12.8px]" aria-label="단계로 걸러내기">
+              <SelectValue placeholder="단계 전체" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={모두}>단계 전체</SelectItem>
+              {(["신청중", "수행중", "사업종료"] as 과제단계[]).map((s) => (
+                <SelectItem key={s} value={s}>
+                  {s}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
+        {유형목록.length > 1 && (
+          <Select value={유형} onValueChange={(v) => set유형(v ?? 모두)}>
+            <SelectTrigger size="sm" className="h-7 w-36 text-[12.8px]" aria-label="사업유형으로 걸러내기">
+              <SelectValue placeholder="유형 전체" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={모두}>유형 전체</SelectItem>
+              {유형목록.map((t) => (
+                <SelectItem key={t} value={t}>
+                  {사업유형_라벨[t] ?? t}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
+        {/* 기간 — 프리셋으로 대부분 끝나고, 안 맞으면 날짜를 직접 넣는다(집행 표와 같은 모양). */}
+        <Select
+          value={프리셋}
+          onValueChange={(v) => {
+            set프리셋(v ?? "전체")
+            set기간시작("")
+            set기간끝("")
+          }}
+        >
+          <SelectTrigger size="sm" className="h-7 w-32 text-[12.8px]" aria-label="기간 프리셋">
+            <SelectValue placeholder="기간 전체" />
+          </SelectTrigger>
+          <SelectContent>
+            {기간프리셋.map((p) => (
+              <SelectItem key={p.v} value={p.v}>
+                {p.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Input
+          type="date"
+          value={기간시작}
+          onChange={(e) => {
+            set기간시작(e.target.value)
+            set프리셋("전체")
+          }}
+          className="h-7 w-[132px] text-[12.5px]"
+          aria-label="기간 시작"
+        />
+        <span className="text-xs text-muted-foreground">~</span>
+        <Input
+          type="date"
+          value={기간끝}
+          onChange={(e) => {
+            set기간끝(e.target.value)
+            set프리셋("전체")
+          }}
+          className="h-7 w-[132px] text-[12.5px]"
+          aria-label="기간 끝"
+        />
 
         <Select value={String(크기)} onValueChange={(v) => set크기(Number(v))}>
           <SelectTrigger size="sm" className="h-7 w-24 text-[12.8px]" aria-label="한 쪽에 볼 개수">
@@ -169,7 +314,7 @@ export function ProjectsLedger({
                 {n}개씩
               </SelectItem>
             ))}
-            <SelectItem value={String(전체보기)}>전체</SelectItem>
+            <SelectItem value={String(쪽없음)}>전체</SelectItem>
           </SelectContent>
         </Select>
 
@@ -244,6 +389,8 @@ export function ProjectsLedger({
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead className="w-[280px]">과제명</TableHead>
+                {/* 단계 열은 전체 보기에서만. 단계 화면에서는 열 하나가 같은 값으로 채워진다. */}
+                {전체보기중 && <TableHead className="w-[84px]">단계</TableHead>}
                 <TableHead>과제코드</TableHead>
                 <TableHead className="w-[150px]">연구책임자</TableHead>
                 <TableHead>부처 / 전문기관</TableHead>
@@ -280,6 +427,11 @@ export function ProjectsLedger({
                         {r.과제명}
                       </Link>
                     </TableCell>
+                    {전체보기중 && (
+                      <TableCell className="text-[12px] text-muted-foreground">
+                        {단계별[r.id] ?? "—"}
+                      </TableCell>
+                    )}
                     <TableCell className="text-muted-foreground">{r.과제코드 ?? "—"}</TableCell>
                     {/* 눌러서 바로 고친다. 막는 판정은 서버 액션의 `수정권한()` 한 곳에서만 한다. */}
                     <TableCell className="text-[12.5px]">
@@ -350,7 +502,7 @@ export function ProjectsLedger({
         <div className="flex flex-wrap items-center gap-2 px-1">
           <span className="text-xs text-muted-foreground tabular-nums">
             {처음}–{끝} / {필터된.length}건
-            {쪽수 === 1 && 크기 !== 전체보기 && ` · 한 쪽에 다 들어갑니다`}
+            {쪽수 === 1 && 크기 !== 쪽없음 && ` · 한 쪽에 다 들어갑니다`}
           </span>
           <div className={쪽수 > 1 ? "ml-auto flex items-center gap-1" : "hidden"}>
             <Button

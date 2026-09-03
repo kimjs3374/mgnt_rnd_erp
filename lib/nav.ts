@@ -66,11 +66,14 @@ export const NAV: NavGroup[] = [
     //    수행중으로, 수행기간이 지나면 사업종료로 저절로 넘어간다.
     title: "과제 관리",
     // 그룹 이름을 누르면 첫 항목으로 간다(위 두 그룹과 같은 규칙).
-    url: "/projects/applying",
+    url: "/projects/all",
     // ⚠ 아이콘은 `components/app-sidebar.tsx` 의 ICONS 에 **이미 있는 것**만 쓴다.
     //    없는 이름을 적으면 아이콘이 조용히 안 그려진다.
     icon: "ClipboardCheck",
     items: [
+      // 전체가 맨 앞이다 — 넓은 데서 좁혀 들어가는 것이 읽는 순서고,
+      // 단계로 나누면 「다 해서 몇 건인가」를 볼 데가 없어진다(2026-09-04 사용자 지시로 더했다).
+      { title: "전체", url: "/projects/all" },
       { title: "신청중", url: "/projects/applying" },
       // `/projects` 는 그대로 둔다 — 과제 상세(`/projects/[id]`)의 부모이고 여러 화면·테스트가
       // 이 주소를 가리킨다. 나머지 둘은 정적 조각이라 `[id]` 보다 먼저 잡힌다.

@@ -12,7 +12,10 @@ import {
   단계정의,
   미선정인가,
   종료표시가_밀렸나,
+  보기목록,
+  전체보기,
   type 과제단계,
+  type 보기범위,
 } from "@/lib/project-stage"
 
 export const dynamic = "force-dynamic"
@@ -26,7 +29,7 @@ export const dynamic = "force-dynamic"
  * 단계는 **저장하지 않고 계산한다**(`lib/project-stage.ts`) — 그래야 선정을 기록하는 순간
  * 수행중으로, 수행기간이 지나면 사업종료로 **저절로** 넘어간다(2026-09-03 사용자 지시).
  */
-export async function ProjectsStageView({ 단계 }: { 단계: 과제단계 }) {
+export async function ProjectsStageView({ 단계 }: { 단계: 보기범위 }) {
   const [{ rows: 전체, error }, 미배정, 스테이지, 책임자행, who] = await Promise.all([
     getProjects(),
     // 과제가 아직 정해지지 않은 집행. 사이드바에서 「집행」을 뺐으므로 여기서 알려주지 않으면
@@ -60,12 +63,27 @@ export async function ProjectsStageView({ 단계 }: { 단계: 과제단계 }) {
 
   // 미선정 건은 세 단계 어디에도 넣지 않는다 — 과제가 되지 못한 건이라 지원사업 대장에서 본다.
   const 과제들 = 전체.filter((r) => !미선정인가(재료(r)))
-  const rows = 과제들.filter((r) => 단계판정(재료(r)) === 단계)
+  const 전체보기중 = 단계 === "전체"
+  const rows = 전체보기중 ? 과제들 : 과제들.filter((r) => 단계판정(재료(r)) === 단계)
 
+  /**
+   * 과제 id → 단계. **서버가 한 번만 판정해서 넘긴다.**
+   * 표가 다시 판정하면 규칙이 두 곳에 생기고, 한쪽만 고쳐지는 날이 온다.
+   */
+  const 단계별 = Object.fromEntries(rows.map((r) => [r.id, 단계판정(재료(r))])) as Record<
+    number,
+    과제단계
+  >
+
+  // 전체 보기에서도 밀린 종료를 짚어 준다 — 사업종료 화면에 안 들어가도 눈에 띄어야 한다.
   const 밀린종료 =
-    단계 === "사업종료" ? rows.filter((r) => 종료표시가_밀렸나(재료(r))).map((r) => r.id) : []
+    단계 === "사업종료" || 전체보기중
+      ? rows.filter((r) => 종료표시가_밀렸나(재료(r))).map((r) => r.id)
+      : []
 
-  const 정의 = 단계정의.find((d) => d.단계 === 단계)!
+  const 정의 = 전체보기중
+    ? { 단계: "전체" as 보기범위, 경로: 전체보기.경로, 설명: 전체보기.설명 }
+    : 단계정의.find((d) => d.단계 === 단계)!
   const 총사업비 = rows.reduce((s, r) => s + (r.총사업비 ?? 0), 0)
   const 정부지원금 = rows.reduce((s, r) => s + (r.정부지원금 ?? 0), 0)
 
@@ -95,13 +113,16 @@ export async function ProjectsStageView({ 단계 }: { 단계: 과제단계 }) {
 
       {/* 단계는 나뉘어 있어도 옆 단계로 바로 건너갈 수 있어야 한다. 사이드바까지 안 가게. */}
       <div className="flex flex-wrap items-center gap-1">
-        {단계정의.map((d) => {
-          const 수 = 과제들.filter((r) => 단계판정(재료(r)) === d.단계).length
-          const 지금 = d.단계 === 단계
+        {보기목록.map((b) => {
+          const 수 =
+            b.이름 === "전체"
+              ? 과제들.length
+              : 과제들.filter((r) => 단계판정(재료(r)) === b.이름).length
+          const 지금 = b.이름 === 단계
           return (
             <Link
-              key={d.단계}
-              href={d.경로}
+              key={b.이름}
+              href={b.경로}
               aria-current={지금 ? "page" : undefined}
               className={
                 "rounded-md border px-2.5 py-1 text-[12.8px] transition-colors " +
@@ -110,7 +131,7 @@ export async function ProjectsStageView({ 단계 }: { 단계: 과제단계 }) {
                   : "text-muted-foreground hover:bg-secondary/60")
               }
             >
-              {d.단계} <span className="tabular-nums">{수}</span>
+              {b.이름} <span className="tabular-nums">{수}</span>
             </Link>
           )
         })}
@@ -123,7 +144,16 @@ export async function ProjectsStageView({ 단계 }: { 단계: 과제단계 }) {
           value={won(총사업비)}
           sub={단계 === "신청중" ? "협약 전이라 0 인 건이 섞여 있다" : `정부지원금 ${won(정부지원금)}`}
         />
-        {단계 === "신청중" ? (
+        {전체보기중 ? (
+          // 전체 보기에서는 단계별로 몇 건인지가 가장 궁금한 값이다.
+          <Stat
+            label="단계별"
+            value={단계정의
+              .map((d) => 과제들.filter((r) => 단계판정(재료(r)) === d.단계).length)
+              .join(" · ")}
+            sub="신청중 · 수행중 · 사업종료"
+          />
+        ) : 단계 === "신청중" ? (
           <Stat label="발표·심사 중" value={심사중} sub="결과를 기다리는 건" />
         ) : 단계 === "수행중" ? (
           <Stat label={`${올해}년 안에 끝남`} value={올해끝} sub="완료보고를 준비할 건" />
@@ -142,6 +172,7 @@ export async function ProjectsStageView({ 단계 }: { 단계: 과제단계 }) {
         책임자={책임자}
         로그인={who.인증}
         단계={단계}
+        단계별={단계별}
         밀린종료={밀린종료}
       />
 

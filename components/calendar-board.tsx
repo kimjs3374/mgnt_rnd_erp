@@ -100,8 +100,15 @@ export function CalendarBoard({
   const 주 = Array.from({ length: 7 }, (_, i) => 더하기(주시작, i))
   const 이번주것 = 주.flatMap((d) => 날짜별.get(d) ?? [])
 
-  const 이달건수 = rows.filter((r) => r.날짜?.startsWith(`${기준.y}-${pad(기준.m)}`)).length
+  const 달접두 = `${기준.y}-${pad(기준.m)}`
+  const 이달건수 = rows.filter((r) => r.날짜?.startsWith(달접두)).length
   const 격자 = 펼침 ?? 이달건수 > 0
+
+  // 주 단위로 꽉 채운다. 앞뒤 달 날짜가 들어가야 달력처럼 보인다.
+  const 첫날 = ymd(기준.y, 기준.m, 1)
+  const 격자시작 = 더하기(첫날, -요일번호(첫날))
+  const 칸수 = Math.ceil((요일번호(첫날) + 그달일수(기준.y, 기준.m)) / 7) * 7
+  const 칸들 = Array.from({ length: 칸수 }, (_, i) => 더하기(격자시작, i))
 
   const 이동 = (delta: number) => {
     const t = new Date(Date.UTC(기준.y, 기준.m - 1 + delta, 1))
@@ -150,6 +157,17 @@ export function CalendarBoard({
             오늘
           </button>
         )}
+        {/* 펼치는 버튼만 있고 접는 버튼이 없으면 한 번 펼친 뒤 되돌릴 방법이 없다. */}
+        {격자 && (
+          <button
+            type="button"
+            onClick={() => set펼침(false)}
+            aria-expanded
+            className="rounded border px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted"
+          >
+            달력 접기
+          </button>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
@@ -194,71 +212,100 @@ export function CalendarBoard({
       {격자 ? (
         <div className="grid lg:grid-cols-[1fr_300px]">
           <div className="p-3">
-            <div className="grid grid-cols-7 text-center text-xs text-muted-foreground">
-              {요일.map((w, i) => (
-                <div
-                  key={w}
-                  className={cn("pb-1", i === 0 && "text-rose-500", i === 6 && "text-blue-500")}
-                >
-                  {w}
-                </div>
-              ))}
-            </div>
-            <div className="grid grid-cols-7 gap-px rounded border bg-border">
-              {[
-                ...Array.from({ length: 요일번호(ymd(기준.y, 기준.m, 1)) }, () => null),
-                ...Array.from({ length: 그달일수(기준.y, 기준.m) }, (_, i) =>
-                  ymd(기준.y, 기준.m, i + 1),
-                ),
-              ].map((d, i) => {
-                if (!d) return <div key={`b${i}`} className="min-h-[64px] bg-card" />
-                const 목록칸 = 날짜별.get(d) ?? []
-                const 오늘 = d === today
-                const 골라짐 = d === 선택
-                return (
-                  <button
-                    key={d}
-                    type="button"
-                    onClick={() => set선택(골라짐 ? null : d)}
-                    aria-pressed={골라짐}
+            {/*
+              흔한 달력처럼 보이게 한다.
+              ⚠ 예전에는 그달 날짜만 그리고 남는 칸을 비워 둬서, 마지막 주가 통짜 회색 블록으로
+                보였다. 달력이 아니라 표가 잘린 것처럼 보인다. 앞뒤 달 날짜로 주를 꽉 채운다.
+              ⚠ 요일 머리를 테두리 밖에 두면 표와 분리돼 보인다. 같은 상자 안에 넣는다.
+            */}
+            <div className="overflow-hidden rounded-md border">
+              <div className="grid grid-cols-7 border-b bg-muted/40">
+                {요일.map((w, i) => (
+                  <div
+                    key={w}
                     className={cn(
-                      "min-h-[64px] bg-card p-1 text-left align-top transition-colors hover:bg-muted/60",
-                      골라짐 && "bg-muted",
+                      "py-1.5 text-center text-xs font-medium",
+                      i === 0
+                        ? "text-rose-500"
+                        : i === 6
+                          ? "text-blue-500"
+                          : "text-muted-foreground",
                     )}
                   >
-                    <span
+                    {w}
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-7">
+                {칸들.map((d, i) => {
+                  const 이번달 = d.startsWith(달접두)
+                  const 목록칸 = 날짜별.get(d) ?? []
+                  const 오늘 = d === today
+                  const 골라짐 = d === 선택
+                  const 요일i = i % 7
+                  return (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => {
+                        // 이웃 달 날짜를 누르면 그 달로 넘어간다 — 보통 달력이 그렇게 동작한다.
+                        if (!이번달) {
+                          const [yy, mm] = parse(d)
+                          set기준({ y: yy, m: mm })
+                          set펼침(true)
+                        }
+                        set선택(골라짐 ? null : d)
+                      }}
+                      aria-pressed={골라짐}
+                      aria-current={오늘 ? "date" : undefined}
                       className={cn(
-                        "inline-flex size-5 items-center justify-center rounded-full text-xs tabular-nums",
-                        오늘
-                          ? "bg-primary font-semibold text-primary-foreground"
-                          : "text-muted-foreground",
+                        "min-h-[78px] border-b border-r p-1 text-left align-top transition-colors",
+                        "[&:nth-child(7n)]:border-r-0 [&:nth-last-child(-n+7)]:border-b-0",
+                        !이번달 && "bg-muted/25",
+                        골라짐 ? "bg-muted" : "hover:bg-muted/50",
                       )}
                     >
-                      {Number(d.slice(8))}
-                    </span>
-                    <span className="mt-0.5 block space-y-0.5">
-                      {목록칸.slice(0, 2).map((r) => (
-                        <span
-                          key={r.종류 + r.참조키}
-                          className="flex items-center gap-1 text-[11px] leading-tight"
-                          title={`${r.종류} · ${r.제목}`}
-                        >
-                          <i
-                            className={cn("size-1.5 shrink-0 rounded-full", 색깔(r.종류).dot)}
-                            aria-hidden
-                          />
-                          <span className="truncate">{r.제목}</span>
-                        </span>
-                      ))}
-                      {목록칸.length > 2 && (
-                        <span className="block text-[11px] text-muted-foreground">
-                          +{목록칸.length - 2}
-                        </span>
-                      )}
-                    </span>
-                  </button>
-                )
-              })}
+                      <span
+                        className={cn(
+                          "inline-flex size-5 items-center justify-center rounded-full text-xs tabular-nums",
+                          오늘
+                            ? "bg-primary font-semibold text-primary-foreground"
+                            : !이번달
+                              ? "text-muted-foreground/40"
+                              : 요일i === 0
+                                ? "text-rose-500"
+                                : 요일i === 6
+                                  ? "text-blue-500"
+                                  : "text-foreground",
+                        )}
+                      >
+                        {Number(d.slice(8))}
+                      </span>
+                      <span className={cn("mt-0.5 block space-y-0.5", !이번달 && "opacity-50")}>
+                        {목록칸.slice(0, 2).map((r) => (
+                          <span
+                            key={r.종류 + r.참조키}
+                            className="flex items-center gap-1 text-[11px] leading-tight"
+                            title={`${r.종류} · ${r.제목}`}
+                          >
+                            <i
+                              className={cn("size-1.5 shrink-0 rounded-full", 색깔(r.종류).dot)}
+                              aria-hidden
+                            />
+                            <span className="truncate">{r.제목}</span>
+                          </span>
+                        ))}
+                        {목록칸.length > 2 && (
+                          <span className="block text-[11px] text-muted-foreground">
+                            +{목록칸.length - 2}
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
             </div>
           </div>
           <div className="border-t p-3 lg:border-l lg:border-t-0">{목록}</div>

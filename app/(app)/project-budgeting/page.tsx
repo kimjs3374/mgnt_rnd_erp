@@ -60,7 +60,11 @@ export default async function ProjectBudgetingPage() {
           sub={남은합 > 0 ? `아직 안 잡은 금액 ${won(남은합)}` : "남은 금액 없음"}
           tone={미계상 + 진행중 > 0 ? "warn" : "default"}
         />
-        <Stat label="계상 완료" value={완료} sub="배정 합계 = 총사업비" />
+        <Stat
+          label="계상 완료 · 확정"
+          value={`${완료} · ${셈("확정")}`}
+          sub="확정된 건은 관리 위치가 사업 대장이다"
+        />
         <Stat
           label="총사업비 초과"
           value={초과}

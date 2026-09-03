@@ -54,6 +54,7 @@ const 단계색: Record<계상단계, string> = {
   초과: "bg-destructive/15 text-destructive",
   진행중: "bg-secondary text-foreground",
   완료: "border border-border text-muted-foreground",
+  확정: "border border-primary text-primary",
 }
 
 function StageBadge({ 단계, 이름 }: { 단계: 계상단계; 이름: string }) {
@@ -91,7 +92,12 @@ export function BudgetingBoard({
   const 걸러진 = React.useMemo(() => {
     const q = 검색.trim().toLowerCase()
     return rows.filter((r) => {
-      if (단계필터 === "미완료" ? r.단계 === "완료" : 단계필터 !== "전체" && r.단계 !== 단계필터) {
+      // 「손이 필요한 것만」에서는 완료와 **확정**을 뺀다. 확정은 관리 위치가 대장으로 넘어간 건이다.
+      if (
+        단계필터 === "미완료"
+          ? r.단계 === "완료" || r.단계 === "확정"
+          : 단계필터 !== "전체" && r.단계 !== 단계필터
+      ) {
         return false
       }
       if (!q) return true
@@ -107,6 +113,7 @@ export function BudgetingBoard({
     "진행중",
     "초과",
     "완료",
+    "확정",
   ]
 
   return (
@@ -223,6 +230,14 @@ export function BudgetingBoard({
                   >
                     협약금액 확정
                   </Button>
+                ) : r.단계 === "확정" ? (
+                  // 확정된 건의 관리 위치는 대장이다. 계상 탭이 아니라 그쪽으로 보낸다.
+                  <Link
+                    href="/projects"
+                    className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                  >
+                    사업 대장에서 보기
+                  </Link>
                 ) : (
                   <Link
                     href={`/projects/${r.id}/budget`}

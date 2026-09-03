@@ -1,6 +1,7 @@
 import "server-only"
 import { db, safeSelect } from "@/lib/db"
 import { getFundingShareRules, getCompanyProfile, getAllBudgets } from "@/lib/queries-project"
+import { getConfirmedProjectIds } from "@/lib/queries-confirm"
 import { pickRule, computeShare } from "@/lib/funding-share"
 import type { Share } from "@/lib/funding-share"
 
@@ -43,7 +44,7 @@ export type BudgetingRow = {
  *   뒤는 **그 금액을 비목으로 쪼개는 일**이다. 합치면 화면이 「계상하세요」라고만 말하고
  *   정작 계상 화면에 가면 기준이 0이라 아무것도 못 한다.
  */
-export type 계상단계 = "사업비_미확정" | "미계상" | "진행중" | "완료" | "초과"
+export type 계상단계 = "사업비_미확정" | "미계상" | "진행중" | "완료" | "초과" | "확정"
 
 export const 단계이름: Record<계상단계, string> = {
   사업비_미확정: "사업비 미확정",
@@ -51,9 +52,15 @@ export const 단계이름: Record<계상단계, string> = {
   진행중: "계상 중",
   완료: "계상 완료",
   초과: "총사업비 초과",
+  확정: "확정 · 대장 관리",
 }
 
-const 단계순서: 계상단계[] = ["사업비_미확정", "미계상", "초과", "진행중", "완료"]
+/**
+ * 「확정」이 맨 끝이다 — 사람이 계상 확정을 누른 건이고, 그 뒤로는 **관리 위치가 사업 대장**이라
+ * 이 화면에서 할 일이 없다(`db/100`). 「손이 필요한 것만」 필터에서 자연히 빠진다.
+ * 「완료」와 갈라 둔 이유: 합계가 맞는 것(완료)과 사람이 잠근 것(확정)은 다른 사실이다.
+ */
+const 단계순서: 계상단계[] = ["사업비_미확정", "미계상", "초과", "진행중", "완료", "확정"]
 
 function 단계판정(총사업비: number, 배정합: number): 계상단계 {
   if (!총사업비 || 총사업비 <= 0) return "사업비_미확정"
@@ -86,7 +93,7 @@ type ProjectRowRaw = {
  *   `선정결과 = '선정'` 으로 거르면 대장이 통째로 비어 버린다(대장 화면이 이미 겪은 함정).
  */
 export async function getBudgetingRows() {
-  const [과제, 예산, 규칙, 회사, 공고] = await Promise.all([
+  const [과제, 예산, 규칙, 회사, 공고, 확정] = await Promise.all([
     safeSelect<ProjectRowRaw>("projects", () => db.from("projects").select("*")),
     getAllBudgets(),
     getFundingShareRules(),
@@ -94,6 +101,7 @@ export async function getBudgetingRows() {
     safeSelect<{ id: number; 사업명: string }>("announcements", () =>
       db.from("announcements").select("*"),
     ),
+    getConfirmedProjectIds(),
   ])
 
   const error = 과제.error ?? 예산.error ?? null
@@ -135,7 +143,8 @@ export async function getBudgetingRows() {
         배정합: agg.합,
         계상건수: agg.건수,
         남은액: 총사업비 - agg.합,
-        단계: 단계판정(총사업비, agg.합),
+        // 사람이 확정을 눌렀으면 그것이 마지막 사실이다 — 합계 판정보다 앞선다.
+        단계: 확정.ids.has(p.id) ? ("확정" as 계상단계) : 단계판정(총사업비, agg.합),
         // 총사업비가 0이면 계산이 안 된다(computeShare 가 null). 그때는 금액을 넣는 순간
         // 화면이 미리보기를 만든다 — 여기서는 규칙이 잡히는지까지만 확인해 둔다.
         제안: computeShare(총사업비 > 0 ? 총사업비 : null, rule),

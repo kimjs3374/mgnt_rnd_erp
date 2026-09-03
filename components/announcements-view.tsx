@@ -1,16 +1,18 @@
 "use client"
 
 import * as React from "react"
+import { EyeOff, Eye } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AnnouncementsExplorer } from "@/components/announcements-explorer"
 
 type ExplorerProps = React.ComponentProps<typeof AnnouncementsExplorer>
 
 /**
- * 공고 탐색 화면 + 「불가 숨김」.
+ * 공고 탐색 화면 + 「불가·해당없음 숨김」.
  *
  * 화면 자체는 components/announcements-explorer.tsx(과제사업이 기준) 그대로다.
- * 여기는 그 위에 한 겹만 씌운다 — **자격판정이 「불가」인 공고를 목록에서 빼는 스위치.**
+ * 여기는 그 위에 한 겹만 씌운다 — **신청할 대상이 아니라고 결론이 난 공고를 목록에서
+ * 빼는 스위치.**
  *
  * 왜 explorer 안의 자격판정 드롭다운으로 안 하는가:
  *   그 드롭다운은 「불가만 보기」는 되는데 「불가만 빼고 보기」가 안 된다. 항목 하나를
@@ -26,28 +28,41 @@ type ExplorerProps = React.ComponentProps<typeof AnnouncementsExplorer>
  * 기본값은 **숨김**이다. 「불가」는 지역이 우리 밖이거나 지원대상에 우리가 없다고
  * 공고가 명시한 것이라 사람이 볼 이유가 거의 없다. 다만 지우지는 않는다 —
  * 판정이 틀렸을 수 있고, 그걸 확인할 길을 막으면 안 된다. 버튼 한 번이면 다시 나온다.
+ *
+ * 「해당없음」도 같이 접는다(2026-09-04 추가). 사용자 지적: "얘는 왜 해당없음 판정근거
+ * 다 했는데 노출되냐"(공고 517 — 광운대 사업 설명회). 사람이 "이건 애초에 지원사업이
+ * 아니다"라고 근거까지 남겨 확정했는데 목록에 계속 남아 있으면 그 판정이 아무 일도 안 한
+ * 셈이 된다. 「불가」와 이유는 다르지만("요건이 안 맞는다" vs "지원사업이 아니다")
+ * **결론은 같다 — 우리가 신청할 대상이 아니다.** 그래서 같은 스위치로 묶는다.
  */
+
+/** 목록에서 접어 두는 판정. 지우는 게 아니라 접는 것이다 — 스위치로 언제든 다시 편다. */
+const 숨김대상 = (판정: string) => 판정 === "불가" || 판정 === "해당없음"
 export function AnnouncementsView({
   rows,
   referenceRows = [],
   actions,
   ...rest
 }: ExplorerProps) {
-  const [불가숨김, set불가숨김] = React.useState(true)
+  const [숨김, set숨김] = React.useState(true)
 
-  const 불가건수 = React.useMemo(
-    () => rows.filter((r) => r.자격판정 === "불가").length,
-    [rows],
-  )
-  const 참고불가건수 = React.useMemo(
-    () => referenceRows.filter((r) => r.자격판정 === "불가").length,
-    [referenceRows],
-  )
-  const 총불가 = 불가건수 + 참고불가건수
+  // 참고 목록(과제사업 화면의 NTIS 등)까지 한 번에 센다 — 스위치 하나가 둘 다 접는다.
+  const { 불가건수, 해당없음건수 } = React.useMemo(() => {
+    const 전부 = [...rows, ...referenceRows]
+    return {
+      불가건수: 전부.filter((r) => r.자격판정 === "불가").length,
+      해당없음건수: 전부.filter((r) => r.자격판정 === "해당없음").length,
+    }
+  }, [rows, referenceRows])
+  const 총숨김 = 불가건수 + 해당없음건수
+  // 「해당없음」이 하나도 없으면 굳이 이름에 붙이지 않는다 — 없는 것을 세는 것처럼 보인다.
+  const 숨김이름 = 해당없음건수 > 0 ? "불가·해당없음" : "불가"
+  const 내역 =
+    `「불가」 ${불가건수}건` + (해당없음건수 > 0 ? ` · 「해당없음」 ${해당없음건수}건` : "")
 
-  const 보이는행 = 불가숨김 ? rows.filter((r) => r.자격판정 !== "불가") : rows
-  const 보이는참고 = 불가숨김
-    ? referenceRows.filter((r) => r.자격판정 !== "불가")
+  const 보이는행 = 숨김 ? rows.filter((r) => !숨김대상(r.자격판정)) : rows
+  const 보이는참고 = 숨김
+    ? referenceRows.filter((r) => !숨김대상(r.자격판정))
     : referenceRows
 
   return (
@@ -72,19 +87,20 @@ export function AnnouncementsView({
         referenceRows={보이는참고}
         actions={
           <div className="flex items-center gap-2">
-            {총불가 > 0 && (
+            {총숨김 > 0 && (
               <Button
                 type="button"
-                variant={불가숨김 ? "default" : "outline"}
+                variant={숨김 ? "default" : "outline"}
                 className="h-7 text-[12.8px]"
                 title={
-                  불가숨김
-                    ? `자격판정이 「불가」인 ${총불가}건을 숨기고 있다. 누르면 다시 보인다.`
-                    : `「불가」 ${총불가}건이 함께 보이고 있다. 누르면 숨긴다.`
+                  숨김
+                    ? `${내역}을 숨기고 있다. 누르면 다시 보인다.`
+                    : `${내역}이 함께 보이고 있다. 누르면 숨긴다.`
                 }
-                onClick={() => set불가숨김((v) => !v)}
+                onClick={() => set숨김((v) => !v)}
               >
-                {불가숨김 ? `✓ 불가 ${총불가}건 숨김` : `불가 ${총불가}건 표시 중`}
+                {숨김 ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                {숨김 ? `${숨김이름} ${총숨김}건 숨김` : `${숨김이름} ${총숨김}건 표시 중`}
               </Button>
             )}
             {actions}

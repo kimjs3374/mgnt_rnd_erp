@@ -5,8 +5,9 @@ import { FundingShareCard } from "@/components/funding-share-card"
 import { FormTemplates } from "@/components/form-templates"
 import { BudgetConfirmBar } from "@/components/budget-confirm-bar"
 import { PersonnelEditor } from "@/components/personnel-editor"
+import { ResearchersBoard } from "@/components/researchers-board"
 import { 재원별합계 } from "@/lib/personnel"
-import { getResearchers } from "@/lib/queries-researchers"
+import { getResearchers, getSalaryHistory } from "@/lib/queries-researchers"
 import {
   getProject,
   getProjectBudget,
@@ -45,7 +46,7 @@ export default async function ProjectBudgetPage({
   const { id: raw } = await params
   const id = Number(raw)
 
-  const [proj, budget, cats, rules, company, reqs, forms, people, confirm, who, 명부] =
+  const [proj, budget, cats, rules, company, reqs, forms, people, confirm, who, 명부, 연봉이력] =
     await Promise.all([
       getProject(id),
       getProjectBudget(id),
@@ -59,6 +60,8 @@ export default async function ProjectBudgetPage({
       getCurrentUser(),
       // 내부 연구원 명부 — 인건비 표에서 골라 넣는다(`db/105_researchers.sql`).
       getResearchers(),
+      // ⑥ 명부를 여기서 관리한다(2026-09-04 사용자 지시) — 연봉 이력까지 같이 읽는다.
+      getSalaryHistory(),
     ])
   const p = proj.rows[0]
   // 계상이 확정됐으면 이 탭은 **볼 수만** 있다. 관리 위치는 사업 대장으로 넘어간다(`db/100`).
@@ -221,6 +224,27 @@ export default async function ProjectBudgetPage({
         읽기전용={읽기전용}
         명부={명부.rows}
       />
+
+      {/* ⑥ 연구원 명부 — 별도 탭에서 빼고 인건비 표 **바로 아래**에 접어 둔다.
+          명부는 인건비 표에 이름을 넣기 위한 재료다. 화면이 갈려 있으면 「등록 → 메뉴 이동 →
+          복귀 → 골라 넣기」 네 걸음이 된다. 늘 펼쳐 두지 않는 이유는 그 반대다 —
+          계상하러 온 사람에게 명부가 먼저 보이면 그것도 순서가 거꾸로다. */}
+      {!읽기전용 && (
+        <details className="rounded-lg border bg-card">
+          <summary className="cursor-pointer list-none p-3 text-[13px] font-medium">
+            연구원 명부 ({명부.rows.filter((r) => r.재직).length}명 재직 · 전체{" "}
+            {명부.rows.length}명)
+            <span className="ml-2 text-xs font-normal text-muted-foreground">
+              여기 등록해 두면 위 인건비 표에서 골라 넣습니다 — 과제마다 다시 치지 않습니다
+            </span>
+          </summary>
+          <div className="border-t p-3">
+            {명부.error && <DbError what="연구원 명부" error={명부.error} />}
+            {연봉이력.error && <DbError what="연봉 이력" error={연봉이력.error} />}
+            <ResearchersBoard rows={명부.rows} 이력={연봉이력.rows} />
+          </div>
+        </details>
+      )}
 
       <BudgetEditor
         과제_id={id}

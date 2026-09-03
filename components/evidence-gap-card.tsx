@@ -106,11 +106,9 @@ export function EvidenceGapCard({
       icon={TriangleAlert}
       label="사업비 증빙 미비"
       value={과제들.length}
-      sub={
-        있다
-          ? `과제 ${과제들.length}건 · 증빙 없는 집행 ${빈집행건}건 — 눌러서 보기`
-          : "집행 건별 필수 서류가 다 채워져 있다"
-      }
+      // 숫자 아래 글은 짧게(2026-09-04 사용자 지시) — 누를 수 있다는 건 카드 자체가
+      // <button>이라 커서·hover로 이미 드러난다. 여기선 핵심 수치만 남긴다.
+      sub={있다 ? `과제 ${과제들.length}건 · 집행 ${빈집행건}건 미비` : "필수 서류 다 채움"}
       tone={있다 ? "warn" : "default"}
     />
   )
@@ -120,9 +118,11 @@ export function EvidenceGapCard({
 
   return (
     <>
+      {/* ⚠ block w-full h-full — <button> 기본값은 inline-block 이라 그리드 stretch 를
+          안 따라간다(사용자 지적: 옆 Stat 카드들과 크기가 다르다). 명시로 채운다. */}
       <button
         type="button"
-        className="cursor-pointer text-left transition-colors hover:brightness-95 focus-visible:outline-2 focus-visible:outline-ring"
+        className="block h-full w-full cursor-pointer text-left transition-colors hover:brightness-95 focus-visible:outline-2 focus-visible:outline-ring"
         onClick={() => set열림(true)}
         aria-label={`사업비 증빙 미비 ${과제들.length}건 — 목록 보기`}
       >

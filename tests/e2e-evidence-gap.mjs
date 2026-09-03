@@ -96,7 +96,9 @@ try {
   const 미비수 = Number((text.match(/사업비 증빙 미비\s*\n?\s*(\d+)/) ?? [])[1] ?? -1)
   log(`카드 숫자: ${미비수}`)
   확인(미비수 >= 1, "구멍이 있으니 카드가 1 이상이다", String(미비수))
-  확인(text.includes("눌러서 보기"), "누를 수 있다고 알려 준다(구멍이 있을 때만)")
+  // ⚠ 2026-09-04 사용자 지시로 카드 sub 글을 짧게 줄였다("눌러서 보기" 같은 문구를 뺐다) —
+  //   누를 수 있다는 건 아래에서 aria-label·버튼 여부로 확인한다(문구가 아니라 역할로 잡는다).
+  확인(/집행\s*\d+건\s*미비/.test(text), "집행 건수를 짧게 보여준다(구멍이 있을 때만)")
 
   const 눌렀나 = await page.evaluate(() => {
     const b = [...document.querySelectorAll("button")].find((x) =>

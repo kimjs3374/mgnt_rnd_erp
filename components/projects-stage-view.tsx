@@ -1,4 +1,4 @@
-﻿import Link from "next/link"
+import Link from "next/link"
 import { FolderKanban, Wallet, Layers, Presentation, CalendarClock, TriangleAlert } from "lucide-react"
 import { PageShell, Stat } from "@/components/page-shell"
 import { DbError } from "@/components/db-error"
@@ -157,7 +157,22 @@ export async function ProjectsStageView({ 단계 }: { 단계: 보기범위 }) {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat icon={FolderKanban} label={`${단계} 과제 수`} value={rows.length} sub={정의.설명} />
+        {/* 숫자 아래 글은 짧게 — 정의.설명(페이지 설명 문단)은 위에 이미 떴다.
+            같은 말을 카드 안에 다시 길게 적을 필요가 없다(2026-09-04 사용자 지시). */}
+        <Stat
+          icon={FolderKanban}
+          label={`${단계} 과제 수`}
+          value={rows.length}
+          sub={
+            전체보기중
+              ? "선정 결과 포함"
+              : 단계 === "신청중"
+                ? "결과 기다리는 중"
+                : 단계 === "수행중"
+                  ? "협약 기간 안"
+                  : "정산·보고 남을 수 있음"
+          }
+        />
         <Stat
           icon={Wallet}
           label="총사업비 합계"
@@ -192,7 +207,7 @@ export async function ProjectsStageView({ 단계 }: { 단계: 보기범위 }) {
             icon={TriangleAlert}
             label="상태가 안 맞는 건"
             value={밀린종료.length}
-            sub="수행기간은 끝났는데 저장된 상태가 수행중"
+            sub="종료 처리 필요"
             tone={밀린종료.length > 0 ? "warn" : "default"}
           />
         )}

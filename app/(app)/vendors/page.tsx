@@ -7,7 +7,6 @@ import {
   getVendorDocuments,
   getUnregisteredVendors,
 } from "@/lib/queries-vendors"
-import { getCurrentUser } from "@/lib/current-user"
 import { won } from "@/lib/queries"
 
 export const dynamic = "force-dynamic"
@@ -23,12 +22,13 @@ export const dynamic = "force-dynamic"
  * 집행 건에 있는 거래처를 후보로 띄워 「어디서 시작할지」를 화면이 말한다.
  */
 export default async function VendorsPage() {
-  const [status, details, docs, 미등록, who] = await Promise.all([
+  // 로그인 기능이 아직 없다(2026-09-03) — 화면이 그걸 전제하지 않는다.
+  // 업로더 기록은 서버 액션이 세션이 있을 때만 넣는다. 로그인이 붙으면 화면도 저절로 이름을 보인다.
+  const [status, details, docs, 미등록] = await Promise.all([
     getVendorStatus(),
     getVendorDetails(),
     getVendorDocuments(),
     getUnregisteredVendors(),
-    getCurrentUser(),
   ])
 
   const 업체 = status.rows
@@ -68,13 +68,7 @@ export default async function VendorsPage() {
         />
       </div>
 
-      <VendorsPanel
-        업체={업체}
-        상세={details.rows}
-        서류={docs.rows}
-        미등록={미등록.rows}
-        로그인={who.인증}
-      />
+      <VendorsPanel 업체={업체} 상세={details.rows} 서류={docs.rows} 미등록={미등록.rows} />
 
       <p className="text-xs text-muted-foreground">
         업체는 <span className="text-foreground">사업자번호</span>로 집행 건과 잇는다 — 증빙마다

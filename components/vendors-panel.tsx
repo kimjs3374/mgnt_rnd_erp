@@ -156,9 +156,11 @@ function DocSlot({
                 {d.파일명}
               </button>
               <span className="text-xs tabular-nums text-muted-foreground">
-                {KB(d.크기)} · {시각(d.업로드일시)} · {d.업로더}
+                {KB(d.크기)} · {시각(d.업로드일시)}
+                {/* 로그인이 아직 없다 — 확인되지 않은 업로더 이름은 적지 않는다.
+                    빈칸이 「미인증(로그인 전)」보다 정직하다. 로그인이 붙으면 여기 이름이 찍힌다. */}
+                {d.업로더_인증 ? ` · ${d.업로더}` : ""}
               </span>
-              {!d.업로더_인증 && <span className="text-xs text-[var(--warning-fg)]">미인증</span>}
               <button
                 type="button"
                 className="ml-auto text-xs text-muted-foreground hover:text-destructive"
@@ -180,13 +182,11 @@ export function VendorsPanel({
   상세,
   서류,
   미등록,
-  로그인,
 }: {
   업체: VendorRow[]
   상세: VendorDetail[]
   서류: VendorDocument[]
   미등록: 미등록거래처[]
-  로그인: boolean
 }) {
   const [msg, setMsg] = React.useState<{ ok: boolean; text: string } | null>(null)
   const [pending, start] = React.useTransition()
@@ -317,13 +317,6 @@ export function VendorsPanel({
         >
           {msg.text}
         </div>
-      )}
-
-      {!로그인 && (
-        <p className="text-xs text-[var(--warning-fg)]">
-          로그인 전이라 올리는 파일의 업로더가 「미인증」으로 기록됩니다. 누가 받아 온 서류인지가
-          정산에서 근거가 되므로 로그인 후에 올리는 편이 낫습니다.
-        </p>
       )}
 
       <div className="flex flex-wrap items-center gap-2">

@@ -116,8 +116,10 @@ try {
   const i = 줄들.findIndex((l) => l.includes("e2e-사업자등록증-테스트.pdf"))
   const 등록증블록 = 줄들.slice(i, i + 3).join(" ")
   ok(/KB|MB/.test(등록증블록), "크기가 찍힌다", 등록증블록.trim().slice(0, 90))
+  ok(!등록증블록.includes("로그인"), "파일 줄이 로그인을 언급하지 않는다")
   ok(/\d{2}-\d{2} \d{2}:\d{2}/.test(등록증블록), "업로드 시각이 찍힌다")
-  ok(text.includes("미인증"), "로그인 전 업로드는 「미인증」으로 표시된다(숨기지 않는다)")
+  // 로그인 기능이 없는 동안은 없는 문을 가리키지 않는다 — 확인되지 않은 업로더는 안 적는다.
+  ok(!text.includes("미인증"), "로그인 전제를 화면에 내세우지 않는다")
 
   console.log("⑤ 다운로드 — 공개 주소가 아니라 60초 서명 주소")
   const 서명주소 = await page.evaluate(async () => {

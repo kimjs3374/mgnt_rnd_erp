@@ -150,6 +150,48 @@ export function BudgetEditor({
     return (Number(l.배정액) || 0) - l.집행액 < 0 ? 빨강 : ""
   }
 
+  /**
+   * Ⓑ 그 줄에 넣을 수 있는 **최대 금액**. 한도가 없는 비목은 null(제한하지 않는다).
+   *
+   * 한도는 비목 **합계**에 걸린다(현금+현물). 그래서 이 줄의 상한은
+   * `한도 − 같은 비목 다른 줄의 합` 이다. 음수면 0 — 다른 줄이 이미 한도를 다 썼다는 뜻이다.
+   *
+   * ⚠ 한도%가 비어 있으면 null 이다. 판정 근거가 없는데 자르면 그게 더 나쁜 거짓말이다.
+   * ⚠ 간접비 한도는 자기 자신을 뺀 기준액에서 역산되므로(`lib/verify.ts`) 이 줄 값이
+   *   바뀌어도 상한이 흔들리지 않는다 — 그래서 이 계산이 안정적이다.
+   */
+  const 한도상한 = (i: number): number | null => {
+    const l = lines[i]
+    const 대상 = 한도대상(l.비목_대분류)
+    if (!대상) return null
+    const c = checks.find((x) => x.대상 === 대상)
+    if (!c || c.기준 == null) return null
+    const 다른줄 = lines
+      .filter((x, j) => j !== i && x.비목_대분류 === l.비목_대분류)
+      .reduce((sum, x) => sum + (Number(x.배정액) || 0), 0)
+    return Math.max(0, Number(c.기준) - 다른줄)
+  }
+
+  /**
+   * 배정액을 넣을 때 한도를 넘기면 **그 자리에서 상한으로 맞추고 이유를 말한다.**
+   * 조용히 자르면 사람이 넣은 값이 왜 달라졌는지 모른다(설계원칙 1 — 기록이 핵심이다).
+   */
+  const 배정액수정 = (i: number, n: number) => {
+    const 상한 = 한도상한(i)
+    if (상한 != null && n > 상한) {
+      const l = lines[i]
+      setMsg({
+        ok: false,
+        text:
+          `${l.비목명 ?? l.비목_대분류}은(는) 한도 ${won(상한)} 까지만 넣을 수 있습니다 — ` +
+          `입력한 ${won(n)} 은 한도[%]를 넘습니다. 더 잡아야 하면 한도[%] 칸을 먼저 고치세요.`,
+      })
+      수정(i, { 배정액: 상한 })
+      return
+    }
+    수정(i, { 배정액: n })
+  }
+
   /** 합계 줄 — 협약 총사업비와 맞는지. 협약액이 없으면 칠하지 않는다. */
   const 합계색 = (() => {
     const c = checks.find((x) => x.키 === "총액")
@@ -287,9 +329,17 @@ export function BudgetEditor({
                         <CheckAutoFix
                           check={c}
                           lines={lines}
-                          과제_id={과제_id}
                           인건비자동={인건비자동}
-                          잠김={더러움}
+                          // Ⓐ 예전에는 저장 안 한 변경이 있으면 잠갔다 — 값을 한 번 고치면
+                          //    못 쓰는 버튼이라 「먼저 저장」을 강요했다. 이제 **화면 값에 반영**하고
+                          //    저장은 아래 [계상 저장]에서 한 번에 한다(DB 를 몰래 고치지 않는다).
+                          onApply={(비목, 재원, 새값) => {
+                            const j = lines.findIndex(
+                              (x) => x.비목_대분류 === 비목 && x.재원구분 === 재원,
+                            )
+                            if (j < 0) return
+                            배정액수정(j, 새값)
+                          }}
                           onApplied={setMsg}
                           className="ml-auto"
                         />
@@ -410,7 +460,8 @@ export function BudgetEditor({
                       ) : (
                         <MoneyInput
                           value={Number(l.배정액) || 0}
-                          onValueChange={(n) => 수정(i, { 배정액: n })}
+                          // Ⓑ 한도가 걸리는 비목은 상한을 넘겨 넣을 수 없다(넘기면 상한으로 맞추고 말해 준다).
+                          onValueChange={(n) => 배정액수정(i, n)}
                           className="h-7 text-right text-[13px] tabular-nums"
                           aria-label={`${l.비목명 ?? l.비목_대분류} ${l.재원구분} 배정액`}
                         />
@@ -449,6 +500,7 @@ export function BudgetEditor({
                           const 비율 = 실제비율(lines, 한도대상(l.비목_대분류)!)
                           const c = 줄검사(l)
                           const 넘음 = c ? 판정하기(c) === "초과" : false
+                          const 상한 = 한도상한(i)
                           return (
                             <span
                               className={`mt-0.5 block text-right text-[11px] tabular-nums ${
@@ -462,6 +514,25 @@ export function BudgetEditor({
                             >
                               입력 {비율 == null ? "—" : `${비율}%`}
                             </span>
+                          )
+                        })()}
+                      {/* Ⓐ 고칠 줄은 표에 있는데 손이 위쪽 목록에만 있었다. 초과한 줄에서 바로 누른다.
+                          이미 저장돼 있던 초과(예: P01 연구수당)를 한 번에 맞추는 자리다. */}
+                      {!읽기전용 &&
+                        (() => {
+                          const c = 줄검사(l)
+                          const 상한 = 한도상한(i)
+                          if (!c || 판정하기(c) !== "초과" || 상한 == null) return null
+                          if ((Number(l.배정액) || 0) <= 상한) return null
+                          return (
+                            <button
+                              type="button"
+                              className="mt-1 block w-full rounded-md border border-destructive/40 px-1 py-0.5 text-[11px] text-destructive hover:bg-destructive/10"
+                              onClick={() => 배정액수정(i, 상한)}
+                              title={`${won(Number(l.배정액) || 0)} → ${won(상한)} 로 맞춥니다(저장은 따로 누릅니다)`}
+                            >
+                              한도까지
+                            </button>
                           )
                         })()}
                     </TableCell>
@@ -570,31 +641,32 @@ export function BudgetEditor({
  * 「차액 채우기」 — 부족·초과 검증 한 건을 특정 줄의 배정액으로 메운다.
  *
  * 절대 조용히 넣지 않는다 — 버튼을 누르면 **무엇을 얼마로 바꿀지 안내창에서 먼저 보여주고**,
- * 사람이 [적용] 을 눌러야 저장된다. 계산은 코드가 하고 확정은 사람이 한다(설계원칙 3).
+ * 사람이 [적용] 을 눌러야 값이 들어간다. 계산은 코드가 하고 확정은 사람이 한다(설계원칙 3).
+ *
+ * ⚠ 2026-09-04: **DB 에 바로 저장하지 않고 표의 값으로 넣는다.** 예전에는 곧바로 저장해서,
+ *   저장 안 한 변경이 있으면 그걸 덮어쓸 위험 때문에 버튼을 잠가야 했다 —
+ *   값을 한 번 고치면 못 쓰는 버튼이었다. 이제 잠글 이유가 없다.
  *
  * ⚠ 컴포넌트 이름을 한글로 짓지 않는다 — JSX 태그 판정이 소문자 ASCII 기준이라 위험하다.
  */
 function CheckAutoFix({
   check,
   lines,
-  과제_id,
   인건비자동,
-  잠김,
+  onApply,
   onApplied,
   className = "",
 }: {
   check: Check
   lines: Line[]
-  과제_id: number
   인건비자동: boolean
-  /** 표에 저장 안 한 다른 변경이 있는 상태. 이때는 열지 않는다 — 그 변경을 덮어쓸 수 있다. */
-  잠김: boolean
+  /** 고른 줄의 배정액을 이 값으로 바꿔 달라고 부모에게 알린다(부모가 한도 상한도 같이 본다). */
+  onApply: (비목_대분류: string, 재원구분: string, 새값: number) => void
   onApplied: (msg: { ok: boolean; text: string }) => void
   className?: string
 }) {
   const [열림, set열림] = React.useState(false)
   const [선택, set선택] = React.useState(0)
-  const [pending, start] = React.useTransition()
 
   const 후보 = React.useMemo(
     () => 자동채우기_후보(check, lines, 인건비자동),
@@ -621,24 +693,13 @@ function CheckAutoFix({
   }
 
   function 적용() {
-    start(async () => {
-      const r = await saveBudgetLines(과제_id, [
-        {
-          비목_대분류: 대상줄.비목_대분류,
-          재원구분: 대상줄.재원구분,
-          배정액: 새값,
-          한도비율: 대상줄.한도비율 == null ? null : Number(대상줄.한도비율),
-        },
-      ])
-      set열림(false)
-      onApplied(
-        r.ok
-          ? {
-              ok: true,
-              text: `${대상줄.비목명 ?? 대상줄.비목_대분류} · ${대상줄.재원구분} 배정액을 ${won(새값)} 로 맞췄습니다.`,
-            }
-          : { ok: false, text: r.error ?? "채우지 못했습니다." },
-      )
+    onApply(대상줄.비목_대분류, 대상줄.재원구분, 새값)
+    set열림(false)
+    onApplied({
+      ok: true,
+      text:
+        `${대상줄.비목명 ?? 대상줄.비목_대분류} · ${대상줄.재원구분} 배정액을 ${won(새값)} 로 넣었습니다 — ` +
+        `아직 저장 전입니다. 아래 [계상 저장]을 누르세요.`,
     })
   }
 
@@ -651,14 +712,13 @@ function CheckAutoFix({
           "text-[var(--warning-fg)] hover:bg-[var(--warning-fg)]/10 disabled:opacity-50 " +
           className
         }
-        disabled={잠김}
-        title={잠김 ? "저장하지 않은 다른 변경이 있습니다 — 먼저 계상 저장을 누르세요" : undefined}
+        title="차액만큼 배정액을 맞춰 표에 넣습니다(저장은 따로 누릅니다)"
         onClick={열기}
       >
         차액 채우기
       </button>
 
-      <Dialog open={열림} onOpenChange={(o) => !o && !pending && set열림(false)}>
+      <Dialog open={열림} onOpenChange={(o) => !o && set열림(false)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-base">{check.이름} — 차액 채우기</DialogTitle>
@@ -707,18 +767,12 @@ function CheckAutoFix({
               type="button"
               variant="ghost"
               className="h-7 text-[12.8px]"
-              disabled={pending}
               onClick={() => set열림(false)}
             >
               취소
             </Button>
-            <Button
-              type="button"
-              className="ml-auto h-7 text-[12.8px]"
-              disabled={pending}
-              onClick={적용}
-            >
-              {pending ? "적용 중…" : "적용하고 저장"}
+            <Button type="button" className="ml-auto h-7 text-[12.8px]" onClick={적용}>
+              적용하고 표에 넣기
             </Button>
           </div>
         </DialogContent>

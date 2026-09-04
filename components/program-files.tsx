@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select"
 import { 기간프리셋, 범위정하기, 기간_전체 } from "@/lib/date-filter"
 import { 묶기, 시각표기, 크기표기, 출처목록 } from "@/lib/program-file-types"
-import type { 사업파일, 서류함스코프 } from "@/lib/program-file-types"
+import type { 사업파일, 서류함스코프, 보류증빙 } from "@/lib/program-file-types"
 
 /**
  * **지원사업 증빙 서류함** — 사업마다 흩어져 들어간 증빙을 한 화면에 모아 놓는다.
@@ -31,7 +31,16 @@ import type { 사업파일, 서류함스코프 } from "@/lib/program-file-types"
 
 const 모든출처 = "출처 전체"
 
-export function ProgramFiles({ 파일, 스코프 }: { 파일: 사업파일[]; 스코프: 서류함스코프 }) {
+export function ProgramFiles({
+  파일,
+  보류,
+  스코프,
+}: {
+  파일: 사업파일[]
+  /** 집행엔 붙어 있는데 아직 실물이 없어 못 담은 증빙. 빈 배열이면 아무것도 안 그린다. */
+  보류: 보류증빙[]
+  스코프: 서류함스코프
+}) {
   const [검색, set검색] = React.useState("")
   const [출처, set출처] = React.useState<string>(모든출처)
   const [프리셋, set프리셋] = React.useState<string>(기간_전체)
@@ -174,6 +183,32 @@ export function ProgramFiles({ 파일, 스코프 }: { 파일: 사업파일[]; �
           </Button>
         </div>
       </div>
+
+      {/* **못 담은 것을 못 담았다고 말한다.** 조용히 빼면 「집행엔 있는데 서류함엔 없다」가
+          되고, 사람은 시스템이 파일을 잃었다고 생각한다(실제로 그 질문이 나왔다).
+          거르기와 무관하게 늘 보인다 — 기간을 좁혔다고 없던 일이 되지 않는다. */}
+      {보류.length > 0 && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-[12.8px] dark:border-amber-900/60 dark:bg-amber-950/30">
+          <p>
+            <b>아직 안 담긴 증빙 {보류.length}건</b> — 「검토대기」라 파일이 저장소에 올라가기
+            전이다. 집행 탭에서 확정하면 여기 들어온다.
+          </p>
+          <ul className="mt-1.5 space-y-0.5">
+            {보류.map((b) => (
+              <li key={`${b.집행_id}:${b.파일명}`} className="flex flex-wrap gap-x-2">
+                <span className="text-muted-foreground">{b.과제명}</span>
+                <span className="truncate">{b.파일명}</span>
+                <a
+                  href={`/projects/${b.과제_id}/expenses`}
+                  className="text-muted-foreground underline hover:no-underline"
+                >
+                  집행 #{b.집행_id} 열기
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* 기간의 뜻을 적어 둔다. 안 적으면 「9월만 봤는데 왜 8월 영수증이 나오나」가 된다. */}
       <p className="text-xs text-muted-foreground">

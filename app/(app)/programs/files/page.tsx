@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic"
 export default async function ProgramFilesPage() {
   // 과제사업 서류함(app/(app)/projects/files/page.tsx)이 같은 조회를 "project"로 부른다 —
   // 어느 사업까지 셀지만 다르다(2026-09-04).
-  const { 파일, error } = await getProgramFiles("program")
+  const { 파일, 보류, error } = await getProgramFiles("program")
 
   return (
     <div className="space-y-4 p-4">
@@ -37,7 +37,7 @@ export default async function ProgramFilesPage() {
           서류 목록을 읽지 못했다: {error}
         </p>
       ) : (
-        <ProgramFiles 파일={파일} 스코프="program" />
+        <ProgramFiles 파일={파일} 보류={보류} 스코프="program" />
       )}
     </div>
   )

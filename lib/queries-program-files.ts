@@ -1,7 +1,7 @@
 import "server-only"
 import { db, safeSelect } from "@/lib/db"
 import { 서류함에담나 } from "@/lib/program-file-types"
-import type { 사업파일, 서류함스코프 } from "@/lib/program-file-types"
+import type { 사업파일, 서류함스코프, 보류증빙 } from "@/lib/program-file-types"
 
 /**
  * 사업 **서류함** — 한 사업에 붙은 파일을 세 곳에서 모아 한 목록으로 만든다.
@@ -52,7 +52,7 @@ type 집행증빙Raw = {
 type 집행Raw = { id: number; 과제_id: number | null }
 type 비목Raw = { 코드: string; 이름: string }
 
-export type 서류함결과 = { 파일: 사업파일[]; error: string | null }
+export type 서류함결과 = { 파일: 사업파일[]; 보류: 보류증빙[]; error: string | null }
 
 /**
  * 파일 전부를 **한 목록**으로 돌려준다. 거르는 일도, 사업별로 묶는 일도 화면이 한다
@@ -79,7 +79,7 @@ export async function getProgramFiles(스코프: 서류함스코프): Promise<�
   ])
   const error =
     과제.error ?? 계상.error ?? 정산.error ?? 집행증빙.error ?? 집행.error ?? 비목.error ?? null
-  if (error) return { 파일: [], error }
+  if (error) return { 파일: [], 보류: [], error }
 
   const 허용된과제 = 과제.rows.filter((p) => 서류함에담나(p, 스코프))
   const 허용됨 = new Set(허용된과제.map((p) => Number(p.id)))
@@ -89,6 +89,8 @@ export async function getProgramFiles(스코프: 서류함스코프): Promise<�
   const 집행의과제 = new Map(집행.rows.map((e) => [Number(e.id), e.과제_id]))
 
   const 전체: 사업파일[] = []
+  /** 담지 못한 것. 빼는 것과 **빼놓고 말 안 하는 것**은 다르다. */
+  const 보류: 보류증빙[] = []
 
   for (const r of 계상.rows) {
     if (!허용됨.has(Number(r.과제_id))) continue
@@ -128,8 +130,18 @@ export async function getProgramFiles(스코프: 서류함스코프): Promise<�
     const pid = 집행의과제.get(Number(r.expense_id))
     if (!pid) continue
     if (!허용됨.has(Number(pid))) continue
-    // 확정 전 파일은 storage_path 가 비어 있다(스테이징에만 있다). 내려받을 수 없으니 뺀다.
-    if (!r.storage_path) continue
+    // 확정 전 파일은 storage_path 가 비어 있다(「검토대기」 — 스테이징에만 있다).
+    // 내려받을 수 없으니 뺀다. **다만 세어 둔다** — 조용히 빠지면 「집행엔 있는데
+    // 서류함엔 없다」가 되고, 사람은 시스템이 파일을 잃었다고 생각한다.
+    if (!r.storage_path) {
+      보류.push({
+        집행_id: Number(r.expense_id),
+        과제_id: Number(pid),
+        과제명: 이름.get(Number(pid)) ?? `과제 ${pid}`,
+        파일명: r.파일명,
+      })
+      continue
+    }
     전체.push({
       키: `집행:${r.id}`,
       출처: "집행 증빙",
@@ -145,5 +157,6 @@ export async function getProgramFiles(스코프: 서류함스코프): Promise<�
   }
 
   전체.sort((a, b) => String(b.일시).localeCompare(String(a.일시)))
-  return { 파일: 전체, error: null }
+  보류.sort((a, b) => a.과제명.localeCompare(b.과제명) || a.집행_id - b.집행_id)
+  return { 파일: 전체, 보류, error: null }
 }

@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic"
  * 업체 서류·회사 서류함·규정 문서함은 여기 없다 — 사업에 붙는 게 아니라 업체·회사에 붙는다.
  */
 export default async function ProjectFilesPage() {
-  const { 파일, error } = await getProgramFiles("project")
+  const { 파일, 보류, error } = await getProgramFiles("project")
 
   return (
     <div className="space-y-4 p-4">
@@ -31,7 +31,7 @@ export default async function ProjectFilesPage() {
           서류 목록을 읽지 못했다: {error}
         </p>
       ) : (
-        <ProgramFiles 파일={파일} 스코프="project" />
+        <ProgramFiles 파일={파일} 보류={보류} 스코프="project" />
       )}
     </div>
   )

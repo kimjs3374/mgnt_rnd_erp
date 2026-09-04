@@ -59,11 +59,15 @@ type 집행증빙Raw = {
 type 집행Raw = {
   id: number
   과제_id: number | null
+  // 지출 줄에 「어떤 비목으로 썼나」를 적기 위해 읽는다(2026-09-04 사용자 지시).
+  비목_대분류: string | null
+  비목_세부항목: string | null
   거래처: string | null
   일자: string | null
   합계: number | null
 }
 type 비목Raw = { 코드: string; 이름: string }
+type 세부Raw = { 코드: string; 대분류: string; 이름: string }
 
 export type 서류함결과 = { 파일: 사업파일[]; 보류: 보류증빙[]; error: string | null }
 
@@ -80,7 +84,7 @@ export type 서류함결과 = { 파일: 사업파일[]; 보류: 보류증빙[]; 
  *   `서류함에담나()` 한 군데에 있다(zip 라우트도 같은 것을 쓴다).
  */
 export async function getProgramFiles(스코프: 서류함스코프): Promise<서류함결과> {
-  const [과제, 계상, 정산, 집행증빙, 집행, 비목] = await Promise.all([
+  const [과제, 계상, 정산, 집행증빙, 집행, 비목, 세부] = await Promise.all([
     safeSelect<과제Raw>("projects", () => db.from("projects").select("*")),
     safeSelect<계상Raw>("project_evidence_files", () =>
       db.from("project_evidence_files").select("*"),
@@ -89,9 +93,19 @@ export async function getProgramFiles(스코프: 서류함스코프): Promise<�
     safeSelect<집행증빙Raw>("evidence", () => db.from("evidence").select("*")),
     safeSelect<집행Raw>("expenses", () => db.from("expenses").select("*")),
     safeSelect<비목Raw>("categories", () => db.from("categories").select("*")),
+    // 세부항목 이름표. 대분류만 적으면 「연구시설·장비 및 재료비」가 열 줄 내리 같아
+    // 구분이 안 된다(2026-09-04 사용자 지시 — 지출 줄에 비목을 보여 준다).
+    safeSelect<세부Raw>("sub_categories", () => db.from("sub_categories").select("*")),
   ])
   const error =
-    과제.error ?? 계상.error ?? 정산.error ?? 집행증빙.error ?? 집행.error ?? 비목.error ?? null
+    과제.error ??
+    계상.error ??
+    정산.error ??
+    집행증빙.error ??
+    집행.error ??
+    비목.error ??
+    세부.error ??
+    null
   if (error) return { 파일: [], 보류: [], error }
 
   const 허용된과제 = 과제.rows.filter((p) => 서류함에담나(p, 스코프))
@@ -103,6 +117,18 @@ export async function getProgramFiles(스코프: 서류함스코프): Promise<�
   // 지출 하나로 묶어 접으려면(2026-09-04 사용자 지시) 거래처·일자·합계가 있어야 목록에서
   // "무슨 지출인지" 표가 난다 — id 만으로는 화면이 「집행 #123」만 보여줘 뜻이 없다.
   const 집행상세 = new Map(집행.rows.map((e) => [Number(e.id), e]))
+  const 세부이름 = new Map(세부.rows.map((c) => [c.코드, c.이름]))
+  /**
+   * 「연구시설·장비 및 재료비 › 연구재료 구입비」. 세부항목이 **비어 있으면 대분류만** 준다 —
+   * 실측(2026-09-04) 커피박 6건 중 5건이 미지정이라, 줄마다 「(미지정)」을 찍으면 그게 더 시끄럽다.
+   * 대분류마저 없으면 null 이다. 모르는 것을 아는 척 채우지 않는다.
+   */
+  const 비목표기 = (e: { 비목_대분류?: string | null; 비목_세부항목?: string | null }) => {
+    const 대 = e.비목_대분류 ? (비목이름.get(e.비목_대분류) ?? e.비목_대분류) : null
+    if (!대) return null
+    const 세 = e.비목_세부항목 ? (세부이름.get(e.비목_세부항목) ?? e.비목_세부항목) : null
+    return 세 ? `${대} › ${세}` : 대
+  }
 
   const 전체: 사업파일[] = []
   /** 담지 못한 것. 빼는 것과 **빼놓고 말 안 하는 것**은 다르다. */
@@ -133,6 +159,7 @@ export async function getProgramFiles(스코프: 서류함스코프): Promise<�
               거래처: 집행행?.거래처 ?? null,
               일자: 집행행?.일자 ?? null,
               합계: 집행행?.합계 == null ? null : Number(집행행.합계),
+              비목: 집행행 ? 비목표기(집행행) : null,
             },
     })
   }
@@ -188,6 +215,7 @@ export async function getProgramFiles(스코프: 서류함스코프): Promise<�
         거래처: 집행행?.거래처 ?? null,
         일자: 집행행?.일자 ?? null,
         합계: 집행행?.합계 == null ? null : Number(집행행.합계),
+        비목: 집행행 ? 비목표기(집행행) : null,
       },
     })
   }

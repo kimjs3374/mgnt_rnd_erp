@@ -331,6 +331,15 @@ export function ProgramFiles({
                                   파일 {e.파일.length}건
                                 </span>
                               </span>
+                              {/* 어떤 비목으로 쓴 돈인가 — 접힌 채로 보여야 한다
+                                  (2026-09-04 사용자 지시). 펼쳐서 파일마다 붙은 분류를
+                                  읽게 하면, 정산 때 제일 먼저 묻는 것을 제일 늦게 알게 된다.
+                                  세부항목이 없으면 대분류만 온다(조회에서 정한다). */}
+                              {e.비목 && (
+                                <span className="hidden shrink-0 truncate text-[12.8px] text-muted-foreground sm:inline">
+                                  {e.비목}
+                                </span>
+                              )}
                               {e.합계 != null && (
                                 <span className="shrink-0 tabular-nums text-muted-foreground">
                                   {e.합계.toLocaleString("ko-KR")}원

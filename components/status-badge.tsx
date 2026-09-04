@@ -22,6 +22,10 @@ const TONE: Record<string, Tone> = {
   사업종료: "done",
   신청중: "warn",
   신청완료: "warn",
+  // ⚠ 「수행중」이 빠져 있어서 fallback(pending·테두리만)으로 그려지고 있었다 —
+  //    줄 색은 하늘색인데 배지만 무채색이라 두 화면이 서로 다른 말을 했다(2026-09-04).
+  //    색 정의는 lib/stage-style.ts 한 곳에 있고, 배지 톤도 그 결에 맞춘다.
+  수행중: "pending",
   선정: "done",
   유효: "done",
   확인됨: "done",

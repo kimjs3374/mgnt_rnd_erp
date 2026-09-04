@@ -30,6 +30,7 @@ import { ProjectLeadCell } from "@/components/project-lead-cell"
 import { 종료로표시 } from "@/app/actions/project-stage"
 import { StageAdvance } from "@/components/stage-advance"
 import type { 과제단계, 보기범위 } from "@/lib/project-stage"
+import { 단계색, 단계범례 } from "@/lib/stage-style"
 
 // lib/queries.ts 는 service_role 로 여는 lib/db 를 갖고 있어 클라이언트 번들에 넣지 않는다
 // (CLAUDE.md §3.5). 타입만 가져오고 won() 은 여기서 다시 만든다 — programs-table.tsx 와 같은 이유.
@@ -64,21 +65,9 @@ const 사업유형_짧게: Record<string, string> = {
 //    같이 맞췄다 — 안 맞추면 「배지는 신청완료인데 줄 색은 신청중」이 된다.
 //    신청완료는 신청중과 같은 대기 계열이되 한 걸음 진한 호박색으로 둔다: 옆줄과 구분되어야
 //    「어디까지 왔나」가 훑어서 잡힌다.
-const 상태색: Record<string, string> = {
-  신청중: "bg-amber-50/50 hover:bg-amber-100/60 dark:bg-amber-950/40 dark:hover:bg-amber-900/50",
-  신청완료: "bg-amber-100/60 hover:bg-amber-200/60 dark:bg-amber-900/40 dark:hover:bg-amber-800/50",
-  수행중: "bg-sky-50/50 hover:bg-sky-100/60 dark:bg-sky-950/40 dark:hover:bg-sky-900/50",
-  사업종료: "bg-red-100/40 hover:bg-red-200/50 dark:bg-red-950/60 dark:hover:bg-red-900/60",
-  미선정: "bg-slate-100/60 hover:bg-slate-200/60 dark:bg-slate-800/40 dark:hover:bg-slate-700/50",
-}
+const 상태색 = 단계색
 /** 범례에 쓰는 스와치 색(hover 뺀 배경만) + 이름. 순서가 곧 범례 순서다. */
-const 상태색_범례: { 상태: string; 스와치: string; 이름: string; 설명: string }[] = [
-  { 상태: "신청중", 스와치: "bg-amber-50/50 dark:bg-amber-950/40", 이름: "신청중", 설명: "접수했고 발표·심사를 기다리는 중입니다." },
-  { 상태: "신청완료", 스와치: "bg-amber-100/60 dark:bg-amber-900/40", 이름: "신청완료", 설명: "발표·심사까지 마치고 최종 결과만 남았습니다." },
-  { 상태: "수행중", 스와치: "bg-sky-50/50 dark:bg-sky-950/40", 이름: "수행중", 설명: "협약기간 안에서 계상·집행·정산을 합니다." },
-  { 상태: "사업종료", 스와치: "bg-red-100/40 dark:bg-red-950/60", 이름: "사업종료", 설명: "끝난 과제입니다 — 문제가 있다는 뜻이 아닙니다." },
-  { 상태: "미선정", 스와치: "bg-slate-100/60 dark:bg-slate-800/40", 이름: "미선정", 설명: "신청했지만 떨어진 건입니다." },
-]
+const 상태색_범례 = 단계범례
 
 /** 단계 필터가 고를 수 있는 값 전부. 기본은 넷 다 켜진 상태 = 「전체」와 같다. */
 const 단계전체목록: 과제단계[] = ["신청중", "신청완료", "수행중", "사업종료"]

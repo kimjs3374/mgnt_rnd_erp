@@ -33,11 +33,23 @@ import { cn } from "@/lib/utils"
  *     갈래인지는 줄마다 바로 알 수 있다 — 그룹 경계가 안 맞아도 헷갈리지 않는다.
  *   ⚠ 페이지 넘김 버튼은 카드에 **딱 하나**다. 여러 갈래가 동시에 여러 페이지일
  *     때 버튼이 여러 개 뜨는 것보다 하나가 낫다는 판단(2026-09-04 사용자 확인).
+ *
+ * 2026-09-04 개편(12차) — **이름과 조치 사이에 "무엇을" 한 칸을 더 넣었다.**
+ *   ⚠ 예전엔 "○○컴퓨터 — 확정 필요"처럼 무슨 비목인지, 어느 과제의 뭐가 문제인지
+ *     안 보였다(눌러서 원본 화면까지 가야 알 수 있었다 — 사용자 지적). `상세` 필드로
+ *     그 정보를 채운다: 비목 확정→비목명, 챙길 서류→상태(만료됨 등), 제출 전
+ *     점검→점검 대상·종류.
+ *   ⚠ **이름은 폭을 제한하고(`max-w-[45%]`), 상세가 남는 공간(`flex-1`)을 가져간다.**
+ *     둘 다 truncate 인데 우선순위가 반대면(이름이 flex-1) 과제명이 길 때 뒤의
+ *     상세("기한임박 - 중간보고")가 통째로 잘려서 안 보이는 문제가 생긴다(실측
+ *     확인). 이름이 길면 이름 쪽이 먼저 잘리게 해서 상세는 항상 최대한 보이게 한다.
  */
 export type 큐항목 = {
   키: string
   이름: string
   꼬리: string
+  /** 이름과 조치 사이에 보여줄 보충 설명. 없으면 그 칸을 비운다. */
+  상세?: string | null
   /** 꼬리를 상태 배지로 그릴지. 「만료」·「없음」처럼 값이 상태일 때만 참. */
   배지?: boolean
 }
@@ -70,17 +82,36 @@ type 행동 = { 문구: string; 색?: string }
 /**
  * 오른쪽에 보여줄 행동 문구. 원본 값(`꼬리`)은 `/expenses`·`/documents`·`/programs`
  * 가 쓰는 공용 어휘라 안 건드리고, 이 카드에서 보여줄 때만 여기서 한 번 바꾼다.
+ *
+ * ⚠ 챙길 서류의 「만료」→「발급 필요」·「만료임박」→「갱신 필요」는 일부러 이렇게
+ *   갈랐다(2026-09-04 사용자 확인). 이미 완전히 만료된 서류는 갱신이 아니라
+ *   재발급 대상으로 본다 — 아직 안 지났을 때만 미리 갱신한다는 뜻.
  */
 function 행동문구(갈래: string, 꼬리: string): 행동 {
   if (갈래 === "챙길 서류") {
-    if (꼬리 === "만료") return { 문구: "갱신 필요", 색: "border-rose-500/40 bg-rose-500/10 text-rose-600 dark:text-rose-400" }
-    if (꼬리 === "만료임박") return { 문구: "곧 만료", 색: "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400" }
+    if (꼬리 === "만료") return { 문구: "발급 필요", 색: "border-rose-500/40 bg-rose-500/10 text-rose-600 dark:text-rose-400" }
+    if (꼬리 === "만료임박") return { 문구: "갱신 필요", 색: "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400" }
     if (꼬리 === "없음") return { 문구: "발급 필요", 색: "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400" }
     return { 문구: 꼬리 }
   }
   if (갈래 === "비목 확정") return { 문구: "확정 필요" }
-  if (갈래 === "제출 전 점검") return { 문구: `미해결 ${꼬리}` }
+  if (갈래 === "제출 전 점검") return { 문구: "미해결" }
   return { 문구: 꼬리 }
+}
+
+/**
+ * 이름과 조치 사이에 넣을 보충 설명. 챙길 서류는 원본 상태값(`꼬리`)을 이 카드에서만
+ * 사람 말로 바꾸고(행동문구와 같은 이유), 나머지 갈래는 대시보드가 이미 사람이 읽을
+ * 말로 만들어 보낸 `상세`를 그대로 쓴다.
+ */
+function 상세문구(갈래: string, 꼬리: string, 상세?: string | null): string | null {
+  if (갈래 === "챙길 서류") {
+    if (꼬리 === "만료") return "만료됨"
+    if (꼬리 === "만료임박") return "만료일 다가옴"
+    if (꼬리 === "없음") return "미발급"
+    return null
+  }
+  return 상세 ?? null
 }
 
 /** 통합 목록의 한 줄 — 원래 갈래 정보를 들고 다닌다(배지·링크·색을 찾으려면 필요하다). */
@@ -122,6 +153,7 @@ export function TodoCard({ 갈래들 }: { 갈래들: 큐갈래[] }) {
               색: "border-border text-muted-foreground",
             }
             const 행동 = 행동문구(it.갈래, it.꼬리)
+            const 상세 = 상세문구(it.갈래, it.꼬리, it.상세)
             // 갈래가 바뀌는 지점에만 구분선을 둔다 — 페이지 중간에서 갈래가 갈려도
             // 줄마다 배지가 있어서 헷갈리진 않지만, 선으로 한 번 더 갈라 준다.
             const 갈래바뀜 = i > 0 && 보이는행[i - 1].갈래 !== it.갈래
@@ -149,7 +181,19 @@ export function TodoCard({ 갈래들 }: { 갈래들: 큐갈래[] }) {
                 >
                   {스타일.짧은}
                 </span>
-                <span className="min-w-0 flex-1 truncate text-[13px]">{it.이름}</span>
+                <span
+                  className={cn(
+                    "truncate text-[13px]",
+                    상세 ? "max-w-[45%] shrink-0" : "min-w-0 flex-1",
+                  )}
+                >
+                  {it.이름}
+                </span>
+                {상세 && (
+                  <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                    {상세}
+                  </span>
+                )}
                 {행동.색 ? (
                   <span
                     className={cn(

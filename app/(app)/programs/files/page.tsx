@@ -4,7 +4,7 @@ import { getProgramFiles } from "@/lib/queries-program-files"
 export const dynamic = "force-dynamic"
 
 /**
- * 지원사업 > **서류함**.
+ * 지원사업 > **지원사업 서류함**.
  *
  * 계상 증빙·집행 증빙·정산 서류가 각각 다른 표에 들어간다. 붙는 자리가 달라서 그렇고
  * 그건 그대로 둔다 — 대신 **한 눈에 보고 한 번에 받는 자리**를 여기 하나 만든다
@@ -19,7 +19,7 @@ export default async function ProgramFilesPage() {
   return (
     <div className="space-y-4 p-4">
       <div>
-        <h1 className="text-lg font-semibold">서류함</h1>
+        <h1 className="text-lg font-semibold">지원사업 서류함</h1>
         <p className="text-sm text-muted-foreground">
           사업마다 올린 서류를 모아 본다. 기간을 정해 거르고, 사업별 폴더로 묶어 한 번에 받는다.
         </p>

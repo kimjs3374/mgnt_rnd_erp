@@ -58,16 +58,24 @@ const 사업유형_짧게: Record<string, string> = {
  * ⚠ `TableRow` 기본 클래스에 `hover:bg-muted/50` 이 있다. `cn()`(tailwind-merge)을 거치므로
  *   hover 색을 같이 안 주면 마우스를 올렸을 때 칠한 색이 사라진다(종료 줄에서 이미 겪은 함정).
  */
+// 2026-09-04 재조정 — "꼭 이렇게 진해야 하나" 사용자 질문에, 구분은 남기되 더 연하게.
+// 팔레트 최저단계(-50/-100)에 opacity 를 한 번 더 얹어(반투명) 카드 배경에 옅게 스민다.
+// ⚠ 키는 **저장된 상태가 아니라 단계**다(`lib/project-stage.ts`). 배지를 단계로 바꾸면서
+//    같이 맞췄다 — 안 맞추면 「배지는 신청완료인데 줄 색은 신청중」이 된다.
+//    신청완료는 신청중과 같은 대기 계열이되 한 걸음 진한 호박색으로 둔다: 옆줄과 구분되어야
+//    「어디까지 왔나」가 훑어서 잡힌다.
 const 상태색: Record<string, string> = {
-  신청중: "bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900/60",
-  수행중: "bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/60 dark:hover:bg-sky-900/60",
-  종료: "bg-red-100 hover:bg-red-200 dark:bg-red-950 dark:hover:bg-red-900",
+  신청중: "bg-amber-50/50 hover:bg-amber-100/60 dark:bg-amber-950/40 dark:hover:bg-amber-900/50",
+  신청완료: "bg-amber-100/60 hover:bg-amber-200/60 dark:bg-amber-900/40 dark:hover:bg-amber-800/50",
+  수행중: "bg-sky-50/50 hover:bg-sky-100/60 dark:bg-sky-950/40 dark:hover:bg-sky-900/50",
+  사업종료: "bg-red-100/40 hover:bg-red-200/50 dark:bg-red-950/60 dark:hover:bg-red-900/60",
 }
 /** 범례에 쓰는 스와치 색(hover 뺀 배경만) + 이름. 순서가 곧 범례 순서다. */
 const 상태색_범례: { 상태: string; 스와치: string; 이름: string; 설명: string }[] = [
-  { 상태: "신청중", 스와치: "bg-amber-50 dark:bg-amber-950/60", 이름: "신청중", 설명: "결과를 기다리는 중입니다." },
-  { 상태: "수행중", 스와치: "bg-sky-50 dark:bg-sky-950/60", 이름: "수행중", 설명: "협약기간 안에서 계상·집행·정산을 합니다." },
-  { 상태: "종료", 스와치: "bg-red-100 dark:bg-red-950", 이름: "종료", 설명: "끝난 과제입니다 — 문제가 있다는 뜻이 아닙니다." },
+  { 상태: "신청중", 스와치: "bg-amber-50/50 dark:bg-amber-950/40", 이름: "신청중", 설명: "접수했고 발표·심사를 기다리는 중입니다." },
+  { 상태: "신청완료", 스와치: "bg-amber-100/60 dark:bg-amber-900/40", 이름: "신청완료", 설명: "발표·심사까지 마치고 최종 결과만 남았습니다." },
+  { 상태: "수행중", 스와치: "bg-sky-50/50 dark:bg-sky-950/40", 이름: "수행중", 설명: "협약기간 안에서 계상·집행·정산을 합니다." },
+  { 상태: "사업종료", 스와치: "bg-red-100/40 dark:bg-red-950/60", 이름: "사업종료", 설명: "끝난 과제입니다 — 문제가 있다는 뜻이 아닙니다." },
 ]
 
 /** 단계 필터가 고를 수 있는 값 전부. 기본은 넷 다 켜진 상태 = 「전체」와 같다. */
@@ -462,14 +470,17 @@ export function ProjectsLedger({
               {보이는.map((r) => {
                 // 끝난 과제는 줄 전체를 연빨강으로 칠한다(사용자 지시). 배지 하나로는
                 // 열 줄 중 어느 게 끝난 건지 훑어서 안 잡힌다.
-                const 끝남 = r.상태 === "종료"
+                // 줄 색·계상 링크도 **단계**를 본다. 저장값만 보면 기간이 끝났는데
+                // 계상 링크가 살아 있다(단계는 사업종료로 넘어가 있는데도).
+                const 단계이줄 = 단계별[r.id] ?? (r.상태 === "종료" ? "사업종료" : r.상태)
+                const 끝남 = 단계이줄 === "사업종료"
                 // 단계마다 할 수 있는 일이 다르다 — 종료는 계상이 없고, 신청중은 정산이 없다.
                 const 계상가능 = !끝남
-                const 정산가능 = r.상태 !== "신청중"
+                const 정산가능 = 단계이줄 !== "신청중" && 단계이줄 !== "신청완료"
                 return (
                   <TableRow
                     key={r.id}
-                    className={"h-[38px] text-[14.3px] " + (상태색[r.상태] ?? "")}
+                    className={"h-[38px] text-[14.3px] " + (상태색[단계이줄] ?? "")}
                   >
                     {/* ⚠ `TableCell` 기본값이 `whitespace-nowrap` 이라 긴 과제명이 한 줄로
                         펼쳐지며 `w-[240px]` 을 무시하고 표를 밀어냈다(1,618px → 가로 스크롤).
@@ -542,7 +553,11 @@ export function ProjectsLedger({
                       </div>
                     </TableCell>
                     <TableCell>
-                      <StatusBadge value={r.상태} />
+                      {/* ⚠ 저장된 `상태` 가 아니라 **단계**를 찍는다. 「단계」 열은 신청완료인데
+                          여기는 신청중이라 한 줄이 서로 다른 말을 했다(사용자 지적).
+                          신청완료는 `선정결과='발표심사'` 에서 나오고 저장된 상태는 그대로
+                          '신청중' 이다 — 저장값이 틀린 게 아니라, 그걸 여기 보여 준 게 틀렸다. */}
+                      <StatusBadge value={단계별[r.id] ?? r.상태} />
                     </TableCell>
                     <TableCell className="text-center">
                       {/* 단계마다 할 수 있는 일이 다르다. 못 하는 일의 링크를 걸어 두면
@@ -626,10 +641,10 @@ export function ProjectsLedger({
       {/* 색이 무엇을 뜻하는지 화면에 적어 둔다. 안 적으면 빨강을 「문제 있는 과제」로 읽는다.
           지금 보이는 줄에 실제로 있는 색만 적는다 — 단계 화면(신청중만·수행중만·종료만)에서는
           한 가지 색만 뜨니 나머지 둘을 굳이 설명하지 않는다. */}
-      {상태색_범례.some((s) => 보이는.some((r) => r.상태 === s.상태)) && (
+      {상태색_범례.some((s) => 보이는.some((r) => (단계별[r.id] ?? r.상태) === s.상태)) && (
         <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
           {상태색_범례
-            .filter((s) => 보이는.some((r) => r.상태 === s.상태))
+            .filter((s) => 보이는.some((r) => (단계별[r.id] ?? r.상태) === s.상태))
             .map((s) => (
               <span key={s.상태} className="flex items-center gap-1.5">
                 <span className={`inline-block h-3 w-5 rounded-sm border ${s.스와치}`} />

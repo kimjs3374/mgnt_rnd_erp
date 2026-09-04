@@ -35,6 +35,7 @@ import { deleteApplication } from "@/app/actions/apply"
 import { 기간프리셋, 범위정하기, 기간겹치나, 걸친연도, 기간_전체 } from "@/lib/date-filter"
 import { StageAdvance } from "@/components/stage-advance"
 import { 단계판정 } from "@/lib/project-stage"
+import type { 과제단계 } from "@/lib/project-stage"
 import type { LedgerRow } from "@/lib/queries"
 
 // lib/queries.ts 는 service_role 로 여는 lib/db 를 갖고 있어 클라이언트 번들에 넣지 않는다
@@ -74,16 +75,22 @@ function 사업기간(r: LedgerRow): { 시작: string | null; 끝: string | null
  * 다를 이유가 없다.
  *   신청중 = 호박색, 수행중 = 하늘색, 종료 = 연빨강 (projects-ledger.tsx 48~61행과 동일)
  */
+// 2026-09-04 재조정 — projects-ledger.tsx 와 같은 색을 쓰는 화면이라(위 주석) 그쪽을
+// 연하게 바꾼 것과 같이 맞춘다. 두 화면이 갈리면 "지원사업은 왜 아직 진하지" 소리가 나온다.
+// ⚠ 키는 **저장된 상태가 아니라 단계**다(`lib/project-stage.ts`). 과제 대장과 같은 색이다 —
+//    두 대장이 다른 색을 쓰면 나란히 놓고 볼 때마다 다시 읽어야 한다.
 const 상태색: Record<string, string> = {
-  신청중: "bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900/60",
-  수행중: "bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/60 dark:hover:bg-sky-900/60",
-  종료: "bg-red-100 hover:bg-red-200 dark:bg-red-950 dark:hover:bg-red-900",
+  신청중: "bg-amber-50/50 hover:bg-amber-100/60 dark:bg-amber-950/40 dark:hover:bg-amber-900/50",
+  신청완료: "bg-amber-100/60 hover:bg-amber-200/60 dark:bg-amber-900/40 dark:hover:bg-amber-800/50",
+  수행중: "bg-sky-50/50 hover:bg-sky-100/60 dark:bg-sky-950/40 dark:hover:bg-sky-900/50",
+  사업종료: "bg-red-100/40 hover:bg-red-200/50 dark:bg-red-950/60 dark:hover:bg-red-900/60",
 }
 /** 범례 — 지금 표에 실제로 있는 색만 적는다(단계 화면에서는 한 색만 뜬다). */
 const 상태색_범례: { 상태: string; 스와치: string; 이름: string; 설명: string }[] = [
-  { 상태: "신청중", 스와치: "bg-amber-50 dark:bg-amber-950/60", 이름: "신청중", 설명: "결과를 기다리는 중입니다." },
-  { 상태: "수행중", 스와치: "bg-sky-50 dark:bg-sky-950/60", 이름: "수행중", 설명: "협약기간 안에서 집행·증빙을 챙깁니다." },
-  { 상태: "종료", 스와치: "bg-red-100 dark:bg-red-950", 이름: "종료", 설명: "끝난 사업입니다 — 문제가 있다는 뜻이 아닙니다." },
+  { 상태: "신청중", 스와치: "bg-amber-50/50 dark:bg-amber-950/40", 이름: "신청중", 설명: "접수했고 발표·심사를 기다리는 중입니다." },
+  { 상태: "신청완료", 스와치: "bg-amber-100/60 dark:bg-amber-900/40", 이름: "신청완료", 설명: "발표·심사까지 마치고 최종 결과만 남았습니다." },
+  { 상태: "수행중", 스와치: "bg-sky-50/50 dark:bg-sky-950/40", 이름: "수행중", 설명: "협약기간 안에서 집행·증빙을 챙깁니다." },
+  { 상태: "사업종료", 스와치: "bg-red-100/40 dark:bg-red-950/60", 이름: "사업종료", 설명: "끝난 사업입니다 — 문제가 있다는 뜻이 아닙니다." },
 ]
 
 /** 마감이 가까울수록 눈에 띄게 — 표 안에서 「지금 급한 게 뭔지」가 스캔되게 한다. */
@@ -125,6 +132,20 @@ export function ProgramsTable({
   const router = useRouter()
   const [search, setSearch] = React.useState("")
   const [상태, set상태] = React.useState(전체_상태)
+  /**
+   * 사업 id → **단계**. 배지 · 줄 색 · 범례 · 「상태」 필터가 전부 이 하나를 본다.
+   * 저장된 `상태` 를 그대로 쓰면 「단계는 신청완료인데 배지는 신청중」이 된다(사용자 지적).
+   */
+  const 단계맵 = React.useMemo(
+    () =>
+      Object.fromEntries(
+        rows.map((r) => [
+          r.id,
+          단계판정({ 상태: r.상태, 선정결과: r.선정결과 ?? null, 종료일: 종료일별[r.id] ?? null }),
+        ]),
+      ) as Record<number, string>,
+    [rows, 종료일별],
+  )
   const [연도, set연도] = React.useState(전체연도)
   const [유형, set유형] = React.useState(모두)
   const [프리셋, set프리셋] = React.useState<string>(기간_전체)
@@ -157,7 +178,7 @@ export function ProgramsTable({
   const 범위 = React.useMemo(() => 범위정하기(프리셋, 기간시작, 기간끝), [프리셋, 기간시작, 기간끝])
 
   const 상태목록 = React.useMemo(
-    () => Array.from(new Set(rows.map((r) => r.상태))).sort(),
+    () => Array.from(new Set(rows.map((r) => 단계맵[r.id]))).sort(),
     [rows],
   )
 
@@ -165,7 +186,7 @@ export function ProgramsTable({
     const q = search.trim().toLowerCase()
     const y = 연도 === 전체연도 ? null : Number(연도)
     let out = rows.filter((r) => {
-      if (상태 !== 전체_상태 && r.상태 !== 상태) return false
+      if (상태 !== 전체_상태 && 단계맵[r.id] !== 상태) return false
       if (유형 !== 모두 && (r.사업유형 ?? "") !== 유형) return false
       const { 시작, 끝 } = 사업기간(r)
       // 연도는 「그 해에 걸쳐 있었는가」다 — 시작 연도만 보면 2024~2026 사업이 「2025」에서 빠진다.
@@ -397,10 +418,13 @@ export function ProgramsTable({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {보이는.map((r) => (
+              {보이는.map((r) => {
+                // 표 전체를 한 번에 판정해 둔 것을 꺼내 쓴다(위 `단계맵`).
+                const 단계이줄 = 단계맵[r.id] ?? r.상태
+                return (
                 <TableRow
                   key={r.id}
-                  className={"h-[38px] text-[14.3px] cursor-pointer " + (상태색[r.상태] ?? "")}
+                  className={"h-[38px] text-[14.3px] cursor-pointer " + (상태색[단계이줄] ?? "")}
                   onClick={() => router.push(`/projects/${r.id}`)}
                 >
                   <TableCell className="font-semibold">{r.사업명}</TableCell>
@@ -430,7 +454,9 @@ export function ProgramsTable({
                     {r.선정결과 ? <StatusBadge value={r.선정결과} /> : "—"}
                   </TableCell>
                   <TableCell>
-                    <StatusBadge value={r.상태} />
+                    {/* 저장된 `상태` 가 아니라 **단계**다 — 아래 단계 버튼과 같은 값을 쓴다.
+                        둘이 다른 값을 보면 한 줄이 서로 다른 말을 한다(사용자 지적). */}
+                    <StatusBadge value={단계이줄} />
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {r.미처리점검 > 0 ? (
@@ -443,14 +469,7 @@ export function ProgramsTable({
                     {/* 신청을 냈다 · 선정됐다는 **날짜로 알 수 없다** — 사람이 누른다
                         (2026-09-04 사용자 지시). 과제 대장과 같은 컴포넌트를 쓴다.
                         ⚠ 여기 rows 는 대장 뷰(LedgerRow)라 종료일 대신 `협약종료` 다. */}
-                    <StageAdvance
-                      과제_id={r.id}
-                      단계={단계판정({
-                        상태: r.상태,
-                        선정결과: r.선정결과 ?? null,
-                        종료일: 종료일별[r.id] ?? null,
-                      })}
-                    />
+                    <StageAdvance 과제_id={r.id} 단계={단계이줄 as 과제단계} />
                   </TableCell>
                   <TableCell className="p-0 text-center">
                     <button
@@ -468,7 +487,8 @@ export function ProgramsTable({
                     </button>
                   </TableCell>
                 </TableRow>
-              ))}
+                )
+              })}
             </TableBody>
           </Table>
         )}
@@ -476,10 +496,10 @@ export function ProgramsTable({
 
       {/* 색이 무엇을 뜻하는지 적어 둔다 — 안 적으면 빨강을 「문제 있는 사업」으로 읽는다.
           지금 필터된 표에 실제로 있는 색만 보여준다(projects-ledger.tsx와 같은 규칙). */}
-      {상태색_범례.some((s) => 필터된.some((r) => r.상태 === s.상태)) && (
+      {상태색_범례.some((s) => 필터된.some((r) => 단계맵[r.id] === s.상태)) && (
         <p className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-xs text-muted-foreground">
           {상태색_범례
-            .filter((s) => 필터된.some((r) => r.상태 === s.상태))
+            .filter((s) => 필터된.some((r) => 단계맵[r.id] === s.상태))
             .map((s) => (
               <span key={s.상태} className="flex items-center gap-1.5">
                 <span className={`inline-block h-3 w-5 rounded-sm border ${s.스와치}`} />

@@ -1,0 +1,39 @@
+[Unit]
+Description=6PM notifier (rnd deadline / settlement alerts)
+Documentation=https://rnd.mgnt.kr
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=magnatech
+Group=magnatech
+WorkingDirectory=/web/rnd/bot
+
+# rnd-bot.service 와 같은 자격증명을 쓴다. 두 벌로 두지 않는다.
+Environment=RND_ENV_FILE=/rnd/docker/.env
+EnvironmentFile=/rnd/docker/.env
+EnvironmentFile=/rnd/bot/.env.mcp
+# 발송 이력(app.notifications)을 남길 때만 쓰는 쓰기 계정.
+EnvironmentFile=/rnd/bot/.env.dev
+
+# ★ 알림 전용 채널. WATCHED_CHANNEL_IDS(증빙을 받는 채널)와 일부러 다르다 —
+#   증빙 대화 사이에 알림이 끼면 둘 다 안 읽힌다.
+Environment=RND_NOTIFY_CHANNEL=C0BUSHL2S0M
+
+# 주간 브리핑이 claude 헤드리스를 부른다. PATH 에 claude 가 있어야 한다.
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=PYTHONUNBUFFERED=1
+
+ExecStart=/rnd/bot/venv/bin/python /web/rnd/bot/notify.py
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=rnd-notify
+
+# 최소 권한
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/rnd

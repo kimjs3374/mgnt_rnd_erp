@@ -33,6 +33,8 @@ import {
 import { deleteApplication } from "@/app/actions/apply"
 // 기간 프리셋·겹침·연도는 과제 대장과 **같은 것을 쓴다**(복사하면 이름이 갈린다).
 import { 기간프리셋, 범위정하기, 기간겹치나, 걸친연도, 기간_전체 } from "@/lib/date-filter"
+import { StageAdvance } from "@/components/stage-advance"
+import { 단계판정 } from "@/lib/project-stage"
 import type { LedgerRow } from "@/lib/queries"
 
 // lib/queries.ts 는 service_role 로 여는 lib/db 를 갖고 있어 클라이언트 번들에 넣지 않는다
@@ -107,7 +109,19 @@ function DdayPill({ d }: { d: number }) {
   )
 }
 
-export function ProgramsTable({ rows }: { rows: LedgerRow[] }) {
+export function ProgramsTable({
+  rows,
+  종료일별 = {},
+}: {
+  rows: LedgerRow[]
+  /**
+   * 사업 id → 협약종료일. **LedgerRow 에는 종료일이 없다**(대장 뷰 타입에 안 들어 있다)
+   * — 단계판정이 「기간이 끝났나」를 보려면 필요해서 화면이 따로 받아 넘긴다
+   *   (`components/programs-stage-view.tsx` 가 이미 같은 것을 읽고 있다).
+   * 안 넘어와도 동작한다 — 그때는 종료 판정만 서버 쪽에서 걸러진다.
+   */
+  종료일별?: Record<number, string | null>
+}) {
   const router = useRouter()
   const [search, setSearch] = React.useState("")
   const [상태, set상태] = React.useState(전체_상태)
@@ -243,11 +257,11 @@ export function ProgramsTable({ rows }: { rows: LedgerRow[] }) {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="사업명·기관 검색"
-          className="h-7 w-56 text-[13px]"
+          className="h-7 w-56 text-[14.3px]"
         />
         <span className="text-xs text-muted-foreground">상태</span>
         <Select value={상태} onValueChange={(v) => set상태(v ?? 전체_상태)}>
-          <SelectTrigger size="sm" className="h-7 w-28 text-[12.8px]">
+          <SelectTrigger size="sm" className="h-7 w-28 text-[14.1px]">
             <SelectValue placeholder={전체_상태} />
           </SelectTrigger>
           <SelectContent>
@@ -261,7 +275,7 @@ export function ProgramsTable({ rows }: { rows: LedgerRow[] }) {
         </Select>
         <span className="text-xs text-muted-foreground">수행 연도</span>
         <Select value={연도} onValueChange={(v) => set연도(v ?? 전체연도)}>
-          <SelectTrigger size="sm" className="h-7 w-24 text-[12.8px]" aria-label="수행 연도로 걸러내기">
+          <SelectTrigger size="sm" className="h-7 w-24 text-[14.1px]" aria-label="수행 연도로 걸러내기">
             <SelectValue placeholder={전체연도} />
           </SelectTrigger>
           <SelectContent>
@@ -276,7 +290,7 @@ export function ProgramsTable({ rows }: { rows: LedgerRow[] }) {
 
         {유형목록.length > 1 && (
           <Select value={유형} onValueChange={(v) => set유형(v ?? 모두)}>
-            <SelectTrigger size="sm" className="h-7 w-36 text-[12.8px]" aria-label="사업유형으로 걸러내기">
+            <SelectTrigger size="sm" className="h-7 w-36 text-[14.1px]" aria-label="사업유형으로 걸러내기">
               <SelectValue placeholder="유형 전체" />
             </SelectTrigger>
             <SelectContent>
@@ -300,7 +314,7 @@ export function ProgramsTable({ rows }: { rows: LedgerRow[] }) {
             set기간끝("")
           }}
         >
-          <SelectTrigger size="sm" className="h-7 w-32 text-[12.8px]" aria-label="기간 프리셋">
+          <SelectTrigger size="sm" className="h-7 w-32 text-[14.1px]" aria-label="기간 프리셋">
             <SelectValue placeholder="기간 전체" />
           </SelectTrigger>
           <SelectContent>
@@ -315,7 +329,7 @@ export function ProgramsTable({ rows }: { rows: LedgerRow[] }) {
           type="date"
           value={기간시작}
           onChange={(e) => set기간시작(e.target.value)}
-          className="h-7 w-[132px] text-[12.8px]"
+          className="h-7 w-[132px] text-[14.1px]"
           aria-label="기간 시작"
         />
         <span className="text-xs text-muted-foreground">~</span>
@@ -323,12 +337,12 @@ export function ProgramsTable({ rows }: { rows: LedgerRow[] }) {
           type="date"
           value={기간끝}
           onChange={(e) => set기간끝(e.target.value)}
-          className="h-7 w-[132px] text-[12.8px]"
+          className="h-7 w-[132px] text-[14.1px]"
           aria-label="기간 끝"
         />
 
         <Select value={String(크기)} onValueChange={(v) => set크기(Number(v) || 20)}>
-          <SelectTrigger size="sm" className="h-7 w-20 text-[12.8px]" aria-label="한 쪽에 몇 줄">
+          <SelectTrigger size="sm" className="h-7 w-20 text-[14.1px]" aria-label="한 쪽에 몇 줄">
             <SelectValue placeholder="20" />
           </SelectTrigger>
           <SelectContent>
@@ -346,7 +360,7 @@ export function ProgramsTable({ rows }: { rows: LedgerRow[] }) {
             type="button"
             variant="ghost"
             onClick={초기화}
-            className="ml-auto h-7 text-[12.8px]"
+            className="ml-auto h-7 text-[14.1px]"
           >
             ↺ 초기화
           </Button>
@@ -377,6 +391,8 @@ export function ProgramsTable({ rows }: { rows: LedgerRow[] }) {
                 <TableHead>결과</TableHead>
                 <TableHead>상태</TableHead>
                 <TableHead className="text-right">점검</TableHead>
+                {/* 단계를 앞으로 옮기는 칸. 과제 대장과 같은 버튼을 쓴다(2026-09-04 사용자 지시). */}
+                <TableHead className="w-[104px] text-center">단계</TableHead>
                 <TableHead className="w-10" />
               </TableRow>
             </TableHeader>
@@ -384,7 +400,7 @@ export function ProgramsTable({ rows }: { rows: LedgerRow[] }) {
               {보이는.map((r) => (
                 <TableRow
                   key={r.id}
-                  className={"h-[38px] text-[13px] cursor-pointer " + (상태색[r.상태] ?? "")}
+                  className={"h-[38px] text-[14.3px] cursor-pointer " + (상태색[r.상태] ?? "")}
                   onClick={() => router.push(`/projects/${r.id}`)}
                 >
                   <TableCell className="font-semibold">{r.사업명}</TableCell>
@@ -398,7 +414,7 @@ export function ProgramsTable({ rows }: { rows: LedgerRow[] }) {
                     {r.마감일 ? (
                       <div className="flex flex-col gap-0.5">
                         {r.d_day != null && <DdayPill d={r.d_day} />}
-                        <span className="text-[11px] text-muted-foreground">{r.마감일}</span>
+                        <span className="text-[12.1px] text-muted-foreground">{r.마감일}</span>
                       </div>
                     ) : (
                       <span className="text-xs text-muted-foreground">확인 필요</span>
@@ -422,6 +438,19 @@ export function ProgramsTable({ rows }: { rows: LedgerRow[] }) {
                     ) : (
                       <span className="text-muted-foreground">0</span>
                     )}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {/* 신청을 냈다 · 선정됐다는 **날짜로 알 수 없다** — 사람이 누른다
+                        (2026-09-04 사용자 지시). 과제 대장과 같은 컴포넌트를 쓴다.
+                        ⚠ 여기 rows 는 대장 뷰(LedgerRow)라 종료일 대신 `협약종료` 다. */}
+                    <StageAdvance
+                      과제_id={r.id}
+                      단계={단계판정({
+                        상태: r.상태,
+                        선정결과: r.선정결과 ?? null,
+                        종료일: 종료일별[r.id] ?? null,
+                      })}
+                    />
                   </TableCell>
                   <TableCell className="p-0 text-center">
                     <button

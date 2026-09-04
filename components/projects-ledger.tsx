@@ -28,6 +28,7 @@ import { 연차수, 현재연차, 기간표기, 연차연도 } from "@/lib/fisca
 import { 기간프리셋, 프리셋범위 } from "@/lib/date-filter"
 import { ProjectLeadCell } from "@/components/project-lead-cell"
 import { 종료로표시 } from "@/app/actions/project-stage"
+import { StageAdvance } from "@/components/stage-advance"
 import type { 과제단계, 보기범위 } from "@/lib/project-stage"
 
 // lib/queries.ts 는 service_role 로 여는 lib/db 를 갖고 있어 클라이언트 번들에 넣지 않는다
@@ -242,12 +243,12 @@ export function ProjectsLedger({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="과제명·과제코드·부처 검색"
-          className="h-7 w-56 text-[13px]"
+          className="h-7 w-56 text-[14.3px]"
         />
 
         <span className="text-xs text-muted-foreground">수행 연도</span>
         <Select value={연도} onValueChange={(v) => set연도(v ?? 전체연도)}>
-          <SelectTrigger size="sm" className="h-7 w-24 text-[12.8px]" aria-label="수행 연도로 걸러내기">
+          <SelectTrigger size="sm" className="h-7 w-24 text-[14.1px]" aria-label="수행 연도로 걸러내기">
             <SelectValue placeholder={전체연도} />
           </SelectTrigger>
           <SelectContent>
@@ -275,7 +276,7 @@ export function ProjectsLedger({
                   aria-pressed={켜짐}
                   onClick={() => 단계토글(s)}
                   className={
-                    "h-7 rounded-md border px-2.5 text-[12.8px] transition-colors " +
+                    "h-7 rounded-md border px-2.5 text-[14.1px] transition-colors " +
                     (켜짐
                       ? "border-primary bg-primary text-primary-foreground"
                       : "text-muted-foreground hover:bg-secondary/60")
@@ -290,7 +291,7 @@ export function ProjectsLedger({
 
         {유형목록.length > 1 && (
           <Select value={유형} onValueChange={(v) => set유형(v ?? 모두)}>
-            <SelectTrigger size="sm" className="h-7 w-36 text-[12.8px]" aria-label="사업유형으로 걸러내기">
+            <SelectTrigger size="sm" className="h-7 w-36 text-[14.1px]" aria-label="사업유형으로 걸러내기">
               <SelectValue placeholder="유형 전체" />
             </SelectTrigger>
             <SelectContent>
@@ -313,7 +314,7 @@ export function ProjectsLedger({
             set기간끝("")
           }}
         >
-          <SelectTrigger size="sm" className="h-7 w-32 text-[12.8px]" aria-label="기간 프리셋">
+          <SelectTrigger size="sm" className="h-7 w-32 text-[14.1px]" aria-label="기간 프리셋">
             <SelectValue placeholder="기간 전체" />
           </SelectTrigger>
           <SelectContent>
@@ -331,7 +332,7 @@ export function ProjectsLedger({
             set기간시작(e.target.value)
             set프리셋("전체")
           }}
-          className="h-7 w-[132px] text-[12.5px]"
+          className="h-7 w-[132px] text-[13.8px]"
           aria-label="기간 시작"
         />
         <span className="text-xs text-muted-foreground">~</span>
@@ -342,12 +343,12 @@ export function ProjectsLedger({
             set기간끝(e.target.value)
             set프리셋("전체")
           }}
-          className="h-7 w-[132px] text-[12.5px]"
+          className="h-7 w-[132px] text-[13.8px]"
           aria-label="기간 끝"
         />
 
         <Select value={String(크기)} onValueChange={(v) => set크기(Number(v))}>
-          <SelectTrigger size="sm" className="h-7 w-24 text-[12.8px]" aria-label="한 쪽에 볼 개수">
+          <SelectTrigger size="sm" className="h-7 w-24 text-[14.1px]" aria-label="한 쪽에 볼 개수">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -370,7 +371,7 @@ export function ProjectsLedger({
             type="button"
             variant="ghost"
             onClick={초기화}
-            className="ml-auto h-7 text-[12.8px]"
+            className="ml-auto h-7 text-[14.1px]"
           >
             ↺ 초기화
           </Button>
@@ -388,7 +389,7 @@ export function ProjectsLedger({
           <Button
             type="button"
             variant="outline"
-            className="ml-auto h-7 bg-card text-[12.8px]"
+            className="ml-auto h-7 bg-card text-[14.1px]"
             disabled={맞춤중}
             onClick={종료로맞추기}
           >
@@ -468,7 +469,7 @@ export function ProjectsLedger({
                 return (
                   <TableRow
                     key={r.id}
-                    className={"h-[38px] text-[13px] " + (상태색[r.상태] ?? "")}
+                    className={"h-[38px] text-[14.3px] " + (상태색[r.상태] ?? "")}
                   >
                     {/* ⚠ `TableCell` 기본값이 `whitespace-nowrap` 이라 긴 과제명이 한 줄로
                         펼쳐지며 `w-[240px]` 을 무시하고 표를 밀어냈다(1,618px → 가로 스크롤).
@@ -488,22 +489,22 @@ export function ProjectsLedger({
                         <Link
                           href={`/projects/${r.id}/expenses${증빙[r.id].빈집행ids[0] ? `?expense=${증빙[r.id].빈집행ids[0]}` : ""}`}
                           title={`집행 ${증빙[r.id].빈집행건}건에 필수 서류 ${증빙[r.id].빈칸}칸이 비었다 — 눌러서 가장 오래된 건부터 채웁니다`}
-                          className="ml-1.5 inline-block rounded bg-[var(--warning)] px-1 py-0.5 align-middle text-[10.5px] font-medium whitespace-nowrap text-[var(--warning-fg)] underline-offset-2 hover:underline"
+                          className="ml-1.5 inline-block rounded bg-[var(--warning)] px-1 py-0.5 align-middle text-[11.6px] font-medium whitespace-nowrap text-[var(--warning-fg)] underline-offset-2 hover:underline"
                         >
                           집행 {증빙[r.id].빈집행건}건 증빙 없음
                         </Link>
                       )}
                     </TableCell>
                     {전체보기중 && (
-                      <TableCell className="text-[12px] text-muted-foreground">
+                      <TableCell className="text-[13.2px] text-muted-foreground">
                         {단계별[r.id] ?? "—"}
                       </TableCell>
                     )}
-                    <TableCell className="text-[12.5px] tabular-nums text-muted-foreground">
+                    <TableCell className="text-[13.8px] tabular-nums text-muted-foreground">
                       {r.과제코드 ?? "—"}
                     </TableCell>
                     {/* 눌러서 바로 고친다. 막는 판정은 서버 액션의 `수정권한()` 한 곳에서만 한다. */}
-                    <TableCell className="text-[12.5px]">
+                    <TableCell className="text-[13.8px]">
                       <ProjectLeadCell
                         과제_id={r.id}
                         표시명={책임자[r.id] ?? null}
@@ -512,7 +513,7 @@ export function ProjectsLedger({
                     </TableCell>
                     {/* 「중소벤처기업부 · 중소기업기술정보진흥원」이 한 줄로 펼쳐지면 열이 300px 를 넘는다.
                         두 줄로 접고 상한을 둔다. 자르지는 않는다 — 전문기관이 어디인지가 정산 창구다. */}
-                    <TableCell className="max-w-[150px] whitespace-normal text-[12.5px] text-muted-foreground">
+                    <TableCell className="max-w-[150px] whitespace-normal text-[13.8px] text-muted-foreground">
                       {r.부처 ?? "—"}
                       {r.전문기관 ? ` · ${r.전문기관}` : ""}
                     </TableCell>
@@ -521,7 +522,7 @@ export function ProjectsLedger({
                         ? (사업유형_짧게[r.사업유형] ?? 사업유형_라벨[r.사업유형] ?? r.사업유형)
                         : "—"}
                     </TableCell>
-                    <TableCell className="text-[12.5px] tabular-nums text-muted-foreground">
+                    <TableCell className="text-[13.8px] tabular-nums text-muted-foreground">
                       {r.시작일 ?? "확인 필요"}~{r.종료일 ?? "확인 필요"}
                     </TableCell>
                     {/* 연차는 회계연도로 센다 — 2022-06~2024-05 는 기간 2년이어도 3개 연차다.
@@ -536,7 +537,7 @@ export function ProjectsLedger({
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       <div>{won(r.총사업비)}</div>
-                      <div className="text-[11.5px] text-muted-foreground">
+                      <div className="text-[12.7px] text-muted-foreground">
                         {r.정부지원금 == null ? "정부 확인 필요" : `정부 ${won(r.정부지원금)}`}
                       </div>
                     </TableCell>
@@ -569,6 +570,15 @@ export function ProjectsLedger({
                           정산
                         </Link>
                       )}
+                      {/* 단계를 앞으로 옮기는 버튼. 신청을 냈다 · 선정됐다는 **날짜로 알 수 없어서**
+                          사람이 누른다(2026-09-04 사용자 지시). 지원사업 대장과 같은 컴포넌트다.
+                          ⚠ 단계는 **서버가 판정해 넘긴 것**(`단계별`)을 쓴다. 여기서 다시
+                          판정하면 두 곳에서 규칙이 갈리고, ProjectRow 엔 선정결과도 없다. */}
+                      {단계별[r.id] && (
+                        <div className="mt-0.5">
+                          <StageAdvance 과제_id={r.id} 단계={단계별[r.id]} />
+                        </div>
+                      )}
                     </TableCell>
                   </TableRow>
                 )
@@ -591,7 +601,7 @@ export function ProjectsLedger({
             <Button
               type="button"
               variant="outline"
-              className="h-7 text-[12.8px]"
+              className="h-7 text-[14.1px]"
               disabled={지금쪽 <= 1}
               onClick={() => set쪽((v) => Math.max(1, v - 1))}
             >
@@ -603,7 +613,7 @@ export function ProjectsLedger({
             <Button
               type="button"
               variant="outline"
-              className="h-7 text-[12.8px]"
+              className="h-7 text-[14.1px]"
               disabled={지금쪽 >= 쪽수}
               onClick={() => set쪽((v) => Math.min(쪽수, v + 1))}
             >

@@ -71,7 +71,7 @@ export async function ProgramsStageView({ 단계 }: { 단계: 사업단계 | "�
           <Button
             nativeButton={false}
             variant="outline"
-            className="h-7 text-[12.8px]"
+            className="h-7 text-[14.1px]"
             render={<a href="/api/programs/xlsx" />}
           >
             ⤓ Excel
@@ -79,7 +79,7 @@ export async function ProgramsStageView({ 단계 }: { 단계: 사업단계 | "�
           {/* 대장에 줄이 생기는 유일한 경로는 공고 지원이다(app/actions/apply.ts). */}
           <Button
             nativeButton={false}
-            className="h-7 text-[12.8px]"
+            className="h-7 text-[14.1px]"
             render={<Link href="/announcements" />}
           >
             + 공고에서 등록
@@ -105,7 +105,7 @@ export async function ProgramsStageView({ 단계 }: { 단계: 사업단계 | "�
               href={b.경로}
               aria-current={지금 ? "page" : undefined}
               className={
-                "rounded-md border px-2.5 py-1 text-[12.8px] transition-colors " +
+                "rounded-md border px-2.5 py-1 text-[14.1px] transition-colors " +
                 (지금
                   ? "border-primary bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-secondary/60")
@@ -155,7 +155,7 @@ export async function ProgramsStageView({ 단계 }: { 단계: 사업단계 | "�
 
       <ProgramChecksPanel rows={미처리점검} />
 
-      <ProgramsTable rows={rows} />
+      <ProgramsTable rows={rows} 종료일별={Object.fromEntries(종료일맵)} />
     </PageShell>
   )
 }

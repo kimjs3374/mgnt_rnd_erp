@@ -14,7 +14,9 @@ export const dynamic = "force-dynamic"
  * 업체·회사에 붙고, 여러 사업이 같은 것을 쓴다(회사 > 업체 · 회사 > 서류함).
  */
 export default async function ProgramFilesPage() {
-  const { 파일, error } = await getProgramFiles()
+  // false = 국가 R&D 아닌 것만. 과제사업 서류함(app/(app)/projects/files/page.tsx)이
+  // 같은 조회를 true로 부른다 — 어느 과제까지 셀지만 다르다(2026-09-04).
+  const { 파일, error } = await getProgramFiles(false)
 
   return (
     <div className="space-y-4 p-4">

@@ -3,7 +3,9 @@ import { db, safeSelect } from "@/lib/db"
 import type { 사업파일 } from "@/lib/program-file-types"
 
 /**
- * 지원사업 **서류함** — 한 사업에 붙은 파일을 세 곳에서 모아 한 목록으로 만든다.
+ * 사업 **서류함** — 한 사업에 붙은 파일을 세 곳에서 모아 한 목록으로 만든다.
+ * 지원사업 서류함(`/programs/files`)과 과제사업 서류함(`/projects/files`)이 같이 쓴다
+ * (2026-09-04) — `getProgramFiles(과제사업만)` 인자로 어느 쪽 과제까지 셀지만 가른다.
  *
  * 파일이 세 표에 흩어져 있다. 각각 붙는 자리가 달라서 그렇게 나뉘었고, 그건 그대로 둔다 —
  * 대신 **보는 자리 하나**를 만든다(2026-09-04 사용자 지시).
@@ -18,7 +20,7 @@ import type { 사업파일 } from "@/lib/program-file-types"
  * ⚠ `select("컬럼명")` 로 추리지 않는다 — supabase-js 타입 파서가 한글 식별자에서 막힌다.
  */
 
-type 과제Raw = { id: number; 과제명: string }
+type 과제Raw = { id: number; 과제명: string; 사업유형: string | null }
 type 계상Raw = {
   id: number
   과제_id: number
@@ -57,8 +59,15 @@ export type 서류함결과 = { 파일: 사업파일[]; error: string | null }
  * 「이 사업 3건」이 눈앞의 목록과 어긋난다.
  *
  * 정렬은 **최근 넣은 것이 위**다. 서류함에서 찾는 건 대개 방금 넣은 파일이다.
+ *
+ * @param 과제사업만 지원사업 서류함(`/programs/files`)과 과제사업 서류함(`/projects/files`)이
+ *   같은 조회·같은 화면(`ProgramFiles`)을 쓴다 — 파일 세 표(계상·정산·집행증빙)의 모양이
+ *   사업유형과 무관하게 똑같기 때문이다. 다른 건 **어느 과제까지 셀지**뿐이라 여기서 하나만
+ *   더 거른다(2026-09-04 사용자 지시 — "과제사업의 과제관리 아래에 과제사업 서류함 탭
+ *   생성"). `undefined`(기본값)면 전부, `false`면 지원사업(국가 R&D 아님), `true`면
+ *   과제사업(국가 R&D)만.
  */
-export async function getProgramFiles(): Promise<서류함결과> {
+export async function getProgramFiles(과제사업만?: boolean): Promise<서류함결과> {
   const [과제, 계상, 정산, 집행증빙, 집행, 비목] = await Promise.all([
     safeSelect<과제Raw>("projects", () => db.from("projects").select("*")),
     safeSelect<계상Raw>("project_evidence_files", () =>
@@ -73,13 +82,22 @@ export async function getProgramFiles(): Promise<서류함결과> {
     과제.error ?? 계상.error ?? 정산.error ?? 집행증빙.error ?? 집행.error ?? 비목.error ?? null
   if (error) return { 파일: [], error }
 
-  const 이름 = new Map(과제.rows.map((p) => [Number(p.id), p.과제명]))
+  // 사업유형 코드는 원본 테이블 값이다("NATIONAL_RND") — 뷰가 붙이는 한글 라벨("국가 R&D")과
+  // 다르다(programs-stage-view.tsx와 같은 구분). 지정이 없으면(undefined) 아무것도 안 거른다.
+  const 허용된과제 =
+    과제사업만 == null
+      ? 과제.rows
+      : 과제.rows.filter((p) => (p.사업유형 === "NATIONAL_RND") === 과제사업만)
+  const 허용됨 = new Set(허용된과제.map((p) => Number(p.id)))
+
+  const 이름 = new Map(허용된과제.map((p) => [Number(p.id), p.과제명]))
   const 비목이름 = new Map(비목.rows.map((c) => [c.코드, c.이름]))
   const 집행의과제 = new Map(집행.rows.map((e) => [Number(e.id), e.과제_id]))
 
   const 전체: 사업파일[] = []
 
   for (const r of 계상.rows) {
+    if (!허용됨.has(Number(r.과제_id))) continue
     전체.push({
       키: `계상:${r.id}`,
       출처: "계상 증빙",
@@ -95,6 +113,7 @@ export async function getProgramFiles(): Promise<서류함결과> {
   }
 
   for (const r of 정산.rows) {
+    if (!허용됨.has(Number(r.과제_id))) continue
     전체.push({
       키: `정산:${r.id}`,
       출처: "정산 서류",
@@ -114,6 +133,7 @@ export async function getProgramFiles(): Promise<서류함결과> {
     //   어느 사업 폴더에도 넣지 않는다 — 짐작해 넣으면 그 사업 서류가 아닌 것이 섞인다.
     const pid = 집행의과제.get(Number(r.expense_id))
     if (!pid) continue
+    if (!허용됨.has(Number(pid))) continue
     // 확정 전 파일은 storage_path 가 비어 있다(스테이징에만 있다). 내려받을 수 없으니 뺀다.
     if (!r.storage_path) continue
     전체.push({

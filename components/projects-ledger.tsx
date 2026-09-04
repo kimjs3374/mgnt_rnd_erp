@@ -103,6 +103,7 @@ export function ProjectsLedger({
   로그인,
   단계,
   단계별 = {},
+  선정결과별 = {},
   증빙 = {},
   밀린종료 = [],
 }: {
@@ -114,6 +115,8 @@ export function ProjectsLedger({
    * 서버가 판정해서 넘긴다 — 화면이 다시 판정하면 두 곳에서 규칙이 갈린다.
    */
   단계별?: Record<number, 과제단계>
+  /** 과제 id → 선정결과. 서버가 읽어 넘긴다(ProjectRow 에는 이 칸이 없다). */
+  선정결과별?: Record<number, string | null>
   /**
    * 과제 id → 사업비 증빙 구멍(집행 건별 필수 서류 기준, `lib/queries-evidence-gap.ts`).
    * 구멍이 없는 과제는 **키가 아예 없다** — 있는 것만 표시한다.
@@ -591,7 +594,11 @@ export function ProjectsLedger({
                           판정하면 두 곳에서 규칙이 갈리고, ProjectRow 엔 선정결과도 없다. */}
                       {단계별[r.id] && (
                         <div className="mt-0.5">
-                          <StageAdvance 과제_id={r.id} 단계={단계별[r.id]} />
+                          <StageAdvance
+                            과제_id={r.id}
+                            단계={단계별[r.id]}
+                            선정결과={선정결과별[r.id]}
+                          />
                         </div>
                       )}
                     </TableCell>

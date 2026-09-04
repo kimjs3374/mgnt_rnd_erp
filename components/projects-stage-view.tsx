@@ -82,8 +82,9 @@ export async function ProjectsStageView({ 단계 }: { 단계: 보기범위 }) {
     종료일: r.종료일,
   })
 
-  // 미선정 건은 세 단계 어디에도 넣지 않는다 — 과제가 되지 못한 건이라 지원사업 대장에서 본다.
-  const 과제들 = 전체.filter((r) => !미선정인가(재료(r)))
+  // ⚠ 미선정도 **신청완료에 남긴다**(2026-09-04 사용자 지시). 전에는 여기서 걸러 내
+  //    화면에서 그냥 사라졌다 — 떨어진 것도 결과라 보여야 한다(배지로 구분한다).
+  const 과제들 = 전체
   const 전체보기중 = 단계 === "전체"
   const rows = 전체보기중 ? 과제들 : 과제들.filter((r) => 단계판정(재료(r)) === 단계)
 
@@ -95,6 +96,11 @@ export async function ProjectsStageView({ 단계 }: { 단계: 보기범위 }) {
     number,
     과제단계
   >
+
+  /** 과제 id → 선정결과. 신청완료의 갈림길(선정/미선정)이 이미 끝났는지 표가 알아야 한다. */
+  const 선정결과별 = Object.fromEntries(
+    rows.map((r) => [r.id, 재료(r).선정결과 ?? null]),
+  ) as Record<number, string | null>
 
   // 전체 보기에서도 밀린 종료를 짚어 준다 — 사업종료 화면에 안 들어가도 눈에 띄어야 한다.
   const 밀린종료 =
@@ -128,13 +134,15 @@ export async function ProjectsStageView({ 단계 }: { 단계: 보기범위 }) {
 
   return (
     <PageShell
-      title={단계}
+      // 전체보기일 땐 "전체"가 아니라 메뉴 이름("과제 관리")을 그대로 보여준다 —
+      // 지원사업 관리(programs-stage-view.tsx)와 같은 규칙(사용자 지시, 2026-09-04).
+      title={단계 === "전체" ? "과제 관리" : 단계}
       description={정의.설명}
       actions={
         <>
           {/* 공고 없이 과거 사업을 대장에 담는 길. 공고에서 시작하는 건은 [지원 등록] 쪽이다. */}
           <ProjectCreateButton />
-          <Button type="button" variant="outline" className="h-7 text-[12.8px]">
+          <Button type="button" variant="outline" className="h-7 text-[14.1px]">
             ⤓ Excel
           </Button>
         </>
@@ -156,7 +164,7 @@ export async function ProjectsStageView({ 단계 }: { 단계: 보기범위 }) {
               href={b.경로}
               aria-current={지금 ? "page" : undefined}
               className={
-                "rounded-md border px-2.5 py-1 text-[12.8px] transition-colors " +
+                "rounded-md border px-2.5 py-1 text-[14.1px] transition-colors " +
                 (지금
                   ? "border-primary bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-secondary/60")
@@ -248,6 +256,7 @@ export async function ProjectsStageView({ 단계 }: { 단계: 보기범위 }) {
         로그인={who.인증}
         단계={단계}
         단계별={단계별}
+        선정결과별={선정결과별}
         증빙={증빙.gaps}
         밀린종료={밀린종료}
       />

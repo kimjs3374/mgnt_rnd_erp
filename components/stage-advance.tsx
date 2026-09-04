@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { 단계올리기, 종료로표시 } from "@/app/actions/project-stage"
+import { 단계올리기, 종료로표시, 미선정으로표시 } from "@/app/actions/project-stage"
 import type { 과제단계 } from "@/lib/project-stage"
 
 /**
@@ -25,22 +25,43 @@ const 다음단계: Partial<Record<과제단계, { 이름: 과제단계; 라벨:
   수행중: { 이름: "사업종료", 라벨: "종료로 기록", 물음: "수행기간이 끝난 것으로 기록합니다." },
 }
 
-export function StageAdvance({ 과제_id, 단계 }: { 과제_id: number; 단계: 과제단계 }) {
+export function StageAdvance({
+  과제_id,
+  단계,
+  선정결과,
+}: {
+  과제_id: number
+  단계: 과제단계
+  /** 이미 결과가 적힌 건은 갈림길을 안 보여 준다. 서버가 판정한 값을 그대로 받는다. */
+  선정결과?: string | null
+}) {
   const 다음 = 다음단계[단계]
-  const [물어보는중, set물어보는중] = React.useState(false)
+  const [물어보는중, set물어보는중] = React.useState<null | "다음" | "미선정">(null)
   const [말, set말] = React.useState<string | null>(null)
   const [진행중, 시작] = React.useTransition()
 
+  const 결 = 선정결과 ?? ""
+  const 결과남 = 결 === "선정" || 결 === "미선정"
+  // **신청완료가 갈림길이다** — 여기서만 선정/미선정을 고른다(2026-09-04 사용자 지시).
+  const 갈림길 = 단계 === "신청완료" && !결과남
+
+  // 이미 떨어진 건은 더 갈 데가 없다. 되돌리기 버튼은 두지 않는다 —
+  // 눌렀다 되돌렸다가 기록 없이 남는다.
+  if (결 === "미선정") {
+    return <span className="text-xs text-muted-foreground">미선정</span>
+  }
   if (!다음) return null // 사업종료는 더 갈 데가 없다
 
-  function 옮기기() {
+  function 옮기기(무엇: "다음" | "미선정") {
     set말(null)
     시작(async () => {
       const r =
-        다음!.이름 === "사업종료"
-          ? await 종료로표시([과제_id])
-          : await 단계올리기([과제_id], 다음!.이름 as "신청완료" | "수행중")
-      set물어보는중(false)
+        무엇 === "미선정"
+          ? await 미선정으로표시([과제_id])
+          : 다음!.이름 === "사업종료"
+            ? await 종료로표시([과제_id])
+            : await 단계올리기([과제_id], 다음!.이름 as "신청완료" | "수행중")
+      set물어보는중(null)
       // 성공하면 서버가 목록을 다시 그린다. 실패한 이유는 **화면에 적는다** —
       // 조용히 아무 일도 안 일어나면 사람은 버튼이 고장 났다고 생각한다.
       if (!r.ok) set말(r.error ?? "옮기지 못했습니다.")
@@ -64,11 +85,15 @@ export function StageAdvance({ 과제_id, 단계 }: { 과제_id: number; 단계:
   if (물어보는중) {
     return (
       <span onClick={멈춤} className="inline-flex items-center gap-1.5 text-xs">
-        <span className="text-muted-foreground">{다음.물음}</span>
+        <span className="text-muted-foreground">
+          {물어보는중 === "미선정"
+            ? "떨어진 것으로 기록합니다. 신청완료에 남습니다."
+            : 다음.물음}
+        </span>
         <button
           type="button"
           disabled={진행중}
-          onClick={옮기기}
+          onClick={() => 옮기기(물어보는중!)}
           className="rounded border px-1.5 py-0.5 font-medium hover:bg-muted disabled:opacity-50"
         >
           {진행중 ? "…" : "예"}
@@ -76,7 +101,7 @@ export function StageAdvance({ 과제_id, 단계 }: { 과제_id: number; 단계:
         <button
           type="button"
           disabled={진행중}
-          onClick={() => set물어보는중(false)}
+          onClick={() => set물어보는중(null)}
           className="text-muted-foreground underline-offset-2 hover:underline"
         >
           아니오
@@ -86,16 +111,33 @@ export function StageAdvance({ 과제_id, 단계 }: { 과제_id: number; 단계:
   }
 
   return (
-    <button
-      type="button"
-      onClick={(e) => {
-        멈춤(e)
-        set물어보는중(true)
-      }}
-      className="rounded border px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
-      aria-label={`${다음.이름}(으)로 옮기기`}
-    >
-      {다음.라벨}
-    </button>
+    <span onClick={멈춤} className="inline-flex items-center gap-1">
+      <button
+        type="button"
+        onClick={(e) => {
+          멈춤(e)
+          set물어보는중("다음")
+        }}
+        className="rounded border px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+        aria-label={`${다음.이름}(으)로 옮기기`}
+      >
+        {갈림길 ? "선정" : 다음.라벨}
+      </button>
+      {/* 신청완료는 **둘 중 하나**다. 「선정」만 두면 떨어진 건이 영원히 여기 남아
+          「아직 결과를 기다리는 건」과 구분이 안 된다(2026-09-04 사용자 지시). */}
+      {갈림길 && (
+        <button
+          type="button"
+          onClick={(e) => {
+            멈춤(e)
+            set물어보는중("미선정")
+          }}
+          className="rounded border px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+          aria-label="미선정으로 기록"
+        >
+          미선정
+        </button>
+      )}
+    </span>
   )
 }

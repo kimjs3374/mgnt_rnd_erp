@@ -91,6 +91,72 @@ export async function 단계올리기(
   }
 }
 
+/**
+ * **미선정으로 기록한다.** (2026-09-04 사용자 지시: 신청완료에서 선정/미선정을 고른다)
+ *
+ * 선정은 `단계올리기(ids, "수행중")` 가 이미 한다 — 상태를 「수행중」으로 올리고
+ * 선정결과에 「선정」을 남긴다. 여기는 **떨어진 쪽**이다.
+ *
+ * ★ **상태는 그대로 「신청중」이다.** 미선정은 수행에 들어가지 않으니 올릴 데가 없다.
+ *   그래서 단계로는 **신청완료에 남는다**(`lib/project-stage.ts`). 전에는 미선정을
+ *   세 단계 어디에도 안 넣어서 화면에서 그냥 사라졌는데, 그러면 「신청했던가?」를 다시
+ *   뒤지게 되고 같은 사업에 또 지원하는 사고가 난다. **떨어진 것도 결과다.**
+ *
+ * ⚠ 되돌리는 버튼은 두지 않는다. 눌렀다 되돌렸다가 기록 없이 남는다 —
+ *   잘못 눌렀으면 사람이 고치되 **왜 고쳤는지가 남는 길**로 고친다(CLAUDE.md §6-1).
+ * ⚠ 서버가 단계를 다시 판정한다. 화면이 보낸 id 를 믿고 찍으면 수행 중인 과제도
+ *   미선정으로 만들 수 있다.
+ */
+export async function 미선정으로표시(과제_ids: number[]): Promise<StageResult> {
+  try {
+    const ids = [...new Set((과제_ids ?? []).map(Number).filter((n) => Number.isInteger(n) && n > 0))]
+    if (!ids.length) return { ok: false, error: "고른 사업이 없습니다." }
+
+    const { data, error } = await db.from("projects").select("*").in("id", ids)
+    if (error) return { ok: false, error: error.message }
+
+    const rows = (data ?? []).map(
+      (r) => r as { id: number; 상태: string; 선정결과: string | null; 종료일: string | null },
+    )
+    // 아직 결과가 안 난 건만 — 이미 선정된 과제를 떨어뜨리는 요청은 받지 않는다.
+    const 대상 = rows
+      .filter((r) => {
+        const 단계 = 단계판정(r)
+        const 결 = r.선정결과 ?? ""
+        return (단계 === "신청완료" || 단계 === "신청중") && 결 !== "선정" && 결 !== "미선정"
+      })
+      .map((r) => r.id)
+
+    if (!대상.length) {
+      return { ok: false, error: "결과를 기다리는 사업이 없습니다. 이미 결과가 적혀 있습니다." }
+    }
+
+    const { error: upErr } = await db
+      .from("projects")
+      .update({ 선정결과: "미선정" })
+      .in("id", 대상)
+    if (upErr) return { ok: false, error: upErr.message }
+
+    for (const path of [
+      "/projects",
+      "/projects/all",
+      "/projects/applying",
+      "/projects/applied",
+      "/projects/closed",
+      "/programs",
+      "/programs/applying",
+      "/programs/executing",
+      "/programs/closed",
+      "/dashboard",
+    ]) {
+      revalidatePath(path)
+    }
+    return { ok: true, 바뀐수: 대상.length }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
 export async function 종료로표시(과제_ids: number[]): Promise<StageResult> {
   try {
     const ids = [...new Set((과제_ids ?? []).map(Number).filter((n) => Number.isInteger(n) && n > 0))]

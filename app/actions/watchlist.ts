@@ -15,6 +15,29 @@ import { db } from "@/lib/db"
 
 export type ActionResult = { ok: boolean; error?: string }
 
+/**
+ * 신청 단계까지 올라간 공고인가. **지우기 전에 반드시 본다.**
+ *
+ * 2026-09-04 사용자 지적: "관심공고(별)을 클릭하면 신청이 취소되버리는 문제".
+ * 별은 표 안의 작은 버튼이고 줄을 누르면 상세로 넘어가는 자리라 스치듯 눌린다.
+ * 관심을 지우는 건 되돌리기 쉽지만, **신청 표시를 지우는 건 「한 일을 안 한 일로」**
+ * 만드는 것이라 무게가 다르다. 올린 자리(공고 상세의 ApplyStatus)에서만 내린다.
+ */
+async function 신청단계인가(참조_id: number): Promise<{ 단계: string | null; error?: string }> {
+  const { data, error } = await db
+    .from("watchlist")
+    .select("*")
+    .eq("종류", "공고")
+    .eq("참조_id", 참조_id)
+    .maybeSingle()
+  if (error) return { 단계: null, error: error.message }
+  const 상태 = (data as { 상태?: string | null } | null)?.상태 ?? null
+  return { 단계: 상태 === "신청예정" || 상태 === "신청완료" ? 상태 : null }
+}
+
+const 신청단계_안내 = (단계: string) =>
+  `「${단계}」로 표시된 공고입니다. 별로는 지워지지 않습니다 — 공고 상세에서 내리세요.`
+
 const 종류목록 = ["공고", "사업"] as const
 type 종류 = (typeof 종류목록)[number]
 
@@ -39,6 +62,13 @@ export async function toggleWatch(
         .upsert({ 종류, 참조_id }, { onConflict: "종류,참조_id" })
       if (error) return { ok: false, error: error.message }
     } else {
+      // 공고의 신청 표시는 여기서 안 지운다(위 `신청단계인가` 주석 참고).
+      // 「사업」 종류는 단계 개념이 없어 그대로 지운다.
+      if (종류 === "공고") {
+        const { 단계, error: 조회오류 } = await 신청단계인가(참조_id)
+        if (조회오류) return { ok: false, error: 조회오류 }
+        if (단계) return { ok: false, error: 신청단계_안내(단계) }
+      }
       const { error } = await db
         .from("watchlist")
         .delete()

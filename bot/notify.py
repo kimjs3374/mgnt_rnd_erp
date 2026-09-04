@@ -20,7 +20,10 @@
   · 관심공고 : D-14 · D-7 · D-3 · D-1 · D-0
   · 보고기한 : D-30 · D-14 · D-7 · D-3 · D-1 · D-0
   · 서류만료 · 정산위험 : 주 1회(월요일). 매일 볼 성질이 아니다.
+  · 브리핑3단 : 주 1회(월요일). 명세 B.12 — 📅 일정 · 💰 예산 · 📈 진행률.
   · 월정산   : 매월 1일. 지난달 것을 닫는다.
+
+명세 B.12 의 「미리 보기」는 `--dry-run` 이다. 무엇이 나갈지 채널에 안 보내고 먼저 본다.
 
 쓰기
     python notify.py                 오늘 몫을 계산해서 보낸다(타이머가 부르는 형태)
@@ -351,6 +354,114 @@ def 월정산(오늘: dt.date) -> list[알림]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# B.12 브리핑 3단 — 일정 · 예산 · 진행률
+# ─────────────────────────────────────────────────────────────────────────────
+def _rcms_마감(오늘: dt.date) -> tuple[dt.date, int]:
+    """다음 RCMS 정산 제출 마감. `app.settlement_rule` 이 기준일과 이동 방향을 들고 있다.
+
+    ⚠ **여기에 LLM 이 없다.** 기준일 25일, 주말·공휴일이면 앞(또는 뒤) 영업일로 민다 —
+      규정이 정한 하나뿐인 답이라 계산으로 확정한다(CLAUDE.md 설계원칙 2).
+    """
+    r = q("select 기준일, 이동 from app.settlement_rule where id = 1")
+    기준일, 이동 = (r[0]["기준일"], r[0]["이동"]) if r else (25, "앞")
+
+    def 그달(y: int, m: int) -> dt.date:
+        마지막 = (dt.date(y + (m == 12), (m % 12) + 1, 1) - dt.timedelta(days=1)).day
+        return dt.date(y, m, min(기준일, 마지막))
+
+    d = 그달(오늘.year, 오늘.month)
+    if d < 오늘:  # 이번 달 것은 지났다 → 다음 달
+        d = 그달(오늘.year + (오늘.month == 12), (오늘.month % 12) + 1)
+
+    if 이동 != "그대로":
+        쉬는날 = {r["날짜"] for r in q("select 날짜 from app.holidays")}
+        걸음 = -1 if 이동 == "앞" else 1
+        while d.weekday() >= 5 or d in 쉬는날:
+            d += dt.timedelta(days=걸음)
+
+    return d, (d - 오늘).days
+
+
+def 브리핑3단(오늘: dt.date) -> list[알림]:
+    """📅 일정 · 💰 예산 · 📈 진행률. 명세 B.12.
+
+    ⚠ 숫자를 좋게 보이려고 고르지 않는다. 증빙 완비율이 0% 면 0% 라고 적는다 —
+      「담기지 못한 것을 숨기지 않는다」가 이 시스템의 일관된 태도다(명세 B.4).
+      알림이 실제보다 후하면 사람이 안심하고 정산에서 반려당한다.
+    """
+    줄: list[str] = ["", "📅 *일정*"]
+
+    일정 = q(
+        """
+        select 종류, 제목, 날짜, d_day from app.v_calendar
+         where d_day between 0 and 30
+         order by d_day limit 6
+        """
+    )
+    for r in 일정:
+        줄.append(f"   • {dday(int(r['d_day']))} · {r['종류']} — {r['제목']} ({r['날짜']})")
+    if not 일정:
+        줄.append("   • 30일 안에 걸린 일정 없음")
+
+    마감일, 남음 = _rcms_마감(오늘)
+    줄.append(f"   • {dday(남음)} · RCMS 정산 제출 마감 — {마감일}")
+
+    만료 = q(
+        "select 이름, 상태, 만료일 from app.v_document_status where 상태 in ('만료','만료임박')"
+    )
+    for r in 만료:
+        줄.append(f"   • {r['상태']} · {r['이름']} — {r['만료일'] or '만료일 미상'}")
+    if not 만료:
+        줄.append("   • 만료·만료임박 서류 없음")
+
+    줄 += ["", "💰 *예산*"]
+    예산 = q(
+        """
+        select p.과제명,
+               sum(b.배정액) as 배정, sum(b.집행액) as 집행
+          from app.v_budget_status b join app.projects p on p.id = b.과제_id
+         where p.상태 = '수행중'
+         group by p.id, p.과제명
+        having sum(b.배정액) > 0
+         order by sum(b.집행액) desc limit 5
+        """
+    )
+    for r in 예산:
+        배정, 집행 = int(r["배정"]), int(r["집행"] or 0)
+        율 = (집행 / 배정 * 100) if 배정 else 0
+        줄.append(f"   • {r['과제명'][:30]} — 계상 {won(배정)} / 집행 {won(집행)} ({율:.1f}%)")
+    if not 예산:
+        줄.append("   • 계상이 확정된 수행중 과제 없음")
+
+    줄 += ["", "📈 *진행률*"]
+    ev = q(
+        """
+        select count(*)                                as 전체,
+               count(*) filter (where s.완비)          as 완비,
+               coalesce(sum(s.필수건수), 0)             as 필수,
+               coalesce(sum(s.보유건수), 0)             as 보유
+          from app.v_evidence_summary s
+          join app.expenses e on e.id = s.expense_id
+          join app.projects p on p.id = e.과제_id
+         where p.상태 = '수행중' and e.상태 in ('확정', '제출')
+        """
+    )
+    d = ev[0] if ev else {}
+    전체, 완비 = int(d.get("전체") or 0), int(d.get("완비") or 0)
+    필수, 보유 = int(d.get("필수") or 0), int(d.get("보유") or 0)
+    if 전체:
+        줄.append(f"   • 증빙 완비율 — {완비}/{전체}건 ({완비 / 전체 * 100:.0f}%)")
+        줄.append(
+            f"   • 제출서류 확보율 — {보유}/{필수}장 "
+            f"({보유 / 필수 * 100:.0f}%)" if 필수 else "   • 제출서류 확보율 — 요건 없음"
+        )
+    else:
+        줄.append("   • 수행중 과제에 확정된 집행 건이 없다")
+
+    return [알림("브리핑3단", None, 오늘.isoformat(), "\n".join(줄))]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 주간 브리핑 — 이 파일에서 **유일하게** LLM 을 쓴다
 # ─────────────────────────────────────────────────────────────────────────────
 def 주간브리핑(오늘: dt.date) -> list[알림]:
@@ -441,6 +552,7 @@ def 주간브리핑(오늘: dt.date) -> list[알림]:
     "서류만료": "🗂 서류 만료",
     "정산위험": "🧾 정산 전 점검 — 지금 정산하면 걸릴 것",
     "월정산": "📆 지난달 정산",
+    "브리핑3단": "📊 오늘의 과제 브리핑",
     "주간브리핑": "🗒 주간 브리핑",
 }
 
@@ -452,6 +564,7 @@ def 주간브리핑(오늘: dt.date) -> list[알림]:
     "서류만료": 서류만료,
     "정산위험": 정산위험,
     "월정산": 월정산,
+    "브리핑3단": 브리핑3단,
     "주간브리핑": 주간브리핑,
 }
 
@@ -462,11 +575,11 @@ def 오늘몫(오늘: dt.date, *, weekly: bool, only: str | None) -> list[str]:
         return [only]
     종류 = ["신청마감", "결과등록", "관심공고", "보고기한"]
     if 오늘.weekday() == 0:  # 월요일
-        종류 += ["서류만료", "정산위험", "주간브리핑"]
+        종류 += ["서류만료", "정산위험", "브리핑3단", "주간브리핑"]
     if 오늘.day == 1:
         종류 += ["월정산"]
     if weekly and "주간브리핑" not in 종류:
-        종류 += ["서류만료", "정산위험", "주간브리핑"]
+        종류 += ["서류만료", "정산위험", "브리핑3단", "주간브리핑"]
     return 종류
 
 
@@ -504,7 +617,8 @@ def 남긴다(알림들: list[알림], 오늘: dt.date, 채널: str, ts: str | N
 
 def 글로(종류: str, 알림들: list[알림]) -> str:
     머리 = 제목표.get(종류, 종류)
-    if 종류 == "주간브리핑":
+    # 브리핑은 이미 제 모양을 갖춘 글이다. 불릿을 덧씌우면 3단 구조가 깨진다.
+    if 종류 in ("주간브리핑", "브리핑3단"):
         return f"*{머리}*\n{알림들[0].줄}"
     몸 = "\n".join(f"• {a.줄}" for a in 알림들)
     return f"*{머리}* ({len(알림들)}건)\n{몸}"

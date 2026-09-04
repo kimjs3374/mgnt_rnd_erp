@@ -252,7 +252,7 @@ export async function AnnouncementDetail({
       actions={
         <Link
           href={backHref}
-          className="text-[12.8px] text-muted-foreground hover:text-foreground"
+          className="text-[14.1px] text-muted-foreground hover:text-foreground"
         >
           ← 목록으로
         </Link>
@@ -323,7 +323,7 @@ export async function AnnouncementDetail({
               </div>
 
               {a.자격판정_원판정 && (
-                <p className="mt-4 rounded-lg border bg-muted/40 px-3 py-1.5 text-[13px] font-medium text-muted-foreground">
+                <p className="mt-4 rounded-lg border bg-muted/40 px-3 py-1.5 text-[14.3px] font-medium text-muted-foreground">
                   AI가 원래 낸 판정은 「{a.자격판정_원판정}」이었지만, 확신도가 0.70 미만이라
                   「확인필요」로 낮췄습니다 — 사람이 확인하기 전엔 자동으로 확정하지 않습니다.
                 </p>
@@ -335,7 +335,7 @@ export async function AnnouncementDetail({
                   {a.자격판정_근거 && a.자격판정_근거.length > 0 && (
                     <div className="rounded-lg border bg-muted/40 p-3.5">
                       <div className="text-xs font-bold text-muted-foreground">근거</div>
-                      <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[13px]">
+                      <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[14.3px]">
                         {a.자격판정_근거.map((근거, i) => (
                           <li key={i}>{근거}</li>
                         ))}
@@ -347,7 +347,7 @@ export async function AnnouncementDetail({
                       <div className="text-xs font-bold text-muted-foreground">
                         회사 정보에 없어 확인이 필요한 항목
                       </div>
-                      <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[13px]">
+                      <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[14.3px]">
                         {a.자격판정_확인필요항목.map((항목, i) => (
                           <li key={i}>{항목}</li>
                         ))}
@@ -384,7 +384,7 @@ export async function AnnouncementDetail({
             </div>
 
             {/* 구역 2 — 핵심 정보(중립, 카드 배경) */}
-            <div className="grid grid-cols-2 gap-x-6 gap-y-4 bg-card p-5 text-[13px] sm:grid-cols-4 sm:p-6">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-4 bg-card p-5 text-[14.3px] sm:grid-cols-4 sm:p-6">
               <Fact icon={Building2} label="주관기관" value={a.소관부처 ?? "—"} />
               <Fact icon={Building2} label="수행기관" value={a.전문기관 ?? "—"} />
               <Fact icon={Tag} label="지원분야" value={요약?.지원분야 ?? "정보 없음"} />
@@ -444,11 +444,19 @@ export async function AnnouncementDetail({
 
             {/* 구역 4 — 신청 진행 상태(사람이 직접 정한다) */}
             <div className="border-t bg-card p-4">
-              {/* ⚠ TODO(2026-09-04, mgnt2): `등록됨` prop을 components/apply-status.tsx
-                  가 아직 못 받는다 — 그 파일이 mgnt3 소유(644)라 이 계정에서 못 고친다.
-                  nyc-15(추정 mgnt3)에게 요청해 뒀다. 고쳐지면 `등록됨={등록됨}`를
-                  다시 붙인다 — 위 AnnouncementDetail 프롭·두 페이지는 이미 준비돼 있다. */}
-              <ApplyStatus announcementId={a.id} initial={a.관심상태 ?? null} />
+              {/* 「신청 완료」는 여기서 누르는 것이 아니라 **대장(app.projects)에서 내려온다.**
+                  mgnt2 가 남긴 TODO 를 이렇게 풀었다 — apply-status.tsx 가 `등록됨` 을 받고
+                  세 번째 칩을 읽기 전용 배지로 그린다. 두 테이블을 동기화하지 않고 읽는 곳을
+                  하나로 줄인 것이다(2026-09-04 사용자 지시: "기준은 과제사업"). */}
+              <ApplyStatus
+                announcementId={a.id}
+                // ⚠ DB 에는 옛 「신청완료」 행이 남아 있을 수 있다(CHECK 제약은 그대로 뒀다).
+                //    그 값은 더 이상 버튼이 아니므로 표시에서 떨어뜨린다 — 신청 완료 여부는
+                //    바로 아래 `등록됨`(대장)이 말한다. 조회 타입(lib/queries.ts)은 네 명이
+                //    같이 쓰는 파일이라 건드리지 않고 여기서 좁힌다.
+                initial={a.관심상태 === "관심" || a.관심상태 === "신청예정" ? a.관심상태 : null}
+                등록됨={등록됨}
+              />
             </div>
           </div>
 
@@ -481,7 +489,7 @@ export async function AnnouncementDetail({
                 </TableHeader>
                 <TableBody>
                   {요건판정목록.map((r, i) => (
-                    <TableRow key={i} className="text-[13px]">
+                    <TableRow key={i} className="text-[14.3px]">
                       <TableCell className="align-top">
                         <Badge variant={r.필수여부 ? "default" : "outline"}>
                           {r.필수여부 ? "필수" : "조건"}
@@ -501,7 +509,7 @@ export async function AnnouncementDetail({
           )}
 
           {/* ── 사업 요약 — 읽는 사람이 여기서 끝내도 되게 ────────────────────── */}
-          <Card className="border-l-4 border-l-primary bg-primary/[0.03] p-5 text-[14px]">
+          <Card className="border-l-4 border-l-primary bg-primary/[0.03] p-5 text-[15.4px]">
             <div className="mb-2 flex items-center gap-1.5">
               <Sparkles className="size-4 text-primary" />
               <h2 className="text-sm font-bold text-primary">사업 요약</h2>
@@ -542,7 +550,7 @@ export async function AnnouncementDetail({
               {[...docs]
                 .sort((x, y) => Number(y.필수여부) - Number(x.필수여부))
                 .map((d) => (
-                  <TableRow key={d.id} className="text-[13px]">
+                  <TableRow key={d.id} className="text-[14.3px]">
                     <TableCell className="font-medium align-top">{d.서류명}</TableCell>
                     <TableCell className="align-top">
                       {d.구분 ? <StatusBadge value={d.구분} /> : "—"}
@@ -570,7 +578,7 @@ export async function AnnouncementDetail({
               — 위 요약·판정의 근거를 직접 확인하고 싶을 때만 펼치세요
             </span>
           </summary>
-          <p className="max-h-72 overflow-y-auto border-t p-4 text-[13px] whitespace-pre-wrap text-muted-foreground">
+          <p className="max-h-72 overflow-y-auto border-t p-4 text-[14.3px] whitespace-pre-wrap text-muted-foreground">
             {a.본문.slice(0, 3000)}
             {a.본문.length > 3000 && "…"}
           </p>

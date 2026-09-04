@@ -98,8 +98,23 @@ export async function toggleWatch(
  * toggleWatch 와 별도 함수인 이유 — toggleWatch 는 "사업"(대시보드의 관심 공고 등)에서도
  * 켜고 끄는 단순 on/off 로 계속 쓰인다. 여기는 "공고" 전용 단계만 다룬다.
  */
-export type 관심상태 = "관심" | "신청예정" | "신청완료"
-const 관심상태목록: readonly 관심상태[] = ["관심", "신청예정", "신청완료"]
+/**
+ * ⚠ **「신청완료」는 여기 없다**(2026-09-04 사용자 지시로 뺐다).
+ *
+ * 있었을 때 이런 일이 났다 — 공고 탐색에서 「신청완료」를 눌러도 과제 관리에는 안 뜨고,
+ * 과제 관리에서 신청완료로 옮겨도 공고 탐색은 그대로였다. 회수도 서로 안 통했다.
+ * **같은 말을 두 테이블이 따로 들고 있었기 때문이다**(watchlist.상태 · projects).
+ *
+ * 양쪽을 동기화하는 코드를 넣지 않았다. 동기화는 언젠가 어긋난다.
+ * 대신 **기준을 과제사업(app.projects)으로 하나만 둔다**(사용자 지시: "기준은 과제사업").
+ * 신청완료 = 그 공고로 **대장에 행이 있다**. 표시는 거기서 파생시켜 읽기만 한다.
+ * 그래서 이제 어느 쪽에서 바꾸든 양쪽이 같이 움직인다 — 읽는 곳이 하나뿐이라서.
+ *
+ * 신청·회수는 공고 상세의 「지원 · 선정 · 대장」 패널(components/apply-panel.tsx)과
+ * 과제 관리에서 한다. 거기서만 대장이 바뀐다.
+ */
+export type 관심상태 = "관심" | "신청예정"
+const 관심상태목록: readonly 관심상태[] = ["관심", "신청예정"]
 
 export async function setAnnouncementInterest(
   참조_id: number,
@@ -118,6 +133,15 @@ export async function setAnnouncementInterest(
         .eq("참조_id", 참조_id)
       if (error) return { ok: false, error: error.message }
     } else {
+      if ((상태 as string) === "신청완료") {
+        // 버튼이 없어졌으니 눌릴 일이 없지만, 열어 둔 옛 화면이 부를 수 있다.
+        return {
+          ok: false,
+          error:
+            "「신청 완료」는 여기서 정하지 않습니다. 아래 「지원 · 선정 · 대장」에서 지원을 등록하면 " +
+            "과제 관리와 공고 탐색 양쪽에 함께 반영됩니다.",
+        }
+      }
       if (!관심상태목록.includes(상태)) {
         return { ok: false, error: `알 수 없는 상태: ${상태}` }
       }

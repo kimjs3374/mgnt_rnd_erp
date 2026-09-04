@@ -7,7 +7,6 @@ import { ProjectBoard } from "@/components/project-board"
 import { TodoCard } from "@/components/todo-card"
 import { WatchlistStrip } from "@/components/watchlist-strip"
 import {
-  getLedger,
   getExpenses,
   getDocuments,
   getAnnouncementBoard,
@@ -18,7 +17,9 @@ import {
 } from "@/lib/queries"
 import { getProgramAnnouncements } from "@/lib/queries-programs"
 import { getWatchlistAnnouncements } from "@/lib/queries-budgeting"
+import { getUnresolvedChecks } from "@/lib/queries-checks"
 import { getLabels, categoryLabel } from "@/lib/labels"
+import { db, safeSelect } from "@/lib/db"
 
 export const dynamic = "force-dynamic"
 
@@ -58,9 +59,11 @@ function 서울의_오늘() {
 
 export default async function DashboardPage() {
   // 동시에 부른다. 하나가 실패해도 나머지는 그려진다.
-  const [ledger, expenses, docs, board, calendar, undated, projects, labels, program, rnd, watch] =
+  const [checks, expenses, docs, board, calendar, undated, projects, labels, program, rnd, watch, 공고연결] =
     await Promise.all([
-      getLedger(),
+      // 「제출 전 점검」에 어떤 문제인지(종류·대상)까지 보여주려고 v_program_ledger 의
+      // 뭉뚱그린 건수 대신 원본을 가져온다(2026-09-04 사용자 요청).
+      getUnresolvedChecks(),
       getExpenses(),
       getDocuments(),
       getAnnouncementBoard(),
@@ -75,13 +78,49 @@ export default async function DashboardPage() {
       // 「과제 계상」 화면을 없애면서(2026-09-04) 관심 공고 목록만 여기로 옮겼다 — 계상은
       // 흐름의 끝이고 관심 공고는 처음이라 원래도 그 화면 맨 위에 있었다(watchlist-strip.tsx).
       getWatchlistAnnouncements(),
+      // ⚠ 「통합 관리」 카드는 과제만 본다(2026-09-04 사용자 지적 — 지원사업 관리에
+      //   있는 건이 이 카드에도 섞여 나왔다). `ProjectRow` 에 공고_id 가 없어서
+      //   원본을 한 번 더 좁게 읽는다 — `getProjects()`(권태호 담당)는 안 건드린다.
+      safeSelect<{ id: number; 공고_id: number | null }>("projects", () =>
+        db.from("projects").select("*"),
+      ),
     ])
+
+  const 지원사업_출처 = new Set(["기업마당", "K-Startup"])
+  const 공고출처맵 = new Map<number, string>()
+  for (const r of [...program.rows, ...rnd.rows]) 공고출처맵.set(r.id, r.출처)
+  const 공고_id맵 = new Map(공고연결.rows.map((r) => [r.id, r.공고_id]))
+  const 과제만 = projects.rows.filter((p) => {
+    const 공고_id = 공고_id맵.get(p.id) ?? null
+    if (공고_id == null) return true
+    return !지원사업_출처.has(공고출처맵.get(공고_id) ?? "")
+  })
 
   const today = 서울의_오늘()
 
   const 확정대기 = expenses.rows.filter((e) => e.상태 === "검토대기")
-  const 점검 = ledger.rows.filter((r) => r.미처리점검 > 0)
   const 미확보서류 = docs.rows.filter((d) => ["만료", "없음"].includes(d.상태))
+
+  // 과제_id 별로 묶는다 — 한 과제에 여러 건이 걸려도 카드에는 한 줄만 쓴다(가장 급한 것
+  // 하나를 대표로 보여주고 나머지는 "외 N건"). getUnresolvedChecks() 가 이미 심각도·
+  // 최신순으로 정렬해서 주므로 그룹의 첫 건이 곧 대표다.
+  const 점검그룹 = new Map<number, typeof checks.rows>()
+  for (const c of checks.rows) {
+    const arr = 점검그룹.get(c.과제_id) ?? []
+    arr.push(c)
+    점검그룹.set(c.과제_id, arr)
+  }
+  const 점검항목 = [...점검그룹.values()].map((건들) => {
+    const 대표 = 건들[0]
+    const 나머지 = 건들.length - 1
+    const 대상종류 = 대표.대상 ? `${대표.대상} - ${대표.종류}` : 대표.종류
+    return {
+      키: `p${대표.과제_id}`,
+      이름: 대표.과제명,
+      꼬리: "미해결",
+      상세: 나머지 > 0 ? `${대상종류} 외 ${나머지}건` : 대상종류,
+    }
+  })
 
   // id → 자격판정. 두 출처를 합쳐도 id 는 announcements 테이블 한 곳에서 오므로 안 섞인다.
   // 판정을 못 가져왔다고 카드 전체를 죽이지 않는다 — 배지가 안 뜰 뿐이다.
@@ -94,10 +133,10 @@ export default async function DashboardPage() {
   const 공고출처: Record<number, string | undefined> = {}
   for (const r of [...program.rows, ...rnd.rows]) 공고출처[r.id] = r.출처
 
-  const errors = [ledger, expenses, docs, board, calendar, undated, projects, watch]
+  const errors = [checks, expenses, docs, board, calendar, undated, projects, watch]
     .map((r, i) => ({
       e: r.error,
-      what: ["대장", "집행", "서류함", "공고", "일정", "날짜 미정", "과제 관리", "관심 공고"][i],
+      what: ["점검", "집행", "서류함", "공고", "일정", "날짜 미정", "과제 관리", "관심 공고"][i],
     }))
     .filter((x) => x.e)
 
@@ -130,7 +169,7 @@ export default async function DashboardPage() {
         <CalendarBoard rows={calendar.rows} today={today} error={calendar.error} />
         <div className="flex flex-col gap-4">
           <ProjectBoard
-            rows={projects.rows}
+            rows={과제만}
             공고출처={공고출처}
             today={today}
             error={projects.error}
@@ -143,13 +182,17 @@ export default async function DashboardPage() {
                 라벨: "비목 확정",
                 링크: "/expenses",
                 건수: 확정대기.length,
-                항목: 확정대기.map((e) => ({
-                  키: `e${e.id}`,
-                  이름: e.거래처 ?? "거래처 미상",
-                  꼬리: e.비목_대분류
+                항목: 확정대기.map((e) => {
+                  const 비목 = e.비목_대분류
                     ? categoryLabel(labels, e.비목_대분류, e.비목_세부항목).main
-                    : "비목 미지정",
-                })),
+                    : "비목 미지정"
+                  return {
+                    키: `e${e.id}`,
+                    이름: e.거래처 ?? "거래처 미상",
+                    꼬리: 비목,
+                    상세: 비목,
+                  }
+                }),
               },
               {
                 라벨: "챙길 서류",
@@ -165,12 +208,8 @@ export default async function DashboardPage() {
               {
                 라벨: "제출 전 점검",
                 링크: "/programs",
-                건수: 점검.length,
-                항목: 점검.map((r) => ({
-                  키: `p${r.id}`,
-                  이름: r.사업명,
-                  꼬리: `${r.미처리점검}건`,
-                })),
+                건수: 점검항목.length,
+                항목: 점검항목,
               },
             ]}
           />

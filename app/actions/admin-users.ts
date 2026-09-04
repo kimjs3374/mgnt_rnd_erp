@@ -3,6 +3,7 @@
 import { db } from "@/lib/db"
 import { getCurrentUser } from "@/lib/current-user"
 import { hashPassword } from "@/lib/password"
+import { isDepartment, POSITIONS_BY_DEPARTMENT } from "@/lib/positions"
 
 export type IssueTempPasswordResult =
   | { ok: true; tempPassword: string }
@@ -189,17 +190,74 @@ export async function changeUserDepartment(formData: FormData): Promise<ActionRe
   await requireSuperAdmin()
   const id = Number(formData.get("id"))
   const department = String(formData.get("department") ?? "")
-  if (!id || (department !== "research" && department !== "planning")) {
+  if (!id || !isDepartment(department)) {
     return { ok: false, error: "잘못된 요청입니다." }
   }
 
-  const { error } = await db.from("users").update({ department }).eq("id", id)
+  // 부서가 바뀌면 직급 목록도 통째로 바뀐다(예: 연구소→기획실). 이전 부서의 직급이
+  // 새 부서 목록에 없으면 그대로 두지 않는다 — "연구원"인 채로 기획실에 남는 걸 막는다.
+  const { data: target } = await db.from("users").select("position").eq("id", id).maybeSingle()
+  const keepPosition = target?.position && POSITIONS_BY_DEPARTMENT[department].includes(target.position)
+
+  const { error } = await db
+    .from("users")
+    .update({ department, position: keepPosition ? target.position : null })
+    .eq("id", id)
   if (error) {
     console.error("[admin-users] 부서 변경 실패:", error.message)
     return { ok: false, error: "부서 변경에 실패했습니다." }
   }
 
   // revalidatePath를 안 부르는 이유는 changeUserRole 위 주석과 같다.
+  return { ok: true }
+}
+
+/** 직급 변경 — 부서별 정해진 목록 안에서만 고를 수 있다(자유 텍스트 아님, 2026-09-04 사용자 결정). */
+export async function changeUserPosition(formData: FormData): Promise<ActionResult> {
+  await requireSuperAdmin()
+  const id = Number(formData.get("id"))
+  const position = String(formData.get("position") ?? "")
+  if (!id) return { ok: false, error: "잘못된 요청입니다." }
+
+  const { data: target } = await db.from("users").select("department").eq("id", id).maybeSingle()
+  if (!target) return { ok: false, error: "계정을 찾을 수 없습니다." }
+  if (!target.department || !isDepartment(target.department)) {
+    return { ok: false, error: "부서를 먼저 지정하세요." }
+  }
+  if (!POSITIONS_BY_DEPARTMENT[target.department].includes(position)) {
+    return { ok: false, error: "그 부서에 없는 직급입니다." }
+  }
+
+  const { error } = await db.from("users").update({ position }).eq("id", id)
+  if (error) {
+    console.error("[admin-users] 직급 변경 실패:", error.message)
+    return { ok: false, error: "직급 변경에 실패했습니다." }
+  }
+
+  return { ok: true }
+}
+
+/**
+ * 개인 추가 메뉴 권한 — 부서 기본 범위 밖의 메뉴 트랙(지원사업·과제사업)을 이 사람에게만 열어준다.
+ * 계정 관리는 대상이 아니다(등급 기준 보안 경계라 개인별 예외를 안 둔다, lib/access.ts 참조).
+ * ⚠ 세션에 로그인 시점 값이 고정되므로 반영되려면 재로그인해야 한다(role·department와 같은 트레이드오프).
+ */
+export async function changeUserExtraMenus(formData: FormData): Promise<ActionResult> {
+  await requireSuperAdmin()
+  const id = Number(formData.get("id"))
+  if (!id) return { ok: false, error: "잘못된 요청입니다." }
+
+  const menus = formData
+    .getAll("extra_menus")
+    .map(String)
+    .filter((m): m is "research" | "planning" => m === "research" || m === "planning")
+
+  const { error } = await db.from("users").update({ extra_menus: menus }).eq("id", id)
+  if (error) {
+    console.error("[admin-users] 추가 메뉴 권한 변경 실패:", error.message)
+    return { ok: false, error: "추가 메뉴 권한 변경에 실패했습니다." }
+  }
+
   return { ok: true }
 }
 

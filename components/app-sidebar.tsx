@@ -52,12 +52,14 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
    *   건너뛰어 화면은 멀쩡하다가 `npm run build`(tsc)에서만 터진다. 이름을 바꿔 충돌 자체를 없앤다.
    */
   userRole?: "member" | "admin" | "super_admin" | null
-  /** 메뉴를 가르는 축(role과 별개) — research(연구소) | planning(기획실). */
-  userDepartment?: "research" | "planning" | null
+  /** 메뉴를 가르는 축(role과 별개) — research(연구소) | planning(기획실) | executive(임원진). */
+  userDepartment?: "research" | "planning" | "executive" | null
+  /** 슈퍼관리자가 개인별로 추가로 열어준 메뉴 트랙. */
+  userExtraMenus?: ("research" | "planning")[]
   userLabel?: string | null
 }
 
-export function AppSidebar({ userRole, userDepartment, userLabel, ...props }: AppSidebarProps) {
+export function AppSidebar({ userRole, userDepartment, userExtraMenus, userLabel, ...props }: AppSidebarProps) {
   const pathname = usePathname()
   const role = userRole ?? "member"
 
@@ -68,9 +70,9 @@ export function AppSidebar({ userRole, userDepartment, userLabel, ...props }: Ap
   //   같은 그룹 안에 여러 부서 화면이 섞여 있어도(예: "통합 관리") 맞는 것만 남긴다.
   const visibleNav: NavGroup[] = NAV.flatMap((g) => {
     if (!g.items) {
-      return isPathAllowed(g.url, role, userDepartment ?? null) ? [g] : []
+      return isPathAllowed(g.url, role, userDepartment ?? null, userExtraMenus ?? []) ? [g] : []
     }
-    const items = g.items.filter((i) => isPathAllowed(i.url, role, userDepartment ?? null))
+    const items = g.items.filter((i) => isPathAllowed(i.url, role, userDepartment ?? null, userExtraMenus ?? []))
     return items.length > 0 ? [{ ...g, items }] : []
   })
 

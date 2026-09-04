@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { DEPARTMENTS, DEPARTMENT_LABEL, POSITIONS_BY_DEPARTMENT, type Department } from "@/lib/positions"
 
 const initialState: ActionResult | null = null
 const initialFindState: FindUsernameResult | null = null
@@ -86,6 +87,9 @@ function LoginPanel() {
 }
 
 function SignupPanel() {
+  // 직급 선택지는 부서에 따라 달라진다(임원진/기획실/연구소 목록이 다름) — 부서를 먼저
+  // 골라야 직급 select가 활성화된다.
+  const [dept, setDept] = useState<Department | "">("")
   const [state, formAction, pending] = useActionState<ActionResult | null, FormData>(async (_prev, formData) => {
     return await signup(formData)
   }, initialState)
@@ -130,22 +134,50 @@ function SignupPanel() {
           <Input id="s-email" name="email" type="email" placeholder="example@mgnt.kr" />
         </div>
       </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="s-department">소속 부서</Label>
-        {/* 네이티브 select — base-ui Select는 폼 제출과 별도 배선이 필요해 지금 범위엔 과하다. */}
-        <select
-          id="s-department"
-          name="department"
-          required
-          defaultValue=""
-          className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-        >
-          <option value="" disabled>
-            선택하세요
-          </option>
-          <option value="research">연구소</option>
-          <option value="planning">기획실</option>
-        </select>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label htmlFor="s-department">소속 부서</Label>
+          {/* 네이티브 select — base-ui Select는 폼 제출과 별도 배선이 필요해 지금 범위엔 과하다. */}
+          <select
+            id="s-department"
+            name="department"
+            required
+            value={dept}
+            onChange={(e) => setDept(e.target.value as Department)}
+            className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <option value="" disabled>
+              선택하세요
+            </option>
+            {DEPARTMENTS.map((d) => (
+              <option key={d} value={d}>
+                {DEPARTMENT_LABEL[d]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="s-position">직급</Label>
+          <select
+            id="s-position"
+            name="position"
+            required
+            disabled={!dept}
+            defaultValue=""
+            key={dept} // 부서가 바뀌면 직급 선택을 리셋한다 — 이전 부서의 직급이 남아있으면 안 된다.
+            className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+          >
+            <option value="" disabled>
+              {dept ? "선택하세요" : "부서를 먼저 고르세요"}
+            </option>
+            {dept &&
+              POSITIONS_BY_DEPARTMENT[dept].map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+          </select>
+        </div>
       </div>
       {state && !state.ok && <p className="text-sm text-destructive">{state.error}</p>}
       <Button type="submit" className="w-full justify-center" size="lg" disabled={pending}>

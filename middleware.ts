@@ -40,7 +40,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  if (!isPathAllowed(pathname, session.role, session.department)) {
+  if (!isPathAllowed(pathname, session.role, session.department, session.extraMenus)) {
     const url = request.nextUrl.clone()
     url.pathname = "/dashboard"
     url.search = ""

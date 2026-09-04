@@ -1,5 +1,5 @@
 /**
- * 부서(연구소/기획실)·등급(슈퍼관리자) 기준 경로 접근 규칙 — 딱 한 곳에 둔다.
+ * 부서(연구소/기획실/임원진)·등급(슈퍼관리자)·개인 추가 메뉴 권한 기준 경로 접근 규칙 — 딱 한 곳에 둔다.
  *
  * middleware.ts(실제 접근 차단)와 components/app-sidebar.tsx(메뉴 숨김)가 이 규칙을
  * 같이 쓴다. 따로 각자 판단하게 두면(예: 사이드바는 그룹 제목으로, 미들웨어는 경로로)
@@ -8,10 +8,17 @@
  * ⚠ 그룹 제목이 아니라 URL 접두사로 판단한다. lib/nav.ts 의 그룹 이름·구조는
  *   자주 바뀌는데(예: "과제 관리"가 "통합 관리" 그룹 안 leaf 로 옮겨감, 2026-09-04),
  *   URL은 상대적으로 안정적이라 재구성에 안 깨진다.
+ *
+ * ⚠ 부서는 예외 없이 항상 "자기 트랙만 기본"이다(2026-09-04 사용자 결정) — 임원진도
+ *   특별 취급하지 않는다. 더 넓게 봐야 하는 사람은 슈퍼관리자가 extraMenus로 개인별로
+ *   열어준다. 계정 관리(SUPER_ADMIN_PREFIXES)는 extraMenus 대상이 아니다 — 등급 기준
+ *   보안 경계라 개인별 예외를 두면 "관리자는 슈퍼관리자가 정해준다" 원칙이 흔들린다.
  */
 
 export type Role = "member" | "admin" | "super_admin"
-export type Department = "research" | "planning" | null
+export type Department = "research" | "planning" | "executive" | null
+/** 슈퍼관리자가 개인별로 추가로 열어줄 수 있는 메뉴 트랙. 계정 관리는 여기 포함하지 않는다. */
+export type ExtraMenu = "research" | "planning"
 
 // 연구소(과제사업 + 과제 관리) 전용 경로.
 const RESEARCH_PREFIXES = ["/project-announcements", "/project-budgeting", "/projects", "/researchers"]
@@ -24,11 +31,20 @@ function matchesPrefix(pathname: string, prefixes: string[]): boolean {
   return prefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`))
 }
 
-/** 이 role·department 조합이 이 경로를 볼 수 있는가. */
-export function isPathAllowed(pathname: string, role: Role, department: Department): boolean {
+/** 이 role·department·extraMenus 조합이 이 경로를 볼 수 있는가. */
+export function isPathAllowed(
+  pathname: string,
+  role: Role,
+  department: Department,
+  extraMenus: readonly ExtraMenu[] = [],
+): boolean {
   if (matchesPrefix(pathname, SUPER_ADMIN_PREFIXES)) return role === "super_admin"
   if (role === "super_admin") return true
-  if (matchesPrefix(pathname, RESEARCH_PREFIXES)) return department === "research"
-  if (matchesPrefix(pathname, PLANNING_PREFIXES)) return department === "planning"
+  if (matchesPrefix(pathname, RESEARCH_PREFIXES)) {
+    return department === "research" || extraMenus.includes("research")
+  }
+  if (matchesPrefix(pathname, PLANNING_PREFIXES)) {
+    return department === "planning" || extraMenus.includes("planning")
+  }
   return true // 대시보드·회사처럼 부서 무관 공용 경로
 }

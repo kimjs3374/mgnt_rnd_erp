@@ -1,7 +1,7 @@
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
-import { ChatPanel } from "@/components/chat-panel"
+// import { ChatPanel } from "@/components/chat-panel" — 2026-09-04 사용자 지시로 화면에서 뺐다.
 import { getCurrentUser } from "@/lib/current-user"
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -29,12 +29,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <AppSidebar
             userRole={user.role}
             userDepartment={user.department}
+            userExtraMenus={user.extraMenus}
             userLabel={user.인증 ? user.이름 : null}
           />
           <SidebarInset className="flex min-w-0 flex-1 flex-col">{children}</SidebarInset>
         </div>
       </SidebarProvider>
-      <ChatPanel />
+      {/* <ChatPanel /> — 2026-09-04 사용자 지시로 화면에서 뺐다(우측 하단 "물어보기" 버튼). */}
     </div>
   )
 }

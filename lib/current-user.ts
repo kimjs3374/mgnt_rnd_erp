@@ -18,7 +18,8 @@ export type CurrentUser = {
   /** true = 세션으로 확인됨. false = 로그인 전이라 업로더를 신뢰할 수 없다. */
   인증: boolean
   role: "member" | "admin" | "super_admin" | null
-  department: "research" | "planning" | null
+  department: "research" | "planning" | "executive" | null
+  extraMenus: ("research" | "planning")[]
 }
 
 /** 로그인 전 임시 표기. DB 에도 이 문자열이 그대로 들어가고 화면에 배지로 뜬다. */
@@ -28,16 +29,19 @@ export async function getCurrentUser(): Promise<CurrentUser> {
   try {
     const jar = await cookies()
     const session = await verifySessionCookie(jar.get(SESSION_COOKIE)?.value)
-    if (!session) return { id: null, 이름: 미인증_업로더, 인증: false, role: null, department: null }
+    if (!session) {
+      return { id: null, 이름: 미인증_업로더, 인증: false, role: null, department: null, extraMenus: [] }
+    }
     return {
       id: String(session.uid),
       이름: session.name || session.username,
       인증: true,
       role: session.role,
       department: session.department,
+      extraMenus: session.extraMenus ?? [],
     }
   } catch {
     // 쿠키를 못 읽는 상황(정적 렌더 등)에서 화면이 죽지 않게 한다.
-    return { id: null, 이름: 미인증_업로더, 인증: false, role: null, department: null }
+    return { id: null, 이름: 미인증_업로더, 인증: false, role: null, department: null, extraMenus: [] }
   }
 }

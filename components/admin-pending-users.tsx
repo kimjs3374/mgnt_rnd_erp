@@ -1,29 +1,30 @@
 "use client"
 
-import { useActionState, useState } from "react"
+import { useActionState } from "react"
 import { approveUser, rejectUser, type ActionResult } from "@/app/actions/admin-users"
 import { Button } from "@/components/ui/button"
 import { formatKstDate } from "@/lib/kst"
+import { DEPARTMENT_LABEL } from "@/lib/positions"
 
-const DEPARTMENT_LABEL: Record<string, string> = { research: "연구소", planning: "기획실" }
-
-type PendingUser = {
+export type PendingUser = {
   id: number
   username: string
   name: string
   phone: string | null
   email: string | null
-  department: "research" | "planning" | null
+  department: "research" | "planning" | "executive" | null
+  position: string | null
   created_at: string
 }
 
 /**
  * 승인/반려 처리 버튼 하나.
  *
- * ⚠ 서버 액션에 revalidatePath를 안 둔다(components/admin-accounts.tsx와 같은 이유 —
- *   2026-09-04 실측: 방금 처리한 행을 서버가 다시 읽어와서 화면을 덮어쓰면, 아직 그 값을
- *   못 본 채로 돌아와 화면이 안 바뀌거나 옛 상태로 보인다). 성공하면 부모가 이 행을
- *   목록에서 바로 지운다(낙관적 업데이트) — 새로고침해도 어차피 안 보이니 데이터는 맞다.
+ * ⚠ 서버 액션에 revalidatePath를 안 둔다(2026-09-04 실측: 방금 처리한 행을 서버가 다시
+ *   읽어와서 화면을 덮어쓰면, 아직 그 값을 못 본 채로 돌아와 화면이 안 바뀌거나 옛 상태로
+ *   보인다). 목록 자체를 이 컴포넌트가 들고 있지 않고 부모(AdminUsersClient)가 들고 있는
+ *   이유도 같다 — 승인하면 "계정 승인" 목록에서 빠지는 동시에 "계정 관리" 탭의 부서별
+ *   목록에도 나타나야 하는데, 그건 두 탭이 같은 상태를 공유해야 가능하다.
  */
 function ActionButton({
   user,
@@ -34,14 +35,14 @@ function ActionButton({
 }: {
   user: PendingUser
   action: (formData: FormData) => Promise<ActionResult>
-  onDone: (id: number) => void
+  onDone: (user: PendingUser) => void
   label: string
   variant?: "default" | "destructive"
 }) {
   const [state, formAction, pending] = useActionState<ActionResult | null, FormData>(
     async (_prev, formData) => {
       const result = (await action(formData)) ?? null
-      if (result?.ok) onDone(user.id)
+      if (result?.ok) onDone(user)
       return result
     },
     null,
@@ -60,10 +61,15 @@ function ActionButton({
   )
 }
 
-export function AdminPendingUsers({ initialUsers }: { initialUsers: PendingUser[] }) {
-  const [users, setUsers] = useState(initialUsers)
-  const remove = (id: number) => setUsers((prev) => prev.filter((u) => u.id !== id))
-
+export function AdminPendingUsers({
+  users,
+  onApprove,
+  onReject,
+}: {
+  users: PendingUser[]
+  onApprove: (user: PendingUser) => void
+  onReject: (user: PendingUser) => void
+}) {
   if (users.length === 0) {
     return (
       <p className="rounded-lg border bg-card p-8 text-center text-sm text-muted-foreground">
@@ -82,6 +88,7 @@ export function AdminPendingUsers({ initialUsers }: { initialUsers: PendingUser[
             <th className="px-3 py-2 font-medium">연락처</th>
             <th className="px-3 py-2 font-medium">이메일</th>
             <th className="px-3 py-2 font-medium">부서</th>
+            <th className="px-3 py-2 font-medium">직급</th>
             <th className="px-3 py-2 font-medium">신청일</th>
             <th className="px-3 py-2 font-medium text-right">처리</th>
           </tr>
@@ -94,14 +101,15 @@ export function AdminPendingUsers({ initialUsers }: { initialUsers: PendingUser[
               <td className="px-3 py-2">{u.phone ?? "-"}</td>
               <td className="px-3 py-2">{u.email ?? "-"}</td>
               <td className="px-3 py-2">{u.department ? DEPARTMENT_LABEL[u.department] : "-"}</td>
+              <td className="px-3 py-2">{u.position ?? "-"}</td>
               <td className="px-3 py-2">{formatKstDate(u.created_at)}</td>
               <td className="px-3 py-2">
                 <div className="flex justify-end gap-2">
-                  <ActionButton user={u} action={approveUser} onDone={remove} label="승인" />
+                  <ActionButton user={u} action={approveUser} onDone={onApprove} label="승인" />
                   <ActionButton
                     user={u}
                     action={rejectUser}
-                    onDone={remove}
+                    onDone={onReject}
                     label="반려"
                     variant="destructive"
                   />

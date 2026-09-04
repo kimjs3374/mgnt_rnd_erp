@@ -6,6 +6,7 @@ import { db } from "@/lib/db"
 import { hashPassword, isPasswordStrongEnough, verifyPassword } from "@/lib/password"
 import { createSessionCookie, SESSION_COOKIE, REMEMBER_SESSION_TTL_SEC } from "@/lib/session"
 import { checkRateLimit, resetRateLimit } from "@/lib/rate-limit"
+import { isDepartment, POSITIONS_BY_DEPARTMENT } from "@/lib/positions"
 
 export type ActionResult = { ok: true } | { ok: false; error: string }
 export type FindUsernameResult = { ok: true; masked: string } | { ok: false; error: string }
@@ -20,7 +21,8 @@ type UserRow = {
   name: string
   role: "member" | "admin" | "super_admin"
   status: "pending" | "approved" | "rejected" | "suspended"
-  department: "research" | "planning" | null
+  department: "research" | "planning" | "executive" | null
+  extra_menus: ("research" | "planning")[] | null
 }
 
 export async function login(formData: FormData): Promise<ActionResult> {
@@ -47,7 +49,7 @@ export async function login(formData: FormData): Promise<ActionResult> {
 
   const { data, error } = await db
     .from("users")
-    .select("id, username, password_hash, name, role, status, department")
+    .select("id, username, password_hash, name, role, status, department, extra_menus")
     .eq("username", username)
     .maybeSingle<UserRow>()
 
@@ -72,7 +74,14 @@ export async function login(formData: FormData): Promise<ActionResult> {
   // 같이 지워지는 세션 쿠키가 된다(토큰 자체는 어느 쪽이든 12시간/30일로 만료된다).
   const remember = formData.get("remember") === "on"
   const cookie = await createSessionCookie(
-    { id: data.id, username: data.username, name: data.name, role: data.role, department: data.department },
+    {
+      id: data.id,
+      username: data.username,
+      name: data.name,
+      role: data.role,
+      department: data.department,
+      extraMenus: data.extra_menus ?? [],
+    },
     { remember },
   )
 
@@ -105,6 +114,7 @@ export async function signup(formData: FormData): Promise<ActionResult> {
   const phone = String(formData.get("phone") ?? "").trim()
   const email = String(formData.get("email") ?? "").trim()
   const department = String(formData.get("department") ?? "").trim()
+  const position = String(formData.get("position") ?? "").trim()
 
   if (!USERNAME_RE.test(username)) {
     return { ok: false, error: "아이디는 영문·숫자·_-만 사용해 3~20자로 입력하세요." }
@@ -121,8 +131,11 @@ export async function signup(formData: FormData): Promise<ActionResult> {
   if (password !== passwordConfirm) {
     return { ok: false, error: "비밀번호가 일치하지 않습니다." }
   }
-  if (department !== "research" && department !== "planning") {
+  if (!isDepartment(department)) {
     return { ok: false, error: "소속 부서를 선택하세요." }
+  }
+  if (!POSITIONS_BY_DEPARTMENT[department].includes(position)) {
+    return { ok: false, error: "직급을 선택하세요." }
   }
 
   const { data: existing } = await db.from("users").select("id").eq("username", username).maybeSingle()
@@ -137,6 +150,7 @@ export async function signup(formData: FormData): Promise<ActionResult> {
     phone: phone || null,
     email: email || null,
     department,
+    position,
   })
   if (error) {
     console.error("[auth] signup insert 실패:", error.message)

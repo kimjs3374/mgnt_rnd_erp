@@ -1,4 +1,5 @@
 import "server-only"
+import { cache } from "react"
 import { db, safeSelect } from "@/lib/db"
 
 /**
@@ -106,7 +107,7 @@ function 마감지남(a: { 접수종료: string | null; 마감유형: string | n
   return a.접수종료 < 오늘
 }
 
-async function 페이지전체<T>(table: string, select: string, 조건 = ""): Promise<T[]> {
+async function 페이지전체<T>(table: string, select: string): Promise<T[]> {
   const out: T[] = []
   for (let page = 0; page < 20; page++) {
     const { rows } = await safeSelect<T>(table, () =>
@@ -115,18 +116,61 @@ async function 페이지전체<T>(table: string, select: string, 조건 = ""): P
     out.push(...rows)
     if (rows.length < 1000) break
   }
-  return 조건 ? out : out
+  return out
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 원본 읽기 — **요청당 한 번만.**
+//
+// ⚠ 실측 사고(2026-09-04, 사용자 신고 "프론트엔드 반응이 없는데"): 이 파일의 집계 함수 넷을
+//   페이지가 Promise.all 로 동시에 불렀는데, 넷이 각자 ann_rule_scores 전량(9,851행 ·
+//   게이트_결과 jsonb 5.7MB)을 따로 받아왔다. 한 번 열 때마다 같은 데이터를 네 번 긁어
+//   dev 서버 메모리가 4.5G(피크 5.1G)까지 올라가고 화면이 멈췄다.
+//
+//   고침 둘 —
+//     ① React `cache()` 로 요청 안에서 한 번만 읽는다(같은 요청의 다른 함수가 재사용).
+//     ② **무거운 컬럼은 현재 버전만** 읽는다. 버전 추이엔 판정·엔진버전만 있으면 되고,
+//        게이트_결과·근거는 현재 버전 한 벌(약 520행)이면 충분하다.
+// ─────────────────────────────────────────────────────────────────────────────
+type LightScore = {
+  announcement_id: number
+  엔진버전: string
+  판정: string
+  판정경로: string | null
+}
+
+const 공고전체 = cache(async () =>
+  페이지전체<AnnRow>("announcements", "id,사업명,출처,접수종료,마감유형,지원분야,파싱상태"),
+)
+
+/** 모든 버전 × 가벼운 컬럼만 — 버전 추이·판정경로 집계용. */
+const 점수요약 = cache(async () =>
+  페이지전체<LightScore>("ann_rule_scores", "announcement_id,엔진버전,판정,판정경로"),
+)
+
+const 현재버전읽기 = cache(async () => {
+  const rows = await 점수요약()
+  if (!rows.length) return ""
+  return rows.map((s) => s.엔진버전).reduce((a, b) => (버전번호(b) > 버전번호(a) ? b : a))
+})
+
+/** 현재 버전만 무거운 컬럼까지 — 게이트 집계·되돌리기 근거용. */
+const 현재점수 = cache(async (): Promise<ScoreRow[]> => {
+  const v = await 현재버전읽기()
+  if (!v) return []
+  const { rows } = await safeSelect<ScoreRow>("ann_rule_scores", () =>
+    db.from("ann_rule_scores").select("*").eq("엔진버전", v).limit(3000) as never,
+  )
+  return rows
+})
 
 export async function getEngineReport(): Promise<EngineReport> {
   const 오늘 = new Date().toISOString().slice(0, 10)
 
-  const [공고, 점수, 렉시콘, 판정이력, 정정] = await Promise.all([
-    페이지전체<AnnRow>("announcements", "id,사업명,출처,접수종료,마감유형,지원분야,파싱상태"),
-    페이지전체<ScoreRow>(
-      "ann_rule_scores",
-      "announcement_id,엔진버전,판정,점수,확신도,커버리지,판정경로,게이트_결과,근거,llm_호출",
-    ),
+  const [공고, 요약, 현재, 렉시콘, 판정이력, 정정] = await Promise.all([
+    공고전체(),
+    점수요약(),
+    현재점수(),
     safeSelect<{ id: number }>("extraction_lexicon", () =>
       db.from("extraction_lexicon").select("id").eq("사용중", true),
     ),
@@ -139,7 +183,7 @@ export async function getEngineReport(): Promise<EngineReport> {
     ),
   ])
 
-  if (점수.length === 0) {
+  if (요약.length === 0) {
     return {
       엔진버전: "-", llm_호출: 0,
       수집: { 전체: 공고.length, 출처별: [] },
@@ -150,10 +194,9 @@ export async function getEngineReport(): Promise<EngineReport> {
     }
   }
 
-  const 최신버전 = 점수
+  const 최신버전 = 요약
     .map((s) => s.엔진버전)
     .reduce((a, b) => (버전번호(b) > 버전번호(a) ? b : a))
-  const 현재 = 점수.filter((s) => s.엔진버전 === 최신버전)
   const 공고맵 = new Map(공고.map((a) => [a.id, a]))
 
   // ── 퍼널 — raw 수집에서 최종까지 어디서 얼마나 빠졌나 ────────────────────────
@@ -207,7 +250,7 @@ export async function getEngineReport(): Promise<EngineReport> {
 
   // ── 버전 추이 — 규칙을 고칠 때마다 판정이 어떻게 움직였나(전/후 비교) ────────
   const 버전맵 = new Map<string, Record<string, number>>()
-  for (const s of 점수) {
+  for (const s of 요약) {
     const cur = 버전맵.get(s.엔진버전) ?? {}
     cur[s.판정] = (cur[s.판정] ?? 0) + 1
     버전맵.set(s.엔진버전, cur)
@@ -287,9 +330,7 @@ export type HumanImpact = {
 
 export async function getHumanImpact(): Promise<HumanImpact> {
   const [점수, 코멘트, 렉시콘, 답변, 정정, 특징] = await Promise.all([
-    페이지전체<{ 엔진버전: string; 판정: string; 판정경로: string | null }>(
-      "ann_rule_scores", "*",
-    ),
+    점수요약(),
     safeSelect<{ id: number; announcement_id: number | null; 텍스트: string; 판정: string
       답변자: string; created_at: string }>("judgment_semantic", () =>
       db.from("judgment_semantic").select("*").order("created_at", { ascending: false }),
@@ -474,13 +515,12 @@ export type LlmCompare = {
 }
 
 export async function getLlmCompare(): Promise<LlmCompare> {
-  const { rows, error } = await safeSelect<CompareRow>("v_ann_rule_vs_llm", () =>
-    db.from("v_ann_rule_vs_llm").select("*").limit(2000),
-  )
-  const { rows: 점수 } = await safeSelect<{ 엔진버전: string; announcement_id: number }>(
-    "ann_rule_scores",
-    () => db.from("ann_rule_scores").select("*").limit(10000),
-  )
+  const [{ rows, error }, 점수] = await Promise.all([
+    safeSelect<CompareRow>("v_ann_rule_vs_llm", () =>
+      db.from("v_ann_rule_vs_llm").select("*").limit(2000),
+    ),
+    점수요약(),
+  ])
 
   const 빈값: LlmCompare = {
     표본: 0, 현재버전: "-", 일치: 0, 일치율: 0, 등급일치: 0, 등급일치율: 0,
@@ -596,11 +636,8 @@ export async function getReversible(): Promise<{
   const 오늘 = new Date().toISOString().slice(0, 10)
 
   const [공고, 점수, 관심, 결정] = await Promise.all([
-    페이지전체<AnnRow>("announcements", "id,사업명,출처,접수종료,마감유형,지원분야,파싱상태"),
-    페이지전체<ScoreRow>(
-      "ann_rule_scores",
-      "announcement_id,엔진버전,판정,점수,확신도,커버리지,판정경로,게이트_결과,근거,llm_호출",
-    ),
+    공고전체(),
+    현재점수(),
     // ⚠ select() 에 한글 컬럼명을 나열하면 supabase-js 타입 파서가 막힌다(lib/queries.ts
     //   에 같은 주석이 있다 — 런타임이 아니라 컴파일 문제다). * 로 받고 타입으로 좁힌다.
     safeSelect<{ 참조_id: number; 상태: string }>("watchlist", () =>
@@ -614,15 +651,13 @@ export async function getReversible(): Promise<{
 
   if (점수.length === 0) return { rows: [], 전체: 0, error: "규칙 엔진 판정 기록이 없다." }
 
-  const 최신버전 = 점수.map((s) => s.엔진버전)
-    .reduce((a, b) => (버전번호(b) > 버전번호(a) ? b : a))
   const 공고맵 = new Map(공고.map((a) => [a.id, a]))
   const 관심맵 = new Map(관심.rows.map((w) => [w.참조_id, w.상태]))
   const 정정집합 = new Set(결정.rows.map((d) => d.announcement_id))
 
   const rows: ReversibleRow[] = []
   for (const s of 점수) {
-    if (s.엔진버전 !== 최신버전) continue
+    // 현재점수() 가 이미 현재 버전만 준다 — 여기서 다시 거르지 않는다.
     if (s.판정 !== "불가" && s.판정 !== "해당없음") continue
     const a = 공고맵.get(s.announcement_id)
     if (!a || 마감지남(a, 오늘)) continue

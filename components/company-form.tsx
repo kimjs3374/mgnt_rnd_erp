@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { IdCard, ListChecks, Wallet } from "lucide-react"
 import { Card } from "@/components/page-shell"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -88,7 +89,12 @@ const 대조: Field[] = [
   },
 ]
 
-const 재무: Field[] = [
+// ⚠ 매출을 재무 나머지(부채비율·R&D집약도 등)와 **다른 Section**으로 가른다
+//   (2026-09-04 사용자 지시: "재무 부분에 매출액 구분해줘"). 매출액·매출증가율은
+//   한 쌍(증가율이 매출액을 기준으로 계산되는 값)이라 같이 두고, 결산연도는
+//   그 기준 연도라 매출 쪽에 붙인다 — "아래 수치가 뜻이 없다"던 안내가 원래
+//   결산연도 바로 다음 줄이었던 흐름을 유지한다.
+const 매출: Field[] = [
   {
     name: "결산연도",
     label: "결산연도",
@@ -97,6 +103,9 @@ const 재무: Field[] = [
   },
   { name: "매출액", label: "매출액(원)", hint: "표준 재무제표", kind: "number" },
   { name: "매출증가율", label: "매출증가율(%)", hint: "표준 재무제표", kind: "number" },
+]
+
+const 재무: Field[] = [
   { name: "부채비율", label: "부채비율(%)", hint: "표준 재무제표", kind: "number" },
   { name: "rnd_집약도", label: "R&D 집약도(%)", hint: "기술기업개요표", kind: "number" },
   { name: "종업원수", label: "종업원 수", hint: "4대보험 가입자명부", kind: "number" },
@@ -320,11 +329,12 @@ export function CompanyForm({ values }: { values: CompanyValues }) {
           </p>
         )}
 
-        <Section title="신원" desc="신청서 초안과 증빙 판독이 쓰는 값">
+        <Section icon={IdCard} title="신원" desc="신청서 초안과 증빙 판독이 쓰는 값">
           {신원.map(행)}
         </Section>
 
         <Section
+          icon={ListChecks}
           title="자격 대조"
           desc="● 표시가 공고 탐색의 「우리 회사 조건」이 실제로 대조하는 값이다"
         >
@@ -332,8 +342,17 @@ export function CompanyForm({ values }: { values: CompanyValues }) {
         </Section>
 
         <Section
-          title="재무"
-          desc="공고의 자격 요건(매출 규모·부채비율 한도 등)과 대조된다. 모르면 비워 둔다 — 추측으로 채우면 자격이 없는 공고에 계획서를 쓰게 된다"
+          icon={Wallet}
+          title="매출"
+          desc="공고의 매출 규모 요건과 대조된다. 결산연도가 없으면 아래 수치가 어느 해 것인지 알 수 없다"
+        >
+          {매출.map(행)}
+        </Section>
+
+        <Section
+          icon={Wallet}
+          title="재무 — 그 외"
+          desc="부채비율 한도 등 매출 외 자격 요건과 대조된다. 모르면 비워 둔다 — 추측으로 채우면 자격이 없는 공고에 계획서를 쓰게 된다"
         >
           {재무.map(행)}
         </Section>
@@ -361,15 +380,24 @@ export function CompanyForm({ values }: { values: CompanyValues }) {
 function Section({
   title,
   desc,
+  icon: Icon,
   children,
 }: {
   title: string
   desc: string
+  icon?: React.ComponentType<{ className?: string }>
   children: React.ReactNode
 }) {
   return (
     <div>
-      <h2 className="mb-1 text-sm font-semibold">{title}</h2>
+      <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold">
+        {Icon && (
+          <span className="flex size-5 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+            <Icon className="size-3" />
+          </span>
+        )}
+        {title}
+      </h2>
       <p className="mb-2 text-xs text-muted-foreground">{desc}</p>
       <Card className="divide-y">{children}</Card>
     </div>

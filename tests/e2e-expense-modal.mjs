@@ -45,18 +45,30 @@ try {
   )
   if (!detailText) throw new Error("모달이 열리지 않았다")
   log(`모달 열림 · ${detailText.length}자`)
-  for (const k of ["AI 제안", "우리 회사 과거 처리", "이대로 확정", "비목 수정"]) {
+  for (const k of ["AI 제안", "우리 회사 과거 처리", "확정", "비목 수정"]) {
     log(`  ${detailText.includes(k) ? "✓" : "✗"} ${k}`)
   }
 
-  // ── 3. 확신도 70% 미만이면 [이대로 확정] 이 잠겨야 한다 ──────
-  const confirmDisabled = await page.evaluate(() => {
-    const b = [...document.querySelectorAll('[data-slot="dialog-content"] button')].find(
-      (x) => x.textContent.trim() === "이대로 확정",
+  // ── 3. [확정] 이 잠겨 있으면 **왜 잠겼는지 화면에 적혀 있어야 한다** ──────
+  //    잠그는 것 자체는 옳다(확신도 70% 미만 · 정산완료). 틀린 건 이유를 안 보여 주는 것이었다 —
+  //    사용자가 "확정이 안 눌려서"라고 한 게 그 상황이다. 이미 확정된 건은 이제 **안 잠근다**
+  //    (다시 누르면 판단 이력에 한 줄이 쌓인다).
+  const 확정상태 = await page.evaluate(() => {
+    const 다이얼로그 = document.querySelector('[data-slot="dialog-content"]')
+    const b = [...(다이얼로그?.querySelectorAll("button") ?? [])].find(
+      (x) => x.textContent.trim() === "확정",
     )
-    return b ? b.disabled : null
+    return { 있나: !!b, 잠김: b ? b.disabled : null, 본문: 다이얼로그?.textContent ?? "" }
   })
-  log(`[이대로 확정] disabled = ${confirmDisabled}  ← 확신도 70% 미만이면 true 여야 정상`)
+  log(`  ${확정상태.있나 ? "✓" : "✗"} [확정] 버튼이 있다`)
+  if (확정상태.잠김) {
+    const 이유있나 =
+      /70% 미만은 그대로 확정할 수 없다|정산이 끝난 건이다/.test(확정상태.본문)
+    log(`  ${이유있나 ? "✓" : "✗"} 잠겼으면 이유가 화면에 적혀 있다`)
+    if (!이유있나) throw new Error("[확정]이 잠겼는데 왜 잠겼는지가 화면에 없다")
+  } else {
+    log("  · [확정] 눌리는 상태")
+  }
 
   // ── 4. [비목 수정] ──────────────────────────────────────────
   await page.evaluate(() => {

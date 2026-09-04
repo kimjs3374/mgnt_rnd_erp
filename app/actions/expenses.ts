@@ -46,7 +46,13 @@ function aiSnapshot(e: Record<string, unknown>) {
   }
 }
 
-/** [이대로 확정] — AI 제안을 사람이 받아들인다. */
+/**
+ * [확정] — AI 제안을 사람이 받아들인다. (화면 이름은 2026-09-04 「이대로 확정」에서 바뀌었다)
+ *
+ * ⚠ **이미 확정된 건에 다시 불러도 된다.** decisions 에 한 줄이 더 쌓일 뿐이다 —
+ *   증빙을 다 붙인 뒤 다시 확정하는 것이 실제로 하는 일이고, 쌓이는 것이 이 파일의 목적이다.
+ *   막는 것은 화면 쪽의 **정산완료**(다시 확정하면 정산이 풀린다)와 아래 확신도 임계값뿐이다.
+ */
 export async function confirmExpense(id: number, 확정자: string): Promise<ActionResult> {
   try {
     const e = await loadExpense(id)
@@ -112,7 +118,7 @@ export async function correctExpense(input: {
     const 바뀜 =
       e.비목_대분류 !== input.비목 || (e.비목_세부항목 ?? null) !== input.세부항목
     if (!바뀜) {
-      return { ok: false, error: "비목이 그대로다. 바꿀 것이 없으면 [이대로 확정]을 쓰라." }
+      return { ok: false, error: "비목이 그대로다. 바꿀 것이 없으면 [확정]을 쓰라." }
     }
 
     const { error: dErr } = await db.from("decisions").insert({

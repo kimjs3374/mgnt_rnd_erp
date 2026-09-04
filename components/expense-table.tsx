@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { ExpenseHistory } from "@/components/expense-history"
 import {
   Table,
   TableBody,
@@ -158,7 +159,7 @@ export function ExpenseTable({
 
   const open = filtered.find((r) => r.id === openId) ?? rows.find((r) => r.id === openId) ?? null
   const sel =
-    "h-7 rounded-md border bg-transparent px-2 text-[12.5px] text-foreground"
+    "h-7 rounded-md border bg-transparent px-2 text-[13.8px] text-foreground"
 
   return (
     <>
@@ -235,7 +236,7 @@ export function ExpenseTable({
           }}
           aria-label="시작일"
         />
-        <span className="text-[12.5px] text-muted-foreground">~</span>
+        <span className="text-[13.8px] text-muted-foreground">~</span>
         <input
           type="date"
           className={sel}
@@ -244,7 +245,7 @@ export function ExpenseTable({
           aria-label="종료일"
         />
 
-        <span className="ml-auto text-[12.5px] text-muted-foreground">
+        <span className="ml-auto text-[13.8px] text-muted-foreground">
           {filtered.length}건 · <span className="tabular-nums">{won(합계)}</span>
           {걸러짐 && <span className="ml-1">(전체 {rows.length}건)</span>}
         </span>
@@ -252,7 +253,7 @@ export function ExpenseTable({
           <Button
             type="button"
             variant="ghost"
-            className="h-7 px-2 text-[12px] text-muted-foreground"
+            className="h-7 px-2 text-[13.2px] text-muted-foreground"
             onClick={초기화}
           >
             필터 해제
@@ -282,7 +283,7 @@ export function ExpenseTable({
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="py-10 text-center text-[13px] text-muted-foreground">
+                <TableCell colSpan={8} className="py-10 text-center text-[14.3px] text-muted-foreground">
                   걸러낸 조건에 맞는 집행이 없습니다. 필터를 풀거나 기간을 넓혀 보세요.
                 </TableCell>
               </TableRow>
@@ -290,7 +291,7 @@ export function ExpenseTable({
             {filtered.map((e) => (
               <TableRow
                 key={e.id}
-                className="h-[38px] cursor-pointer text-[13px]"
+                className="h-[38px] cursor-pointer text-[14.3px]"
                 onClick={() => setOpenId(e.id)}
               >
                 <TableCell className="tabular-nums text-muted-foreground">
@@ -379,6 +380,19 @@ function ExpenseDetail({
   const conf = row.ai_확신도 == null ? null : Number(row.ai_확신도)
   const lowConf = conf != null && conf < 0.7
   const 미확정 = row.상태 === "검토대기"
+  // 정산이 끝난 건은 다시 확정하면 상태가 「확정」으로 **되돌아간다** — 정산이 풀린다.
+  const 정산끝 = row.상태 === "정산완료"
+  /**
+   * 확정을 못 누르는 이유. **없으면 눌린다.**
+   *
+   * 이미 확정된 건은 막지 않는다 — 서버 액션이 decisions 에 한 줄을 더 쌓을 뿐이고,
+   * 쌓이는 건 이 시스템이 원하는 것이다. 증빙을 다 붙인 뒤 다시 확정하는 것이 실제 일이다.
+   */
+  const 못누르는이유 = 정산끝
+    ? "정산이 끝난 건이다. 다시 확정하면 정산이 풀린다."
+    : lowConf
+      ? `확신도 ${Math.round((conf ?? 0) * 100)}% — 70% 미만은 그대로 확정할 수 없다. [비목 수정]으로 직접 고르라.`
+      : null
 
   const subOptions = subs.filter((s) => s.대분류 === cat)
   const 바뀜 = cat !== (row.비목_대분류 ?? "") || sub !== (row.비목_세부항목 ?? "")
@@ -417,7 +431,10 @@ function ExpenseDetail({
       </DialogHeader>
 
       {mode === "view" ? (
-        <div className="grid gap-3 text-[13px]">
+        <div className="grid gap-3 text-[14.3px]">
+          {/* 처리 이력 — 「왜 이 비목인가」의 답. 펼칠 때 한 번만 불러온다. */}
+          <ExpenseHistory 집행_id={row.id} />
+
           {/* AI 판단 */}
           <section className="rounded-lg border bg-card p-3">
             <div className="mb-2 flex items-center gap-2">
@@ -533,31 +550,31 @@ function ExpenseDetail({
             </p>
           )}
 
+          {/* **왜 안 눌리는지 화면에 적는다.** title 툴팁만 있으면 눌러 봐도 아무 일이 없고
+              이유도 안 보인다 — 사용자가 "확정이 안 눌려서"라고 한 게 정확히 그 상황이었다. */}
+          {못누르는이유 && (
+            <p className="text-right text-xs text-muted-foreground">{못누르는이유}</p>
+          )}
+          {!못누르는이유 && !미확정 && (
+            <p className="text-right text-xs text-muted-foreground">
+              이미 확정된 건이다 — 다시 누르면 판단 이력에 한 줄이 더 쌓인다.
+            </p>
+          )}
+
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setMode("correct")}>
               비목 수정
             </Button>
-            <Button
-              type="button"
-              onClick={doConfirm}
-              disabled={pending || !미확정 || lowConf}
-              title={
-                !미확정
-                  ? "이미 확정된 건이다"
-                  : lowConf
-                    ? "확신도 70% 미만은 그대로 확정할 수 없다"
-                    : undefined
-              }
-            >
-              {pending ? "처리 중…" : "이대로 확정"}
+            <Button type="button" onClick={doConfirm} disabled={pending || !!못누르는이유}>
+              {pending ? "처리 중…" : "확정"}
             </Button>
           </div>
         </div>
       ) : (
-        <div className="grid gap-3 text-[13px]">
+        <div className="grid gap-3 text-[14.3px]">
           <Field label="올바른 비목">
             <select
-              className="h-8 w-full rounded-md border bg-card px-2 text-[13px]"
+              className="h-8 w-full rounded-md border bg-card px-2 text-[14.3px]"
               value={cat}
               onChange={(e) => {
                 setCat(e.target.value)
@@ -575,7 +592,7 @@ function ExpenseDetail({
 
           <Field label="세부항목">
             <select
-              className="h-8 w-full rounded-md border bg-card px-2 text-[13px]"
+              className="h-8 w-full rounded-md border bg-card px-2 text-[14.3px]"
               value={sub}
               onChange={(e) => setSub(e.target.value)}
               disabled={!cat}
@@ -610,7 +627,7 @@ function ExpenseDetail({
           <Field label="한 줄 메모 (필수)">
             <input
               type="text"
-              className="h-8 w-full rounded-md border bg-card px-2 text-[13px]"
+              className="h-8 w-full rounded-md border bg-card px-2 text-[14.3px]"
               placeholder="예: 연구원 지급 노트북은 사무 겸용이라 운영비로 처리해 왔음"
               value={사유}
               onChange={(e) => set사유(e.target.value)}

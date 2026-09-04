@@ -34,7 +34,7 @@ type DecisionRaw = Record<string, unknown> & { id: number; expense_id: number }
 
 /**
  * 집행 ★ — 우선순위에서 끝까지 지키는 화면.
- * 행을 누르면 상세가 열리고, 거기서 [이대로 확정] 또는 [비목 수정] 을 한다.
+ * 행을 누르면 상세가 열리고, 거기서 [확정] 또는 [비목 수정] 을 한다.
  *
  * ⚠ 권한(2026-09-04) — 인건비·학생인건비 건은 개인 급여와 직결돼 일반회원에게 행 자체를
  *   숨긴다. 합계 숫자만 별도로 보여준다(과제별 집행 탭과 같은 원칙).
@@ -142,21 +142,21 @@ export default async function ExpensesPage() {
       description="Slack 에 증빙을 던지면 여기에 쌓인다. AI 가 제안하고 사람이 확정한다."
       actions={
         <>
-          <Button type="button" variant="outline" className="h-7 text-[12.8px]">
+          <Button type="button" variant="outline" className="h-7 text-[14.1px]">
             ⤓ Excel
           </Button>
-          <Button type="button" className="h-7 text-[12.8px]">
+          <Button type="button" className="h-7 text-[14.1px]">
             + 집행 등록
           </Button>
         </>
       }
       filters={
         <>
-          <Input placeholder="거래처·품목 검색" className="h-7 w-56 text-[13px]" />
-          <Button type="button" variant="outline" className="h-7 text-[12.8px]">
+          <Input placeholder="거래처·품목 검색" className="h-7 w-56 text-[14.3px]" />
+          <Button type="button" variant="outline" className="h-7 text-[14.1px]">
             전체 상태
           </Button>
-          <Button type="button" variant="outline" className="h-7 text-[12.8px]">
+          <Button type="button" variant="outline" className="h-7 text-[14.1px]">
             전체 비목
           </Button>
           <span className="ml-auto text-xs text-muted-foreground">

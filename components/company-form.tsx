@@ -35,7 +35,9 @@ type Field = {
   name: keyof CompanyValues
   label: string
   hint: string
-  kind?: "number" | "date" | "list" | "check"
+  /** "money" — 원 단위 큰 숫자(매출액 등)에 천 단위 콤마를 붙여 보여준다. 서버는 이미
+   *  콤마를 걷어내고 파싱한다(`app/actions/company.ts`의 `숫자()`) — 여기서만 표시를 고친다. */
+  kind?: "number" | "money" | "date" | "list" | "check"
   /** 자격 대조에 실제로 쓰이는 값. 비면 공고를 못 거른다 — 화면에서 따로 표시한다. */
   대조에쓰임?: boolean
 }
@@ -101,7 +103,7 @@ const 매출: Field[] = [
     hint: "어느 해 기준인지. 없으면 아래 수치가 뜻이 없다",
     kind: "number",
   },
-  { name: "매출액", label: "매출액(원)", hint: "표준 재무제표", kind: "number" },
+  { name: "매출액", label: "매출액(원)", hint: "표준 재무제표", kind: "money" },
   { name: "매출증가율", label: "매출증가율(%)", hint: "표준 재무제표", kind: "number" },
 ]
 
@@ -130,6 +132,75 @@ function 값문자열(v: unknown): string {
   return String(v)
 }
 
+const 콤마포맷 = (digits: string) => (digits === "" ? "" : Number(digits).toLocaleString("ko-KR"))
+/** 앞에서부터 숫자를 `n`개 지난 자리. 콤마는 안 센다(components/money-input.tsx와 같은 방법). */
+function 커서자리(글: string, 숫자개수: number): number {
+  if (숫자개수 <= 0) return 0
+  let 셈 = 0
+  for (let i = 0; i < 글.length; i++) {
+    if (글[i] >= "0" && 글[i] <= "9") {
+      셈 += 1
+      if (셈 === 숫자개수) return i + 1
+    }
+  }
+  return 글.length
+}
+const 숫자수 = (s: string) => s.replace(/[^\d]/g, "").length
+
+/**
+ * 매출액 같은 큰 원 단위 칸 — **치는 즉시 천 단위 콤마**(2026-09-04 사용자 지적: "매출액에
+ * 쉼표 구분이 없어서 보기 힘들다"). `components/money-input.tsx`와 같은 방법(콤마는
+ * `<input type="number">`가 못 받으니 text + inputMode="numeric")이지만, 이 폼은 제어
+ * 컴포넌트가 아니라 **네이티브 FormData 제출**이라 그 컴포넌트를 그대로 못 쓴다 — `name`을
+ * 가진 채로 콤마 섞인 문자열을 그대로 제출한다. 서버(`app/actions/company.ts`의 `숫자()`)가
+ * 이미 콤마를 걷어내고 파싱하니 별도 처리가 필요 없다.
+ */
+function MoneyField({
+  id,
+  name,
+  defaultValue,
+}: {
+  id: string
+  name: string
+  defaultValue: string
+}) {
+  const [text, setText] = React.useState(() => 콤마포맷(defaultValue.replace(/[^\d]/g, "")))
+  const ref = React.useRef<HTMLInputElement>(null)
+  const 놓을자리 = React.useRef<number | null>(null)
+
+  React.useLayoutEffect(() => {
+    const el = ref.current
+    if (el && 놓을자리.current != null && document.activeElement === el) {
+      const p = Math.min(놓을자리.current, el.value.length)
+      el.setSelectionRange(p, p)
+    }
+    놓을자리.current = null
+  })
+
+  return (
+    <Input
+      ref={ref}
+      id={id}
+      name={name}
+      type="text"
+      inputMode="numeric"
+      autoComplete="off"
+      value={text}
+      placeholder="—"
+      className="h-7 w-64 text-[14.3px]"
+      onChange={(e) => {
+        const el = e.target
+        const raw = el.value
+        const 커서앞숫자 = 숫자수(raw.slice(0, el.selectionStart ?? raw.length))
+        const digits = raw.replace(/[^\d]/g, "")
+        const 다음 = 콤마포맷(digits)
+        setText(다음)
+        놓을자리.current = 커서자리(다음, 커서앞숫자)
+      }}
+    />
+  )
+}
+
 function Row({
   f,
   values,
@@ -153,7 +224,7 @@ function Row({
 
   return (
     <div
-      className={`flex flex-wrap items-center gap-3 px-4 py-2.5 text-[13px] ${
+      className={`flex flex-wrap items-center gap-3 px-4 py-2.5 text-[14.3px] ${
         읽음 ? "bg-[var(--success)]/15" : ""
       }`}
     >
@@ -179,6 +250,14 @@ function Row({
           defaultChecked={v === true}
           className="size-4 accent-primary"
         />
+      ) : f.kind === "money" ? (
+        <MoneyField
+          id={f.name}
+          name={f.name}
+          // key 를 안 주면 판독 결과가 바뀌어도 내부 state 가 안 바뀐다(위 number/date 칸과 같은 이유).
+          key={`${f.name}-${읽음 ? "ai" : "db"}-${값문자열(v)}`}
+          defaultValue={값문자열(v)}
+        />
       ) : (
         <Input
           id={f.name}
@@ -190,7 +269,7 @@ function Row({
           key={`${f.name}-${읽음 ? "ai" : "db"}-${값문자열(v)}`}
           defaultValue={값문자열(v)}
           placeholder="—"
-          className="h-7 w-64 text-[13px]"
+          className="h-7 w-64 text-[14.3px]"
         />
       )}
 
@@ -249,10 +328,10 @@ function ParseUploader({ onParsed }: { onParsed: (r: ParseResult) => void }) {
           name="file"
           required
           accept=".pdf,.png,.jpg,.jpeg,.gif,.webp"
-          className="h-7 max-w-[320px] text-[12.8px] file:mr-2 file:h-6 file:rounded-md file:border file:bg-background file:px-2 file:text-[12.8px]"
+          className="h-7 max-w-[320px] text-[14.1px] file:mr-2 file:h-6 file:rounded-md file:border file:bg-background file:px-2 file:text-[14.1px]"
         />
         {/* ⚠ type="submit" 을 빼면 shadcn 기본값(type="button")이라 아무 반응이 없다. */}
-        <Button type="submit" variant="outline" className="h-7 text-[12.8px]" disabled={pending}>
+        <Button type="submit" variant="outline" className="h-7 text-[14.1px]" disabled={pending}>
           {pending ? "판독 중… (20~40초)" : "올려서 판독"}
         </Button>
         <span className="text-xs text-muted-foreground">
@@ -316,7 +395,7 @@ export function CompanyForm({ values }: { values: CompanyValues }) {
         <input type="hidden" name="출처_문서" defaultValue={values.출처_문서 ?? ""} />
 
         {판독값 && (
-          <p className="rounded-lg border bg-card p-3 text-[13px]">
+          <p className="rounded-lg border bg-card p-3 text-[14.3px]">
             서류에서 읽은 <b>{Object.keys(판독값).length}개 항목</b>이 아래에 채워져 있다(초록 배경).
             <b className="text-[var(--warning-fg)]"> 아직 저장되지 않았다</b> — 값을 확인하고
             「저장」을 눌러야 DB 에 들어간다. 틀린 값은 그 자리에서 고치면 된다.
@@ -324,7 +403,7 @@ export function CompanyForm({ values }: { values: CompanyValues }) {
         )}
 
         {대조미입력 > 0 && (
-          <p className="rounded-lg border bg-card p-3 text-[13px] text-[var(--warning-fg)]">
+          <p className="rounded-lg border bg-card p-3 text-[14.3px] text-[var(--warning-fg)]">
             ● 표시 항목 {대조미입력}개가 비어 있다 — 공고 탐색이 그만큼 못 거른다.
           </p>
         )}
@@ -359,7 +438,7 @@ export function CompanyForm({ values }: { values: CompanyValues }) {
 
         <div className="flex items-center gap-3">
           {/* type="submit" 을 빼면 조용히 아무 일도 안 일어난다. */}
-          <Button type="submit" className="h-7 text-[12.8px]" disabled={pending}>
+          <Button type="submit" className="h-7 text-[14.1px]" disabled={pending}>
             {pending ? "저장 중…" : "저장"}
           </Button>
           {state && (

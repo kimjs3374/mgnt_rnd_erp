@@ -60,6 +60,19 @@ export type 미등록거래처 = {
   합계: number
 }
 
+/** 업체 한 곳과의 집행 한 건 — 「구매내역」 창이 그대로 찍는다. */
+export type 업체집행 = {
+  id: number
+  일자: string | null
+  과제_id: number | null
+  과제코드: string | null
+  /** `품목` JSONB 를 서버에서 이미 한 줄로 만든 값. 객체를 그대로 화면에 넘기지 않는다. */
+  품목요약: string
+  비목_대분류: string | null
+  결제수단: string | null
+  합계: number | null
+}
+
 /** 화면이 먼저 보여주는 두 자리 + 그 밖. DB 에는 CHECK 가 없다(요구 서류가 사업마다 다르다). */
 export const 업체서류_기본 = ["사업자등록증", "통장사본"] as const
 export const 업체서류_후보 = ["사업자등록증", "통장사본", "계약서", "청렴계약이행서약서", "기타"]

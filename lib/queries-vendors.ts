@@ -1,7 +1,14 @@
 import "server-only"
 import { db, safeSelect } from "@/lib/db"
 import { 사업자번호_숫자만 } from "@/lib/vendor-types"
-import type { VendorRow, VendorDetail, VendorDocument, 미등록거래처 } from "@/lib/vendor-types"
+import { itemLabel } from "@/lib/item-label"
+import type {
+  VendorRow,
+  VendorDetail,
+  VendorDocument,
+  미등록거래처,
+  업체집행,
+} from "@/lib/vendor-types"
 
 /**
  * 업체(거래처) 대장 조회.
@@ -29,6 +36,48 @@ export const getVendorDocuments = () =>
   safeSelect<VendorDocument>("vendor_documents", () =>
     db.from("vendor_documents").select("*").order("업로드일시", { ascending: false }),
   )
+
+/**
+ * 업체별 집행 내역 — 「구매내역」 창이 쓴다. 사업자번호를 키로 준다.
+ *
+ * ⚠ **`v_vendor_status` 와 똑같은 규칙으로 잇는다** — `거래처_사업자번호` 와
+ *   `vendors.사업자번호` 의 **문자열이 그대로 같을 때**만 한 업체다. 뷰가 정규화를 안 한다.
+ *   여기서만 숫자를 뽑아 맞추면 표는 「3건」인데 창은 「5건」이 되어 **화면이 거짓말을 한다.**
+ *   표기 흔들림은 따로 고칠 일이지, 이 창이 몰래 고칠 일이 아니다.
+ *
+ * 최근 것부터 세운다 — 「요즘 이 업체와 뭘 했나」가 먼저 궁금하다(증빙 미비 목록과 반대다.
+ * 거기는 마감이 먼저 닿는 오래된 것부터였다. 보는 목적이 다르면 순서도 다르다).
+ */
+export async function getVendorExpenses(): Promise<{
+  rows: Record<string, 업체집행[]>
+  error: string | null
+}> {
+  const exp = await safeSelect<Record<string, unknown>>("expenses", () =>
+    db.from("expenses").select("*"),
+  )
+  if (exp.error) return { rows: {}, error: exp.error }
+
+  const rows: Record<string, 업체집행[]> = {}
+  for (const e of exp.rows) {
+    const 키 = e.거래처_사업자번호 == null ? "" : String(e.거래처_사업자번호)
+    if (!키) continue
+    ;(rows[키] ??= []).push({
+      id: Number(e.id),
+      일자: e.일자 == null ? null : String(e.일자),
+      과제_id: e.과제_id == null ? null : Number(e.과제_id),
+      과제코드: e.과제코드 == null ? null : String(e.과제코드),
+      품목요약: itemLabel(e.품목),
+      비목_대분류: e.비목_대분류 == null ? null : String(e.비목_대분류),
+      결제수단: e.결제수단 == null ? null : String(e.결제수단),
+      합계: e.합계 == null ? null : Number(e.합계),
+    })
+  }
+  // 일자가 없는 건은 맨 아래로 — 「모른다」를 최근처럼 보이게 하지 않는다.
+  for (const k of Object.keys(rows)) {
+    rows[k].sort((a, b) => (b.일자 ?? "").localeCompare(a.일자 ?? ""))
+  }
+  return { rows, error: null }
+}
 
 /**
  * **집행 건에는 있는데 대장에 없는 거래처.** 더미를 넣지 않았으니 이게 곧 첫 화면의 내용이다 —

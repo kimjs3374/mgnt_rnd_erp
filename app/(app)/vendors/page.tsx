@@ -1,3 +1,4 @@
+import { Building2, FileWarning, Landmark, TriangleAlert } from "lucide-react"
 import { PageShell, Stat } from "@/components/page-shell"
 import { DbError } from "@/components/db-error"
 import { VendorsPanel } from "@/components/vendors-panel"
@@ -6,8 +7,9 @@ import {
   getVendorDetails,
   getVendorDocuments,
   getUnregisteredVendors,
+  getVendorExpenses,
 } from "@/lib/queries-vendors"
-import { won } from "@/lib/queries"
+import { won, getCategories } from "@/lib/queries"
 
 export const dynamic = "force-dynamic"
 
@@ -24,11 +26,13 @@ export const dynamic = "force-dynamic"
 export default async function VendorsPage() {
   // 로그인 기능이 아직 없다(2026-09-03) — 화면이 그걸 전제하지 않는다.
   // 업로더 기록은 서버 액션이 세션이 있을 때만 넣는다. 로그인이 붙으면 화면도 저절로 이름을 보인다.
-  const [status, details, docs, 미등록] = await Promise.all([
+  const [status, details, docs, 미등록, 집행내역, 비목] = await Promise.all([
     getVendorStatus(),
     getVendorDetails(),
     getVendorDocuments(),
     getUnregisteredVendors(),
+    getVendorExpenses(),
+    getCategories(),
   ])
 
   const 업체 = status.rows
@@ -45,22 +49,31 @@ export default async function VendorsPage() {
       {details.error && <DbError what="업체 상세" error={details.error} />}
       {docs.error && <DbError what="업체 서류" error={docs.error} />}
       {미등록.error && <DbError what="집행 거래처" error={미등록.error} />}
+      {집행내역.error && <DbError what="업체 집행 내역" error={집행내역.error} />}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="등록 업체" value={업체.length} sub={`집행 합계 ${won(집행액)}`} />
         <Stat
-          label="사업자등록증 미확보"
+          icon={Building2}
+          label="등록 업체"
+          value={업체.length}
+          sub={`집행 합계 ${won(집행액)}`}
+        />
+        <Stat
+          icon={FileWarning}
+          label="사업자등록증 미등록"
           value={등록증없음}
           sub={업체.length ? `${업체.length}곳 중` : "업체를 먼저 등록한다"}
           tone={등록증없음 > 0 ? "warn" : "default"}
         />
         <Stat
-          label="통장사본 미확보"
+          icon={Landmark}
+          label="통장사본 미등록"
           value={통장없음}
           sub={업체.length ? `${업체.length}곳 중` : "업체를 먼저 등록한다"}
           tone={통장없음 > 0 ? "warn" : "default"}
         />
         <Stat
+          icon={TriangleAlert}
           label="대장에 없는 거래처"
           value={미등록.rows.length}
           sub="집행 건에는 있다"
@@ -68,7 +81,14 @@ export default async function VendorsPage() {
         />
       </div>
 
-      <VendorsPanel 업체={업체} 상세={details.rows} 서류={docs.rows} 미등록={미등록.rows} />
+      <VendorsPanel
+        업체={업체}
+        상세={details.rows}
+        서류={docs.rows}
+        미등록={미등록.rows}
+        집행내역={집행내역.rows}
+        비목이름={Object.fromEntries(비목.rows.map((c) => [c.코드, c.이름]))}
+      />
 
       <p className="text-xs text-muted-foreground">
         업체는 <span className="text-foreground">사업자번호</span>로 집행 건과 잇는다 — 증빙마다

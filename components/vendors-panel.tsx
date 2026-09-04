@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import {
   Dialog,
   DialogContent,
@@ -29,7 +30,13 @@ import {
   deleteVendor,
 } from "@/app/actions/vendors"
 import { 업체서류_기본, 사업자번호_표기 } from "@/lib/vendor-types"
-import type { VendorRow, VendorDetail, VendorDocument, 미등록거래처 } from "@/lib/vendor-types"
+import type {
+  VendorRow,
+  VendorDetail,
+  VendorDocument,
+  미등록거래처,
+  업체집행,
+} from "@/lib/vendor-types"
 
 /**
  * 업체(거래처) 대장 — 사업자등록증·통장사본을 받아 두는 자리.
@@ -66,14 +73,24 @@ function 시각(iso: string) {
  *   한글 식별자가 그 경계에서 어떻게 취급되는지는 도구마다 애매하다.
  *   변수·함수는 이 저장소 규칙대로 한글을 쓴다.
  */
+/**
+ * 서류를 받아 뒀나 — **「등록 / 미등록」 두 마디로 말한다**(2026-09-04 사용자 지시).
+ *
+ * 「확보 1」이라고 쓰면 회계 용어처럼 읽혀서 무슨 절차가 더 있는 줄 알게 되고,
+ * 1 이 무슨 수인지도 안 적혀 있었다. 장수는 업체를 열면 파일 목록이 그대로 보여 준다 —
+ * 훑는 자리에는 **받았나 못 받았나**만 있으면 된다. 여러 장이면 툴팁으로 말한다.
+ */
 function HeldBadge({ n }: { n: number }) {
   return n > 0 ? (
-    <span className="inline-flex h-5 items-center rounded-4xl border border-border px-2 text-xs tabular-nums">
-      확보 {n}
+    <span
+      className="inline-flex h-5 items-center rounded-4xl border border-border px-2 text-xs"
+      title={n > 1 ? `${n}장 올려 두었습니다` : undefined}
+    >
+      등록
     </span>
   ) : (
     <span className="inline-flex h-5 items-center rounded-4xl bg-[var(--warning)] px-2 text-xs text-[var(--warning-fg)]">
-      미확보
+      미등록
     </span>
   )
 }
@@ -114,9 +131,9 @@ function DocSlot({
       <div className="flex flex-wrap items-baseline gap-2">
         <span className="text-[13px] font-medium">{종류}</span>
         {목록.length === 0 ? (
-          <span className="text-xs text-[var(--warning-fg)]">미확보</span>
+          <span className="text-xs text-[var(--warning-fg)]">미등록</span>
         ) : (
-          <span className="text-xs text-muted-foreground">{목록.length}건</span>
+          <span className="text-xs text-muted-foreground">등록 {목록.length}건</span>
         )}
         <Button
           type="button"
@@ -182,17 +199,25 @@ export function VendorsPanel({
   상세,
   서류,
   미등록,
+  집행내역,
+  비목이름 = {},
 }: {
   업체: VendorRow[]
   상세: VendorDetail[]
   서류: VendorDocument[]
   미등록: 미등록거래처[]
+  /** 사업자번호 → 그 업체와의 집행 내역(최근순). 「구매내역」 창이 쓴다. */
+  집행내역: Record<string, 업체집행[]>
+  /** 비목 코드 → 한글. 화면에 EQUIP_PURCHASE 가 보이면 안 된다. */
+  비목이름?: Record<string, string>
 }) {
   const [msg, setMsg] = React.useState<{ ok: boolean; text: string } | null>(null)
   const [pending, start] = React.useTransition()
   /** null=닫힘 · "new"=등록 · 숫자=그 업체 수정 */
   const [열린, set열린] = React.useState<number | "new" | null>(null)
   const [기본값, set기본값] = React.useState<폼기본값>({})
+  /** 구매내역을 펼친 업체. 수정 창과 **따로** 연다 — 보러 온 사람이 편집 폼에 떨어지면 안 된다. */
+  const [내역업체, set내역업체] = React.useState<VendorRow | null>(null)
   const { 드롭대상, 드롭영역 } = useFileDrop({ 거부됨: (사유) => setMsg({ ok: false, text: 사유 }) })
 
   const 현재 = typeof 열린 === "number" ? 상세.find((v) => v.id === 열린) : undefined
@@ -355,7 +380,7 @@ export function VendorsPanel({
                 <TableHead>계좌</TableHead>
                 <TableHead>사업자등록증</TableHead>
                 <TableHead>통장사본</TableHead>
-                <TableHead className="text-right">집행</TableHead>
+                <TableHead className="text-right">구매내역</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -380,8 +405,25 @@ export function VendorsPanel({
                   <TableCell>
                     <HeldBadge n={v.통장사본_건수} />
                   </TableCell>
-                  <TableCell className="text-right tabular-nums text-muted-foreground">
-                    {v.집행건수 > 0 ? `${v.집행건수}건 · ${won(v.집행액)}` : "—"}
+                  {/* 금액을 뺐다(2026-09-04 사용자 지시) — 훑는 자리에 총액이 있으면 눈이
+                      거기 붙는데 정작 「무엇을 샀나」는 못 본다. 금액은 창 안에 건별로 있다. */}
+                  <TableCell className="text-right">
+                    {v.집행건수 > 0 ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-6 text-[12px]"
+                        // ⚠ 행 전체가 수정 창을 여는 자리다. 막지 않으면 두 창이 같이 뜬다.
+                        onClick={(ev) => {
+                          ev.stopPropagation()
+                          set내역업체(v)
+                        }}
+                      >
+                        구매내역 {v.집행건수}건
+                      </Button>
+                    ) : (
+                      <span className="text-[12px] text-muted-foreground">거래 없음</span>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
@@ -419,6 +461,89 @@ export function VendorsPanel({
           </ul>
         </div>
       )}
+
+      {/* 구매내역 — **보는 창이다.** 여기서 집행을 고치지 않는다(고치는 자리는 과제의 집행 탭).
+          줄을 누르면 그 집행 건이 펼쳐진 채로 열린다 — 증빙 미비 목록과 같은 규칙이다. */}
+      <Dialog open={내역업체 != null} onOpenChange={(o) => !o && set내역업체(null)}>
+        {내역업체 != null &&
+          (() => {
+            const 목록 = 내역업체.사업자번호 ? (집행내역[내역업체.사업자번호] ?? []) : []
+            const 합 = 목록.reduce((s, e) => s + Number(e.합계 ?? 0), 0)
+            return (
+              <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
+                <DialogHeader>
+                  <DialogTitle className="text-base">{내역업체.업체명} — 구매내역</DialogTitle>
+                  <DialogDescription>
+                    <b>사업자번호</b>로 이은 집행 건입니다. 최근 것부터 세웠습니다. 줄을 누르면 그
+                    집행 건으로 갑니다.
+                  </DialogDescription>
+                </DialogHeader>
+
+                {목록.length === 0 ? (
+                  <EmptyState
+                    title="이 업체로 잡힌 집행이 없습니다"
+                    hint={
+                      내역업체.사업자번호
+                        ? "집행 건의 사업자번호가 대장과 글자까지 같아야 이어집니다 — 표기가 다르면 여기 안 잡힙니다."
+                        : "이 업체에 사업자번호가 없습니다. 번호를 채우면 집행 건과 이어집니다."
+                    }
+                  />
+                ) : (
+                  <>
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="hover:bg-transparent">
+                          <TableHead className="w-[96px]">일자</TableHead>
+                          <TableHead className="w-[104px]">과제</TableHead>
+                          <TableHead>품목</TableHead>
+                          <TableHead className="w-[92px]">비목</TableHead>
+                          <TableHead className="w-[80px]">결제</TableHead>
+                          <TableHead className="w-[112px] text-right">금액</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {목록.map((e) => (
+                          <TableRow key={e.id} className="h-[38px] text-[13px]">
+                            <TableCell className="tabular-nums text-muted-foreground">
+                              {e.일자 ?? "미상"}
+                            </TableCell>
+                            <TableCell className="text-[12px] text-muted-foreground">
+                              {e.과제_id ? (
+                                <Link
+                                  href={`/projects/${e.과제_id}/expenses?expense=${e.id}`}
+                                  className="underline-offset-2 hover:underline"
+                                  onClick={() => set내역업체(null)}
+                                >
+                                  {e.과제코드 ?? `과제 ${e.과제_id}`}
+                                </Link>
+                              ) : (
+                                "미배정"
+                              )}
+                            </TableCell>
+                            <TableCell className="whitespace-normal">{e.품목요약}</TableCell>
+                            <TableCell className="text-[12px] text-muted-foreground">
+                              {e.비목_대분류 ? (비목이름[e.비목_대분류] ?? e.비목_대분류) : "—"}
+                            </TableCell>
+                            <TableCell className="text-[12px] text-muted-foreground">
+                              {e.결제수단 ?? "—"}
+                            </TableCell>
+                            <TableCell className="text-right font-semibold tabular-nums">
+                              {won(e.합계)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                    <p className="text-right text-[13px] tabular-nums">
+                      <span className="text-muted-foreground">{목록.length}건 합계 </span>
+                      <b>{won(합)}</b>
+                    </p>
+                  </>
+                )}
+              </DialogContent>
+            )
+          })()}
+      </Dialog>
 
       <Dialog open={열린 != null} onOpenChange={(o) => !o && set열린(null)}>
         {열린 != null && (

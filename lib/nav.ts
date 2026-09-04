@@ -42,6 +42,12 @@ export const NAV: NavGroup[] = [
       //   "뭔가 이상하게 만들고 있다"는 지적을 받고 되돌렸다. 들어가면 화면 안에 칩이 있다
       //   (`components/programs-stage-view.tsx`).
       { title: "지원사업 관리", url: "/programs" },
+      // 서류함 — 계상 증빙·집행 증빙·정산 서류가 각각 다른 표에 들어가는데, **보는 자리**는
+      // 하나여야 한다(2026-09-04 사용자 지시). 올리는 자리는 그대로 둔다: 놓는 자리가
+      // 곧 서류종류라 여기서 또 받으면 「무엇에 붙은 파일인가」가 사라진다.
+      // ⚠ 회사 > 서류함(/documents)과 이름이 같다. 그쪽은 **우리 회사** 서류(등기부·재무제표)고
+      //   이쪽은 **사업에 붙은** 서류다. 그룹이 갈라 주지만, 헷갈리면 이름을 나눈다.
+      { title: "서류함", url: "/programs/files" },
     ],
   },
   {
@@ -141,8 +147,11 @@ export function crumbsFor(pathname: string): { label: string; href?: string }[] 
   }
   if (pathname in 단계경로표) {
     const s = 단계경로표[pathname]
+    // 부모 그룹 이름은 NAV 에서 찾는다 — 여기 문자열을 박아 두면 그룹 이름이 바뀔 때
+    // 브레드크럼만 옛 이름으로 남는다(실제로 "통합 관리"가 그렇게 남아 있었다).
+    const 그룹 = NAV.find((g) => g.items?.some((i) => i.url === s.부모경로))
     return [
-      { label: "통합 관리" },
+      ...(그룹 ? [{ label: 그룹.title }] : []),
       { label: s.부모, href: s.부모경로 },
       { label: s.이름 },
     ]

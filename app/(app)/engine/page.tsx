@@ -1,12 +1,8 @@
 import { PageShell, Card } from "@/components/page-shell"
 import { DbError } from "@/components/db-error"
 import { EngineReportView } from "@/components/engine-report"
-import { EngineLlmCompare } from "@/components/engine-llm-compare"
-import { EngineHumanImpact } from "@/components/engine-human-impact"
 import { ReversePanel } from "@/components/reverse-panel"
-import {
-  getEngineReport, getReversible, getLlmCompare, getHumanImpact,
-} from "@/lib/queries-engine"
+import { getEngineReport, getReversible } from "@/lib/queries-engine"
 import { getReversalHistory } from "@/app/actions/engine"
 
 export const dynamic = "force-dynamic"
@@ -24,14 +20,20 @@ export const dynamic = "force-dynamic"
  *
  * 두 요구가 한 화면에 있는 이유 — 근거(왜 걸렀나)를 보지 않고 되돌리면 그건 그냥 뒤집기다.
  * 같은 화면에서 규칙의 결과와 그 근거를 보고, 납득이 안 되는 건을 바로 되돌린다.
+ *
+ * ⚠ 여기 두지 않는 것 — 엔진 버전 추이 · LLM 대조 · 사람 입력 효과.
+ *   사용자 지적(2026-09-04): "판정리포트에다가 내용을 넣어봐야 어짜피 실서비스할때
+ *   의미없는데이터임 … 판정리포트에는 어떻게 판정했는지만 보여주면되고". 맞다 — 이 화면은
+ *   실무자가 「이 공고가 왜 이렇게 판정됐나」를 보는 자리다. 규칙을 몇 번 고쳤고 LLM 과
+ *   얼마나 닮았는지는 **만드는 쪽의 관심사**라 화면에 두면 실무를 가린다.
+ *   그 자료는 별도 아티팩트로 정리해 둔다(집계 함수 getLlmCompare·getHumanImpact 는
+ *   지우지 않고 남겨 둔다 — 아티팩트를 갱신할 때 같은 숫자를 다시 뽑아야 한다).
  */
 export default async function EnginePage() {
-  const [report, 되돌림후보, 되돌림이력, llm대조, 사람효과] = await Promise.all([
+  const [report, 되돌림후보, 되돌림이력] = await Promise.all([
     getEngineReport(),
     getReversible(),
     getReversalHistory(),
-    getLlmCompare(),
-    getHumanImpact(),
   ])
 
   return (
@@ -40,10 +42,6 @@ export default async function EnginePage() {
       description="수집한 공고를 규칙 엔진이 어떤 근거로 걸러냈는지 — 그리고 접힌 것을 사람이 다시 여는 자리."
     >
       <EngineReportView report={report} />
-
-      <EngineHumanImpact impact={사람효과} />
-
-      <EngineLlmCompare cmp={llm대조} />
 
       <Card className="p-4">
         <h2 className="text-sm font-semibold">엔진이 접은 것을 다시 열기</h2>

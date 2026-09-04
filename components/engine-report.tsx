@@ -181,11 +181,11 @@ export function EngineReportView({ report }: { report: EngineReport }) {
           </div>
         </Card>
 
-        {/* ── 판정 경로 · 학습 ───────────────────────────────────────────── */}
+        {/* ── 판정 경로 ─────────────────────────────────────────────────── */}
         <Card className="p-4">
-          <h2 className="text-sm font-semibold">무엇이 판정을 만들었나</h2>
+          <h2 className="text-sm font-semibold">무엇이 이 판정을 만들었나</h2>
           <p className="mt-0.5 mb-3 text-xs text-muted-foreground">
-            규칙만으로 났는지, 사람이 남긴 판정(학습)이나 답변이 얹혔는지.
+            계산(규칙)만으로 났는지, 사람이 남긴 답변·판정이 얹혔는지.
           </p>
           <div className="grid gap-2.5">
             {report.판정경로.map((p) => (
@@ -261,55 +261,6 @@ export function EngineReportView({ report }: { report: EngineReport }) {
         </Card>
       </div>
 
-      {/* ── 엔진 버전 추이 ───────────────────────────────────────────────── */}
-      <Card className="p-4">
-        <h2 className="text-sm font-semibold">규칙을 고칠 때마다 판정이 어떻게 움직였나</h2>
-        <p className="mt-0.5 mb-3 text-xs text-muted-foreground">
-          엔진 버전은 지우지 않고 나란히 쌓는다 — 「고쳐서 나아졌는가」를 숫자로 되짚기 위해서다.
-          같은 공고를 같은 날 여러 버전으로 판정한 결과라 서로 직접 비교된다.
-        </p>
-        <div className="overflow-x-auto">
-          <table className="w-full text-[13px]">
-            <thead>
-              <tr className="border-b text-left text-xs text-muted-foreground">
-                <th className="py-1.5 pr-3 font-medium">버전</th>
-                <th className="py-1.5 pr-3 text-right font-medium">가능</th>
-                <th className="py-1.5 pr-3 text-right font-medium">확인필요</th>
-                <th className="py-1.5 pr-3 text-right font-medium">요건미확인</th>
-                <th className="py-1.5 pr-3 text-right font-medium">불가</th>
-                <th className="py-1.5 pr-3 text-right font-medium">해당없음</th>
-                <th className="py-1.5 text-right font-medium">합계</th>
-              </tr>
-            </thead>
-            <tbody>
-              {report.버전추이.map((v) => (
-                <tr
-                  key={v.엔진버전}
-                  className={
-                    "border-b last:border-0 " +
-                    (v.엔진버전 === report.엔진버전 ? "bg-muted/40 font-medium" : "")
-                  }
-                >
-                  <td className="py-1.5 pr-3 whitespace-nowrap">
-                    {v.엔진버전}
-                    {v.엔진버전 === report.엔진버전 && (
-                      <span className="ml-1.5 text-[10px] text-muted-foreground">현재</span>
-                    )}
-                  </td>
-                  {(["가능", "확인필요", "요건미확인", "불가", "해당없음"] as const).map((k) => (
-                    <td key={k} className="py-1.5 pr-3 text-right tabular-nums">
-                      {(v.판정[k] ?? 0).toLocaleString()}
-                    </td>
-                  ))}
-                  <td className="py-1.5 text-right tabular-nums text-muted-foreground">
-                    {v.합계.toLocaleString()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
     </div>
   )
 }

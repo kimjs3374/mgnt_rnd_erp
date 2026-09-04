@@ -42,13 +42,9 @@ export const NAV: NavGroup[] = [
       //   "뭔가 이상하게 만들고 있다"는 지적을 받고 되돌렸다. 들어가면 화면 안에 칩이 있다
       //   (`components/programs-stage-view.tsx`).
       { title: "지원사업 관리", url: "/programs" },
-      // 서류함 — 계상 증빙·집행 증빙·정산 서류가 각각 다른 표에 들어가는데, **보는 자리**는
-      // 하나여야 한다(2026-09-04 사용자 지시). 올리는 자리는 그대로 둔다: 놓는 자리가
-      // 곧 서류종류라 여기서 또 받으면 「무엇에 붙은 파일인가」가 사라진다.
-      // ⚠ 회사 > 서류함(/documents)과 이름이 같아서 헷갈린다는 지적을 받고
-      //   「지원사업 서류함」으로 이름을 나눴다(2026-09-04). 그쪽은 **우리 회사** 서류
-      //   (등기부·재무제표)고, 이쪽은 **사업에 붙은** 서류다.
-      { title: "지원사업 서류함", url: "/programs/files" },
+      // ⚠ 「지원사업 서류함」은 메뉴에서 뺐다(2026-09-04 사용자 지시) — 화면·주소는
+      //   그대로 살아 있다(`/programs/files`, 북마크·e2e 용도). 다시 넣고 싶으면
+      //   이 자리에 `{ title: "지원사업 서류함", url: "/programs/files" }` 를 되돌린다.
     ],
   },
   {
@@ -62,9 +58,9 @@ export const NAV: NavGroup[] = [
       { title: "공고 탐색", url: "/project-announcements" },
       // 지원사업 그룹과 **같은 순서**다 — 나란히 놓인 두 그룹이 서로 다르면 매번 다시 읽어야 한다.
       { title: "과제 관리", url: "/projects/all" },
-      // 지원사업 서류함(위 지원사업 그룹)과 같은 화면·같은 조회다 — 어느 사업유형까지
-      // 셀지만 다르다(`getProgramFiles(true)`, 2026-09-04 사용자 지시).
-      { title: "과제사업 서류함", url: "/projects/files" },
+      // ⚠ 「과제사업 서류함」도 메뉴에서 뺐다(2026-09-04 사용자 지시) — 화면·주소는
+      //   그대로 살아 있다(`/projects/files`). 되돌리려면
+      //   `{ title: "과제사업 서류함", url: "/projects/files" }` 를 이 자리에 넣는다.
       // ⚠ 「업체」는 사이드바에 없다(2026-09-04 사용자 지시) — **과제사업 서류함 안의 탭**
       //   으로 들어갔다(`/projects/files?tab=vendors`). 정산 때 서류를 챙기는 사람이
       //   과제 서류와 업체 서류를 같이 찾는데, 메뉴를 갈라 두면 매번 오간다.
@@ -147,10 +143,12 @@ export function crumbsFor(pathname: string): { label: string; href?: string }[] 
     "/projects/applied": { 부모: "과제 관리", 부모경로: "/projects/all", 이름: "신청완료" },
     "/projects": { 부모: "과제 관리", 부모경로: "/projects/all", 이름: "수행중" },
     "/projects/closed": { 부모: "과제 관리", 부모경로: "/projects/all", 이름: "사업종료" },
+    "/projects/rejected": { 부모: "과제 관리", 부모경로: "/projects/all", 이름: "미선정" },
     "/programs/applying": { 부모: "지원사업 관리", 부모경로: "/programs", 이름: "신청중" },
     "/programs/applied": { 부모: "지원사업 관리", 부모경로: "/programs", 이름: "신청완료" },
     "/programs/executing": { 부모: "지원사업 관리", 부모경로: "/programs", 이름: "수행중" },
     "/programs/closed": { 부모: "지원사업 관리", 부모경로: "/programs", 이름: "사업종료" },
+    "/programs/rejected": { 부모: "지원사업 관리", 부모경로: "/programs", 이름: "미선정" },
   }
   if (pathname in 단계경로표) {
     const s = 단계경로표[pathname]

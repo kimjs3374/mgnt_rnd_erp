@@ -82,11 +82,15 @@ export async function ProjectsStageView({ 단계 }: { 단계: 보기범위 }) {
     종료일: r.종료일,
   })
 
-  // ⚠ 미선정도 **신청완료에 남긴다**(2026-09-04 사용자 지시). 전에는 여기서 걸러 내
-  //    화면에서 그냥 사라졌다 — 떨어진 것도 결과라 보여야 한다(배지로 구분한다).
-  const 과제들 = 전체
+  // 미선정은 여기서 뺀다 — 자기만의 목록(단계==="미선정")에서만 본다(2026-09-04 사용자 지시).
+  const 미선정목록 = 전체.filter((r) => 단계판정(재료(r)) === "미선정")
+  const 과제들 = 전체.filter((r) => 단계판정(재료(r)) !== "미선정")
   const 전체보기중 = 단계 === "전체"
-  const rows = 전체보기중 ? 과제들 : 과제들.filter((r) => 단계판정(재료(r)) === 단계)
+  const rows = 전체보기중
+    ? 과제들
+    : 단계 === "미선정"
+      ? 미선정목록
+      : 과제들.filter((r) => 단계판정(재료(r)) === 단계)
 
   /**
    * 과제 id → 단계. **서버가 한 번만 판정해서 넘긴다.**
@@ -156,7 +160,9 @@ export async function ProjectsStageView({ 단계 }: { 단계: 보기범위 }) {
           const 수 =
             b.이름 === "전체"
               ? 과제들.length
-              : 과제들.filter((r) => 단계판정(재료(r)) === b.이름).length
+              : b.이름 === "미선정"
+                ? 미선정목록.length
+                : 과제들.filter((r) => 단계판정(재료(r)) === b.이름).length
           const 지금 = b.이름 === 단계
           return (
             <Link
@@ -192,7 +198,9 @@ export async function ProjectsStageView({ 단계 }: { 단계: 보기범위 }) {
                   ? "발표·심사 중, 결과 대기"
                   : 단계 === "수행중"
                     ? "협약 기간 안"
-                    : "정산·보고 남을 수 있음"
+                    : 단계 === "미선정"
+                      ? "같은 공고 재지원 전 확인"
+                      : "정산·보고 남을 수 있음"
           }
         />
         <Stat
@@ -231,6 +239,13 @@ export async function ProjectsStageView({ 단계 }: { 단계: 보기범위 }) {
             label={`${올해}년 안에 끝남`}
             value={올해끝}
             sub="완료보고를 준비할 건"
+          />
+        ) : 단계 === "미선정" ? (
+          <Stat
+            icon={TriangleAlert}
+            label="떨어진 건"
+            value={rows.length}
+            sub="같은 공고에 또 지원하지 않도록 확인"
           />
         ) : (
           <Stat

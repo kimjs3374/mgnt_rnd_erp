@@ -87,7 +87,7 @@ export function StageAdvance({
       <span onClick={멈춤} className="inline-flex items-center gap-1.5 text-xs">
         <span className="text-muted-foreground">
           {물어보는중 === "미선정"
-            ? "떨어진 것으로 기록합니다. 신청완료에 남습니다."
+            ? "떨어진 것으로 기록합니다. 미선정 목록으로 옮겨집니다."
             : 다음.물음}
         </span>
         <button

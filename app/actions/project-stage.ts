@@ -77,10 +77,12 @@ export async function 단계올리기(
       "/projects/applying",
       "/projects/applied",
       "/projects/closed",
+      "/projects/rejected",
       "/programs",
       "/programs/applying",
       "/programs/executing",
       "/programs/closed",
+      "/programs/rejected",
       "/dashboard",
     ]) {
       revalidatePath(path)
@@ -97,10 +99,13 @@ export async function 단계올리기(
  * 선정은 `단계올리기(ids, "수행중")` 가 이미 한다 — 상태를 「수행중」으로 올리고
  * 선정결과에 「선정」을 남긴다. 여기는 **떨어진 쪽**이다.
  *
- * ★ **상태는 그대로 「신청중」이다.** 미선정은 수행에 들어가지 않으니 올릴 데가 없다.
- *   그래서 단계로는 **신청완료에 남는다**(`lib/project-stage.ts`). 전에는 미선정을
- *   세 단계 어디에도 안 넣어서 화면에서 그냥 사라졌는데, 그러면 「신청했던가?」를 다시
- *   뒤지게 되고 같은 사업에 또 지원하는 사고가 난다. **떨어진 것도 결과다.**
+ * ★ **상태 칼럼은 그대로 「신청중」이다.** 미선정은 수행에 들어가지 않으니 올릴 데가 없다.
+ *   대신 `선정결과: "미선정"` 만 남기면 `단계판정()`(`lib/project-stage.ts`)이 이 값을
+ *   보고 **독립된 「미선정」 단계**로 계산해 낸다 — 신청중·신청완료 화면에는 더 이상
+ *   안 보이고 자기만의 목록(`/projects/rejected`, `/programs/rejected`)에서만 본다
+ *   (2026-09-04 재수정 — 처음엔 신청완료에 같이 뒀는데, 「숨기고 따로 보게 해달라」는
+ *   사용자 지시로 바꿨다). 그래도 **완전히 사라지진 않는다** — 따로 모아 두는 것으로
+ *   같은 사업에 또 지원하는 사고를 여전히 막는다.
  *
  * ⚠ 되돌리는 버튼은 두지 않는다. 눌렀다 되돌렸다가 기록 없이 남는다 —
  *   잘못 눌렀으면 사람이 고치되 **왜 고쳤는지가 남는 길**로 고친다(CLAUDE.md §6-1).
@@ -143,10 +148,12 @@ export async function 미선정으로표시(과제_ids: number[]): Promise<Stage
       "/projects/applying",
       "/projects/applied",
       "/projects/closed",
+      "/projects/rejected",
       "/programs",
       "/programs/applying",
       "/programs/executing",
       "/programs/closed",
+      "/programs/rejected",
       "/dashboard",
     ]) {
       revalidatePath(path)

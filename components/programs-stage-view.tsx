@@ -46,12 +46,18 @@ export async function ProgramsStageView({ 단계 }: { 단계: 사업단계 | "�
     종료일: 종료일맵.get(r.id) ?? null,
   })
 
-  // 미선정 건은 세 단계 어디에도 넣지 않는다 — 사업이 되지 못한 건이다.
+  // 미선정 건은 네 단계 어디에도 안 넣는다 — 자기만의 목록(단계==="미선정")에서만 본다
+  // (2026-09-04 사용자 지시: 숨기고 따로 보게 해달라).
+  const 미선정목록 = 지원사업.filter((r) => 미선정인가(재료(r)))
   const 사업들 = 지원사업.filter((r) => !미선정인가(재료(r)))
   const 지원사업id = new Set(지원사업.map((r) => r.id))
   const 미처리점검 = 점검목록.rows.filter((c) => 지원사업id.has(c.과제_id))
   const 전체보기중 = 단계 === "전체"
-  const rows = 전체보기중 ? 사업들 : 사업들.filter((r) => 단계판정(재료(r)) === 단계)
+  const rows = 전체보기중
+    ? 사업들
+    : 단계 === "미선정"
+      ? 미선정목록
+      : 사업들.filter((r) => 단계판정(재료(r)) === 단계)
 
   const 정의 = 전체보기중
     ? { 단계: "전체" as const, 경로: 전체보기.경로, 설명: 전체보기.설명 }
@@ -97,7 +103,9 @@ export async function ProgramsStageView({ 단계 }: { 단계: 사업단계 | "�
           const 수 =
             b.이름 === "전체"
               ? 사업들.length
-              : 사업들.filter((r) => 단계판정(재료(r)) === b.이름).length
+              : b.이름 === "미선정"
+                ? 미선정목록.length
+                : 사업들.filter((r) => 단계판정(재료(r)) === b.이름).length
           const 지금 = b.이름 === 단계
           return (
             <Link
@@ -133,7 +141,9 @@ export async function ProgramsStageView({ 단계 }: { 단계: 사업단계 | "�
                   ? "발표·심사 중, 결과 대기"
                   : 단계 === "수행중"
                     ? "협약 기간 안"
-                    : "정산·보고 남을 수 있음"
+                    : 단계 === "미선정"
+                      ? "같은 공고 재지원 전 확인"
+                      : "정산·보고 남을 수 있음"
           }
         />
         <Stat icon={Wallet} label="지원금액 합계" value={won(총지원금)} sub={`사용 ${won(총사용)}`} />

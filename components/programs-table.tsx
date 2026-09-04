@@ -84,6 +84,7 @@ const 상태색: Record<string, string> = {
   신청완료: "bg-amber-100/60 hover:bg-amber-200/60 dark:bg-amber-900/40 dark:hover:bg-amber-800/50",
   수행중: "bg-sky-50/50 hover:bg-sky-100/60 dark:bg-sky-950/40 dark:hover:bg-sky-900/50",
   사업종료: "bg-red-100/40 hover:bg-red-200/50 dark:bg-red-950/60 dark:hover:bg-red-900/60",
+  미선정: "bg-slate-100/60 hover:bg-slate-200/60 dark:bg-slate-800/40 dark:hover:bg-slate-700/50",
 }
 /** 범례 — 지금 표에 실제로 있는 색만 적는다(단계 화면에서는 한 색만 뜬다). */
 const 상태색_범례: { 상태: string; 스와치: string; 이름: string; 설명: string }[] = [
@@ -91,6 +92,7 @@ const 상태색_범례: { 상태: string; 스와치: string; 이름: string; 설
   { 상태: "신청완료", 스와치: "bg-amber-100/60 dark:bg-amber-900/40", 이름: "신청완료", 설명: "발표·심사까지 마치고 최종 결과만 남았습니다." },
   { 상태: "수행중", 스와치: "bg-sky-50/50 dark:bg-sky-950/40", 이름: "수행중", 설명: "협약기간 안에서 집행·증빙을 챙깁니다." },
   { 상태: "사업종료", 스와치: "bg-red-100/40 dark:bg-red-950/60", 이름: "사업종료", 설명: "끝난 사업입니다 — 문제가 있다는 뜻이 아닙니다." },
+  { 상태: "미선정", 스와치: "bg-slate-100/60 dark:bg-slate-800/40", 이름: "미선정", 설명: "신청했지만 떨어진 건입니다." },
 ]
 
 /** 마감이 가까울수록 눈에 띄게 — 표 안에서 「지금 급한 게 뭔지」가 스캔되게 한다. */

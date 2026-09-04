@@ -33,10 +33,12 @@ import { 단계정의, 단계판정, 미선정인가, type 과제단계 } from "
  *   ⚠ 줄 높이를 52px → 56px 로 살짝 키웠다 — 배지가 커진 만큼 자리를 준다.
  */
 
-// 사업종료는 대시보드에 안 올린다 — 보고 나서 할 일이 없다. 순서는 단계정의(신청→수행→종료)를 따른다.
+// 사업종료·미선정은 대시보드에 안 올린다 — 보고 나서 할 일이 없다. 순서는 단계정의(신청→수행→종료)를 따른다.
 // ⚠ 타입을 명시한다 — TS 가 `!== "사업종료"` 필터에서 타입을 좁혀 버리면
 //   아래에서 「과제단계 | null」 인 active 를 못 받아들인다.
-const 탭목록: 과제단계[] = 단계정의.map((d) => d.단계).filter((t) => t !== "사업종료")
+const 탭목록: 과제단계[] = 단계정의
+  .map((d) => d.단계)
+  .filter((t) => t !== "사업종료" && t !== "미선정")
 const 페이지당 = 3
 
 const 사업유형이름: Record<string, string> = {
@@ -122,12 +124,12 @@ export function ProjectBoard({
       </div>
 
       {error ? (
-        <p className="px-4 py-10 text-center text-[13px] text-muted-foreground">
+        <p className="px-4 py-10 text-center text-[14.3px] text-muted-foreground">
           목록을 불러오지 못했습니다.
           <span className="mt-1 block text-xs opacity-70">{error}</span>
         </p>
       ) : 탭.length === 0 ? (
-        <div className="px-4 py-10 text-center text-[13px] text-muted-foreground">
+        <div className="px-4 py-10 text-center text-[14.3px] text-muted-foreground">
           진행 중인 과제가 없습니다 ·{" "}
           <Link href="/projects" className="text-primary hover:underline">
             과제 관리에서 전체 보기
@@ -145,7 +147,7 @@ export function ProjectBoard({
                   aria-selected={t === 현재}
                   onClick={() => 탭전환(t)}
                   className={cn(
-                    "-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2 text-[13px] transition-colors",
+                    "-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2 text-[14.3px] transition-colors",
                     t === 현재
                       ? "border-primary font-medium text-foreground"
                       : "border-transparent text-muted-foreground hover:text-foreground",
@@ -180,7 +182,7 @@ export function ProjectBoard({
                       두 줄의 세로 가운데에 온다. 두 줄은 같은 블록 안이라 시작점이 같다. */}
                   <사업유형배지 코드={유형} />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px]" title={r.과제명}>
+                    <span className="block truncate text-[14.3px]" title={r.과제명}>
                       {r.과제명}
                     </span>
                     <span className="block truncate text-xs text-muted-foreground">
@@ -236,7 +238,7 @@ function 사업유형배지({ 코드 }: { 코드: string | null }) {
   if (!코드) return null
   const 이름 = 사업유형이름[코드] ?? 코드
   return (
-    <span className="inline-flex h-4 shrink-0 items-center rounded border border-border px-1 text-[10px] font-medium text-muted-foreground">
+    <span className="inline-flex h-4 shrink-0 items-center rounded border border-border px-1 text-[11px] font-medium text-muted-foreground">
       {이름}
     </span>
   )

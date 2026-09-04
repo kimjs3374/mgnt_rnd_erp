@@ -27,16 +27,16 @@ import {
 export const dynamic = "force-dynamic"
 
 /**
- * 과제사업의 **단계별 화면 한 벌** — 신청중 · 수행중 · 사업종료.
+ * 과제사업의 **단계별 화면 한 벌** — 신청중 · 신청완료 · 수행중 · 사업종료.
  *
- * 세 화면이 읽는 데이터와 표가 똑같아서 한 컴포넌트로 두고 `단계` 만 바꿔 부른다.
- * 셋으로 복사하면 한 곳만 고쳐지고, 그 어긋남은 시연장에서 드러난다.
+ * 네 화면이 읽는 데이터와 표가 똑같아서 한 컴포넌트로 두고 `단계` 만 바꿔 부른다.
+ * 넷으로 복사하면 한 곳만 고쳐지고, 그 어긋남은 시연장에서 드러난다.
  *
  * 단계는 **저장하지 않고 계산한다**(`lib/project-stage.ts`) — 그래야 선정을 기록하는 순간
  * 수행중으로, 수행기간이 지나면 사업종료로 **저절로** 넘어간다(2026-09-03 사용자 지시).
  */
 export async function ProjectsStageView({ 단계 }: { 단계: 보기범위 }) {
-  const [{ rows: 전체, error }, 미배정, 스테이지, 책임자행, who, 증빙] = await Promise.all([
+  const [{ rows: 전체행, error }, 미배정, 스테이지, 책임자행, who, 증빙, 공고행] = await Promise.all([
     getProjects(),
     // 과제가 아직 정해지지 않은 집행. 사이드바에서 「집행」을 뺐으므로 여기서 알려주지 않으면
     // Slack 으로 막 들어온 건이 아무 화면에도 안 뜬다.
@@ -45,7 +45,7 @@ export async function ProjectsStageView({ 단계 }: { 단계: 보기범위 }) {
     ),
     // 선정결과는 `ProjectRow` 에 없고 `lib/queries.ts` 는 권태호 담당이라 건드리지 않는다.
     // ⚠ 한글 컬럼명을 select 문자열에 넣으면 supabase-js 타입 파서가 컴파일에서 막는다.
-    safeSelect<{ id: number; 선정결과: string | null; 상태: string; 종료일: string | null }>(
+    safeSelect<{ id: number; 선정결과: string | null; 상태: string; 종료일: string | null; 공고_id: number | null }>(
       "projects",
       () => db.from("projects").select("*"),
     ),
@@ -56,9 +56,22 @@ export async function ProjectsStageView({ 단계 }: { 단계: 보기범위 }) {
     getCurrentUser(),
     // 사업비 증빙이 빈 곳(2026-09-04 사용자 지시). 집행 건별 필수 서류 기준이다.
     getEvidenceGaps(),
+    // ⚠ 「과제 관리」는 과제사업만 본다(2026-09-04 사용자 지적 — 지원사업 관리에 있는
+    //   건이 여기에도 섞여 나왔다). 공고 출처로 지원사업(기업마당·K-Startup)을 걸러낸다.
+    //   이 필터가 팀원의 이후 편집으로 한 번 사라졌었다 — 다시 지우지 않는다.
+    safeSelect<{ id: number; 출처: string }>("announcements", () =>
+      db.from("announcements").select("id,출처"),
+    ),
   ])
 
+  const 지원사업_출처 = new Set(["기업마당", "K-Startup"])
+  const 공고출처 = new Map(공고행.rows.map((a) => [a.id, a.출처]))
   const 판정재료 = new Map(스테이지.rows.map((r) => [Number(r.id), r]))
+  const 전체 = 전체행.filter((r) => {
+    const 공고_id = 판정재료.get(r.id)?.공고_id ?? null
+    if (공고_id == null) return true
+    return !지원사업_출처.has(공고출처.get(공고_id) ?? "")
+  })
   /**
    * 판정에 쓸 값. 선정결과는 위 조회에서 오고, 상태·종료일은 목록 행이 이미 갖고 있다.
    * 조회가 실패하면 선정결과 없이 판정한다 — 못 읽었다고 화면을 비우지 않는다.
@@ -107,7 +120,6 @@ export async function ProjectsStageView({ 단계 }: { 단계: 보기범위 }) {
   const 정산 = await getNextSettlement()
 
   const 올해 = new Date().toISOString().slice(0, 4)
-  const 심사중 = rows.filter((r) => (판정재료.get(r.id)?.선정결과 ?? "") === "발표심사").length
   const 올해끝 = rows.filter((r) => String(r.종료일 ?? "").slice(0, 4) === 올해).length
 
   const 책임자 = Object.fromEntries(
@@ -167,17 +179,23 @@ export async function ProjectsStageView({ 단계 }: { 단계: 보기범위 }) {
             전체보기중
               ? "선정 결과 포함"
               : 단계 === "신청중"
-                ? "결과 기다리는 중"
-                : 단계 === "수행중"
-                  ? "협약 기간 안"
-                  : "정산·보고 남을 수 있음"
+                ? "접수 완료, 심사 전"
+                : 단계 === "신청완료"
+                  ? "발표·심사 중, 결과 대기"
+                  : 단계 === "수행중"
+                    ? "협약 기간 안"
+                    : "정산·보고 남을 수 있음"
           }
         />
         <Stat
           icon={Wallet}
           label="총사업비 합계"
           value={won(총사업비)}
-          sub={단계 === "신청중" ? "협약 전이라 0 인 건이 섞여 있다" : `정부지원금 ${won(정부지원금)}`}
+          sub={
+            단계 === "신청중" || 단계 === "신청완료"
+              ? "협약 전이라 0 인 건이 섞여 있다"
+              : `정부지원금 ${won(정부지원금)}`
+          }
         />
         {전체보기중 ? (
           // ⚠ 여기 「단계별(2 · 6 · 4)」 카드가 있었는데 **바로 위 단계 칩이 같은 숫자**를
@@ -194,7 +212,11 @@ export async function ProjectsStageView({ 단계 }: { 단계: 보기범위 }) {
             비목이름={Object.fromEntries(비목.rows.map((c) => [c.코드, c.이름]))}
           />
         ) : 단계 === "신청중" ? (
-          <Stat icon={Presentation} label="발표·심사 중" value={심사중} sub="결과를 기다리는 건" />
+          // 발표·심사는 이제 「신청완료」 단계로 따로 있다(2026-09-04, 신청중·신청완료 분리) —
+          // 여기서는 다음에 뭘 기다리는지만 짧게 말해 준다.
+          <Stat icon={Layers} label="다음 단계" value="신청완료" sub="발표·심사가 기록되면 자동으로 넘어간다" />
+        ) : 단계 === "신청완료" ? (
+          <Stat icon={Presentation} label="발표·심사 중" value={rows.length} sub="선정 결과를 기다리는 건" />
         ) : 단계 === "수행중" ? (
           <Stat
             icon={CalendarClock}
@@ -230,12 +252,15 @@ export async function ProjectsStageView({ 단계 }: { 단계: 보기범위 }) {
         밀린종료={밀린종료}
       />
 
-      {단계 === "신청중" && (
+      {(단계 === "신청중" || 단계 === "신청완료") && (
         <>
           {/* 사업비 계상은 **신청서에 넣는 것**이라 선정 전에 하는 일이다.
               선정된 뒤에 처음 계상하는 순서는 실제 일과 반대다(2026-09-04 사용자 지시로 열었다).
               예전엔 여기서 전용 대기열 화면(「과제 계상」)으로 보냈는데 그 화면을 없앴다 —
-              총사업비도 이제 줄 오른쪽 「계상」 링크를 눌러 들어간 연구비 계상 탭에서 바로 채운다. */}
+              총사업비도 이제 줄 오른쪽 「계상」 링크를 눌러 들어간 연구비 계상 탭에서 바로 채운다.
+              신청완료(발표·심사 중)도 협약 전이라 신청중과 같은 안내를 그대로 쓴다
+              (탭 노출 규칙도 raw 상태="신청중" 기준이라 신청완료 건도 계상 탭이 열려 있다,
+              `components/project-tabs.tsx`). */}
           <p className="text-xs text-muted-foreground">
             신청 단계에서도 <b>과제비를 계상할 수 있습니다</b> — 줄 오른쪽의 「계상」을 눌러 열면
             재원 구성 카드에서 총사업비를 넣고 규정으로 나눌 수 있습니다. 한도 검산(연구수당 ·

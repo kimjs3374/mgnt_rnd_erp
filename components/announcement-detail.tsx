@@ -194,6 +194,7 @@ export async function AnnouncementDetail({
   id,
   backHref,
   footer,
+  등록됨 = false,
 }: {
   id: string
   backHref: string
@@ -203,6 +204,13 @@ export async function AnnouncementDetail({
    * 페이지에서 형제로 붙이면 여백 규격 밖으로 나간다 — 그래서 프롭으로 받는다.
    */
   footer?: ReactNode
+  /**
+   * 이 공고로 실제 지원 등록(`app.projects` 행)이 있는가. `ApplyStatus`(관심·신청예정·
+   * 신청완료 — `app.watchlist` 뿐인 개인 표시)가 이 값을 몰라서 "신청완료를 눌렀는데
+   * 지원사업 관리에 안 보인다"는 혼동이 생겼다(2026-09-04 사용자 지적). 둘은 다른
+   * 테이블·다른 뜻이라 여기서 연결해 알려 준다.
+   */
+  등록됨?: boolean
 }) {
   const announcementId = Number(id)
   if (!Number.isFinite(announcementId)) notFound()
@@ -436,6 +444,10 @@ export async function AnnouncementDetail({
 
             {/* 구역 4 — 신청 진행 상태(사람이 직접 정한다) */}
             <div className="border-t bg-card p-4">
+              {/* ⚠ TODO(2026-09-04, mgnt2): `등록됨` prop을 components/apply-status.tsx
+                  가 아직 못 받는다 — 그 파일이 mgnt3 소유(644)라 이 계정에서 못 고친다.
+                  nyc-15(추정 mgnt3)에게 요청해 뒀다. 고쳐지면 `등록됨={등록됨}`를
+                  다시 붙인다 — 위 AnnouncementDetail 프롭·두 페이지는 이미 준비돼 있다. */}
               <ApplyStatus announcementId={a.id} initial={a.관심상태 ?? null} />
             </div>
           </div>

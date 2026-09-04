@@ -24,6 +24,8 @@ export default async function AnnouncementDetailPage({
     <AnnouncementDetail
       id={id}
       backHref="/announcements"
+      // 「신청완료」(개인 표시)와 실제 대장 등록을 헷갈리지 않게 알려 준다(2026-09-04).
+      등록됨={apps.rows.length > 0}
       footer={
         <ApplyPanel
           공고_id={공고_id}

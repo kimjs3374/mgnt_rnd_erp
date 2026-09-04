@@ -74,24 +74,46 @@ function 시각(iso: string) {
  *   변수·함수는 이 저장소 규칙대로 한글을 쓴다.
  */
 /**
- * 서류를 받아 뒀나 — **「등록 / 미등록」 두 마디로 말한다**(2026-09-04 사용자 지시).
+ * 서류를 받아 뒀나 — **「등록 / 미등록」 두 마디로 말하고, 등록돼 있으면 그 자리에서 받는다.**
+ * (2026-09-04 사용자 지시: 「따로 사업자등록증 및 통장사본을 다운받고 볼 수 있게」)
  *
- * 「확보 1」이라고 쓰면 회계 용어처럼 읽혀서 무슨 절차가 더 있는 줄 알게 되고,
- * 1 이 무슨 수인지도 안 적혀 있었다. 장수는 업체를 열면 파일 목록이 그대로 보여 준다 —
- * 훑는 자리에는 **받았나 못 받았나**만 있으면 된다. 여러 장이면 툴팁으로 말한다.
+ * 「확보 1」이라고 쓰던 것을 「등록」으로 바꿨다 — 회계 용어처럼 읽혀 무슨 절차가 더 있는 줄
+ * 알게 되고, 1 이 무슨 수인지도 안 적혀 있었다.
+ *
+ * ⚠ **행 전체가 업체 창을 여는 자리**라 누를 때 막지 않으면 파일도 받고 창도 뜬다.
+ * ⚠ 여러 장이면 **가장 최근 것**을 준다(조회가 업로드일시 내림차순으로 준다).
+ *   나머지는 업체를 열면 목록으로 다 보인다 — 표 한 칸에 파일 목록을 펼치지 않는다.
  */
-function HeldBadge({ n }: { n: number }) {
-  return n > 0 ? (
-    <span
-      className="inline-flex h-5 items-center rounded-4xl border border-border px-2 text-xs"
-      title={n > 1 ? `${n}장 올려 두었습니다` : undefined}
+function HeldBadge({
+  목록,
+  pending,
+  on받기,
+}: {
+  목록: VendorDocument[]
+  pending: boolean
+  on받기: (id: number) => void
+}) {
+  if (목록.length === 0)
+    return (
+      <span className="inline-flex h-5 items-center rounded-4xl bg-[var(--warning)] px-2 text-xs text-[var(--warning-fg)]">
+        미등록
+      </span>
+    )
+  const 최근 = 목록[0]
+  return (
+    <button
+      type="button"
+      disabled={pending}
+      onClick={(ev) => {
+        ev.stopPropagation()
+        on받기(최근.id)
+      }}
+      className="inline-flex h-5 cursor-pointer items-center gap-1 rounded-4xl border border-border px-2 text-xs hover:bg-secondary disabled:opacity-50"
+      title={`${최근.파일명}${목록.length > 1 ? ` 외 ${목록.length - 1}장` : ""} — 눌러서 받기`}
     >
       등록
-    </span>
-  ) : (
-    <span className="inline-flex h-5 items-center rounded-4xl bg-[var(--warning)] px-2 text-xs text-[var(--warning-fg)]">
-      미등록
-    </span>
+      <span aria-hidden>⤓</span>
+    </button>
   )
 }
 
@@ -129,7 +151,7 @@ function DocSlot({
       className={`rounded-lg border p-3 transition-colors ${켜짐 ? 드롭강조.카드 : ""}`}
     >
       <div className="flex flex-wrap items-baseline gap-2">
-        <span className="text-[13px] font-medium">{종류}</span>
+        <span className="text-[14.3px] font-medium">{종류}</span>
         {목록.length === 0 ? (
           <span className="text-xs text-[var(--warning-fg)]">미등록</span>
         ) : (
@@ -138,7 +160,7 @@ function DocSlot({
         <Button
           type="button"
           variant="outline"
-          className="ml-auto h-6 text-[12px]"
+          className="ml-auto h-6 text-[13.2px]"
           disabled={pending}
           onClick={() => 입력.current?.click()}
         >
@@ -163,7 +185,7 @@ function DocSlot({
       ) : (
         <ul className="mt-2 space-y-1">
           {목록.map((d) => (
-            <li key={d.id} className="flex flex-wrap items-baseline gap-2 text-[13px]">
+            <li key={d.id} className="flex flex-wrap items-baseline gap-2 text-[14.3px]">
               <button
                 type="button"
                 className="underline-offset-2 hover:underline"
@@ -318,6 +340,16 @@ export function VendorsPanel({
     })
   }
 
+  /**
+   * 한 업체의 한 종류 서류. **최근 것이 앞이다** — 조회가 업로드일시 내림차순으로 준다.
+   * 표의 「등록 ⤓」 이 그중 첫 장을 받는다.
+   */
+  const 서류종류별 = React.useCallback(
+    (업체_id: number, 종류: string) =>
+      서류.filter((d) => d.업체_id === 업체_id && d.서류종류 === 종류),
+    [서류],
+  )
+
   /** 한 자리 몫의 props. 자리는 위의 `DocSlot` 이 그린다. */
   const 자리props = (종류: string) => ({
     종류,
@@ -334,7 +366,7 @@ export function VendorsPanel({
     <>
       {msg && (
         <div
-          className={`rounded-lg border p-3 text-[13px] ${
+          className={`rounded-lg border p-3 text-[14.3px] ${
             msg.ok
               ? "border-border bg-card text-foreground"
               : "border-destructive/30 bg-destructive/5 text-destructive"
@@ -347,7 +379,7 @@ export function VendorsPanel({
       <div className="flex flex-wrap items-center gap-2">
         <Button
           type="button"
-          className="h-7 text-[12.8px]"
+          className="h-7 text-[14.1px]"
           onClick={() => {
             set기본값({})
             set열린("new")
@@ -387,7 +419,7 @@ export function VendorsPanel({
               {업체.map((v) => (
                 <TableRow
                   key={v.id}
-                  className="h-[38px] cursor-pointer text-[13px]"
+                  className="h-[38px] cursor-pointer text-[14.3px]"
                   onClick={() => set열린(v.id)}
                 >
                   <TableCell className="font-medium">{v.업체명}</TableCell>
@@ -400,10 +432,18 @@ export function VendorsPanel({
                     {v.계좌번호 ? `${v.은행 ?? ""} ${v.계좌번호}`.trim() : "—"}
                   </TableCell>
                   <TableCell>
-                    <HeldBadge n={v.등록증_건수} />
+                    <HeldBadge
+                      목록={서류종류별(v.id, "사업자등록증")}
+                      pending={pending}
+                      on받기={내려받기}
+                    />
                   </TableCell>
                   <TableCell>
-                    <HeldBadge n={v.통장사본_건수} />
+                    <HeldBadge
+                      목록={서류종류별(v.id, "통장사본")}
+                      pending={pending}
+                      on받기={내려받기}
+                    />
                   </TableCell>
                   {/* 금액을 뺐다(2026-09-04 사용자 지시) — 훑는 자리에 총액이 있으면 눈이
                       거기 붙는데 정작 「무엇을 샀나」는 못 본다. 금액은 창 안에 건별로 있다. */}
@@ -412,7 +452,7 @@ export function VendorsPanel({
                       <Button
                         type="button"
                         variant="outline"
-                        className="h-6 text-[12px]"
+                        className="h-6 text-[13.2px]"
                         // ⚠ 행 전체가 수정 창을 여는 자리다. 막지 않으면 두 창이 같이 뜬다.
                         onClick={(ev) => {
                           ev.stopPropagation()
@@ -422,7 +462,7 @@ export function VendorsPanel({
                         구매내역 {v.집행건수}건
                       </Button>
                     ) : (
-                      <span className="text-[12px] text-muted-foreground">거래 없음</span>
+                      <span className="text-[13.2px] text-muted-foreground">거래 없음</span>
                     )}
                   </TableCell>
                 </TableRow>
@@ -434,7 +474,7 @@ export function VendorsPanel({
 
       {미등록.length > 0 && (
         <div className="rounded-lg border bg-card p-3">
-          <p className="text-[13px] font-medium">집행 건에는 있는데 대장에 없는 거래처</p>
+          <p className="text-[14.3px] font-medium">집행 건에는 있는데 대장에 없는 거래처</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
             많이 쓴 곳부터입니다. 누르면 그 값이 채워진 등록 창이 열립니다 —{" "}
             <span className="text-foreground">표기가 다른 같은 업체를 자동으로 합치지 않습니다.</span>{" "}
@@ -503,11 +543,11 @@ export function VendorsPanel({
                       </TableHeader>
                       <TableBody>
                         {목록.map((e) => (
-                          <TableRow key={e.id} className="h-[38px] text-[13px]">
+                          <TableRow key={e.id} className="h-[38px] text-[14.3px]">
                             <TableCell className="tabular-nums text-muted-foreground">
                               {e.일자 ?? "미상"}
                             </TableCell>
-                            <TableCell className="text-[12px] text-muted-foreground">
+                            <TableCell className="text-[13.2px] text-muted-foreground">
                               {e.과제_id ? (
                                 <Link
                                   href={`/projects/${e.과제_id}/expenses?expense=${e.id}`}
@@ -521,10 +561,10 @@ export function VendorsPanel({
                               )}
                             </TableCell>
                             <TableCell className="whitespace-normal">{e.품목요약}</TableCell>
-                            <TableCell className="text-[12px] text-muted-foreground">
+                            <TableCell className="text-[13.2px] text-muted-foreground">
                               {e.비목_대분류 ? (비목이름[e.비목_대분류] ?? e.비목_대분류) : "—"}
                             </TableCell>
-                            <TableCell className="text-[12px] text-muted-foreground">
+                            <TableCell className="text-[13.2px] text-muted-foreground">
                               {e.결제수단 ?? "—"}
                             </TableCell>
                             <TableCell className="text-right font-semibold tabular-nums">
@@ -534,7 +574,7 @@ export function VendorsPanel({
                         ))}
                       </TableBody>
                     </Table>
-                    <p className="text-right text-[13px] tabular-nums">
+                    <p className="text-right text-[14.3px] tabular-nums">
                       <span className="text-muted-foreground">{목록.length}건 합계 </span>
                       <b>{won(합)}</b>
                     </p>
@@ -581,7 +621,7 @@ export function VendorsPanel({
                     name="업체명"
                     required
                     defaultValue={현재?.업체명 ?? 기본값.업체명 ?? ""}
-                    className="mt-1 h-8 text-[13px]"
+                    className="mt-1 h-8 text-[14.3px]"
                   />
                 </label>
                 <label className="text-xs text-muted-foreground">
@@ -591,7 +631,7 @@ export function VendorsPanel({
                     inputMode="numeric"
                     placeholder="1234567890"
                     defaultValue={현재?.사업자번호 ?? 기본값.사업자번호 ?? ""}
-                    className="mt-1 h-8 tabular-nums text-[13px]"
+                    className="mt-1 h-8 tabular-nums text-[14.3px]"
                   />
                 </label>
                 <label className="text-xs text-muted-foreground">
@@ -599,7 +639,7 @@ export function VendorsPanel({
                   <Input
                     name="대표자"
                     defaultValue={현재?.대표자 ?? ""}
-                    className="mt-1 h-8 text-[13px]"
+                    className="mt-1 h-8 text-[14.3px]"
                   />
                 </label>
                 <label className="text-xs text-muted-foreground">
@@ -607,7 +647,7 @@ export function VendorsPanel({
                   <Input
                     name="연락처"
                     defaultValue={현재?.연락처 ?? ""}
-                    className="mt-1 h-8 text-[13px]"
+                    className="mt-1 h-8 text-[14.3px]"
                   />
                 </label>
                 <label className="text-xs text-muted-foreground">
@@ -615,7 +655,7 @@ export function VendorsPanel({
                   <Input
                     name="업태"
                     defaultValue={현재?.업태 ?? ""}
-                    className="mt-1 h-8 text-[13px]"
+                    className="mt-1 h-8 text-[14.3px]"
                   />
                 </label>
                 <label className="text-xs text-muted-foreground">
@@ -623,7 +663,7 @@ export function VendorsPanel({
                   <Input
                     name="종목"
                     defaultValue={현재?.종목 ?? ""}
-                    className="mt-1 h-8 text-[13px]"
+                    className="mt-1 h-8 text-[14.3px]"
                   />
                 </label>
                 <label className="text-xs text-muted-foreground sm:col-span-2">
@@ -631,7 +671,7 @@ export function VendorsPanel({
                   <Input
                     name="주소"
                     defaultValue={현재?.주소 ?? ""}
-                    className="mt-1 h-8 text-[13px]"
+                    className="mt-1 h-8 text-[14.3px]"
                   />
                 </label>
                 <label className="text-xs text-muted-foreground">
@@ -639,13 +679,13 @@ export function VendorsPanel({
                   <Input
                     name="이메일"
                     defaultValue={현재?.이메일 ?? ""}
-                    className="mt-1 h-8 text-[13px]"
+                    className="mt-1 h-8 text-[14.3px]"
                   />
                 </label>
               </div>
 
               <div className="rounded-lg border p-3">
-                <p className="text-[13px] font-medium">입금 계좌</p>
+                <p className="text-[14.3px] font-medium">입금 계좌</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   통장사본을 보고 사람이 옮겨 적습니다. <b>AI 로 읽지 않습니다</b> — 계좌번호는 한
                   자만 틀려도 돈이 남에게 가고, 확신도로 걸러낼 수 있는 종류의 오류가 아닙니다.
@@ -656,7 +696,7 @@ export function VendorsPanel({
                     <Input
                       name="은행"
                       defaultValue={현재?.은행 ?? ""}
-                      className="mt-1 h-8 text-[13px]"
+                      className="mt-1 h-8 text-[14.3px]"
                     />
                   </label>
                   <label className="text-xs text-muted-foreground">
@@ -664,7 +704,7 @@ export function VendorsPanel({
                     <Input
                       name="계좌번호"
                       defaultValue={현재?.계좌번호 ?? ""}
-                      className="mt-1 h-8 tabular-nums text-[13px]"
+                      className="mt-1 h-8 tabular-nums text-[14.3px]"
                     />
                   </label>
                   <label className="text-xs text-muted-foreground">
@@ -672,7 +712,7 @@ export function VendorsPanel({
                     <Input
                       name="예금주"
                       defaultValue={현재?.예금주 ?? ""}
-                      className="mt-1 h-8 text-[13px]"
+                      className="mt-1 h-8 text-[14.3px]"
                     />
                   </label>
                 </div>
@@ -683,18 +723,18 @@ export function VendorsPanel({
                 <Input
                   name="비고"
                   defaultValue={현재?.비고 ?? ""}
-                  className="mt-1 h-8 text-[13px]"
+                  className="mt-1 h-8 text-[14.3px]"
                 />
               </label>
 
               <div className="flex flex-wrap items-center gap-2">
-                <Button type="submit" className="h-7 text-[12.8px]" disabled={pending}>
+                <Button type="submit" className="h-7 text-[14.1px]" disabled={pending}>
                   {pending ? "저장 중…" : 현재 ? "저장" : "등록"}
                 </Button>
                 <Button
                   type="button"
                   variant="ghost"
-                  className="h-7 text-[12.8px]"
+                  className="h-7 text-[14.1px]"
                   onClick={() => set열린(null)}
                 >
                   닫기
@@ -703,7 +743,7 @@ export function VendorsPanel({
                   <Button
                     type="button"
                     variant="ghost"
-                    className="ml-auto h-7 text-[12.8px] text-muted-foreground hover:text-destructive"
+                    className="ml-auto h-7 text-[14.1px] text-muted-foreground hover:text-destructive"
                     disabled={pending}
                     onClick={() => 업체지우기(현재.id)}
                   >
@@ -715,7 +755,7 @@ export function VendorsPanel({
 
             {현재 ? (
               <div className="space-y-2">
-                <p className="text-[13px] font-medium">받아 둔 서류</p>
+                <p className="text-[14.3px] font-medium">받아 둔 서류</p>
                 {업체서류_기본.map((종류) => (
                   <DocSlot key={종류} {...자리props(종류)} />
                 ))}

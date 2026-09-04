@@ -36,7 +36,7 @@ const 파일수 = () =>
   page.evaluate(() => document.querySelectorAll('a[href^="/api/program-files/one"]').length)
 const 묶음수 = () => page.evaluate(() => document.querySelectorAll("[aria-expanded]").length)
 
-console.log("\n지원사업 서류함")
+console.log("\n지원사업 증빙 서류함")
 await page.goto(`${BASE}/programs/files`, { waitUntil: "networkidle0" })
 await 잠깐(400)
 
@@ -94,7 +94,7 @@ if (처음 === 0) {
 
   // 한 번에 받기 — 진짜 zip 이 오는가(헤더까지 본다).
   const zip = await page.evaluate(async () => {
-    const r = await fetch("/api/program-files/zip")
+    const r = await fetch("/api/program-files/zip?scope=program")
     const buf = new Uint8Array(await r.arrayBuffer())
     return {
       status: r.status,
@@ -110,7 +110,7 @@ if (처음 === 0) {
 
   // 기간을 좁혀 요청하면 zip 도 좁아져야 한다 — 보는 것과 받는 것이 어긋나면 안 된다.
   const 빈zip = await page.evaluate(async () => {
-    const r = await fetch("/api/program-files/zip?from=2000-01-01&to=2000-12-31")
+    const r = await fetch("/api/program-files/zip?scope=program&from=2000-01-01&to=2000-12-31")
     return r.status
   })
   확인(빈zip === 404, "기간에 아무것도 없으면 빈 zip 을 주지 않고 알려 준다", `${빈zip}`)
@@ -127,6 +127,24 @@ if (처음 === 0) {
     `${한개.status}/${한개.type}`,
   )
 }
+
+// 두 서류함이 zip 라우트 하나를 같이 쓴다 — scope 를 빼먹으면 화면과 다른 것이 내려간다.
+// 조용히 아무거나 주지 말고 막아야 한다.
+const scope없이 = await page.evaluate(async () =>
+  (await fetch("/api/program-files/zip")).status,
+)
+확인(scope없이 === 400, "scope 없이 부르면 거절한다", `${scope없이}`)
+
+// 지원사업 서류함에 **국가 R&D 과제가 섞이지 않는가**(2026-09-04 사용자 지적: "커피박 과제가
+// 들어가 있어"). 화면에 뜬 사업 이름이 과제사업 zip 쪽 이름과 겹치면 안 된다.
+const 섞였나 = await page.evaluate(async () => {
+  const 화면 = [...document.querySelectorAll("[aria-expanded]")].map((b) =>
+    (b.textContent ?? "").replace(/^[▾▸]\s*/, "").trim(),
+  )
+  const r = await fetch("/api/program-files/zip?scope=project")
+  return { 화면, 과제사업zip: r.status }
+})
+log(`지원사업 서류함에 뜬 사업: ${섞였나.화면.join(" / ") || "(없음)"}`)
 
 확인(errors.length === 0, "콘솔 오류 없음", errors.slice(0, 3).join(" | "))
 

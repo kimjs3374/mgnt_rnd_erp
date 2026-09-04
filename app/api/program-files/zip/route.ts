@@ -1,8 +1,14 @@
 import { db } from "@/lib/db"
 import { makeZip, uniqueNames, type ZipEntry } from "@/lib/zip"
+import { 서류함에담나 } from "@/lib/program-file-types"
+import type { 서류함스코프 } from "@/lib/program-file-types"
 
 /**
- * 지원사업 서류함 **한 번에 내려받기** — `/api/program-files/zip?from=2026-01-01&to=2026-09-04&project=2`
+ * 서류함 **한 번에 내려받기**
+ * — `/api/program-files/zip?scope=program&from=2026-01-01&to=2026-09-04&project=2`
+ *
+ * ⚠ 지원사업 서류함과 과제사업 서류함이 **이 라우트 하나**를 같이 쓴다. `scope` 를 안 실으면
+ *   화면과 다른 것이 내려간다 — 어느 쪽에서 눌러도 같은 zip 이 오던 시절이 있었다.
  * (2026-09-04 사용자 지시: "한번에 모아서 다운 및 특정 기간을 지정해 볼 수 있으면 좋겠어")
  *
  * 세 표에 흩어진 파일을 **사업별 폴더**로 묶어 하나의 zip 으로 흘려보낸다:
@@ -36,6 +42,12 @@ export async function GET(req: Request) {
   const from = url.searchParams.get("from") // YYYY-MM-DD, 업로드 시각 기준
   const to = url.searchParams.get("to")
   const project = url.searchParams.get("project") // 특정 사업만
+  // 기본값을 두지 않는다. 안 실려 오면 어느 서류함인지 모르는 채 아무거나 내려보내게 된다.
+  const scope = url.searchParams.get("scope")
+  if (scope !== "program" && scope !== "project") {
+    return new Response("scope 가 필요하다 (program | project)", { status: 400 })
+  }
+  const 스코프: 서류함스코프 = scope
   // 화면에서 출처를 걸러 놓았으면 **받는 것도 같아야 한다.** 보이는 것과 받는 것이
   // 다르면 사람은 zip 을 열어 보고 나서야 안다.
   const sources = url.searchParams.get("sources")
@@ -52,12 +64,19 @@ export async function GET(req: Request) {
   const 오류 = 과제.error ?? 계상.error ?? 정산.error ?? 집행증빙.error ?? 집행.error ?? 비목.error
   if (오류) return new Response(`목록을 읽지 못했다: ${오류.message}`, { status: 500 })
 
-  const 이름 = new Map((과제.data ?? []).map((p: any) => [Number(p.id), String(p.과제명)]))
+  // 화면(`lib/queries-program-files.ts`)과 **같은 함수**로 거른다. 규칙을 여기 따로 적었다가
+  // 한쪽만 틀려서 화면엔 없는 R&D 과제가 zip 에 들어간 적이 있다.
+  const 이름 = new Map(
+    (과제.data ?? [])
+      .filter((p: any) => 서류함에담나(p, 스코프))
+      .map((p: any) => [Number(p.id), String(p.과제명)]),
+  )
   const 비목이름 = new Map((비목.data ?? []).map((c: any) => [String(c.코드), String(c.이름)]))
   const 집행의과제 = new Map((집행.data ?? []).map((e: any) => [Number(e.id), e.과제_id]))
 
   const rows: 모음[] = []
   for (const r of (계상.data ?? []) as any[]) {
+    if (!이름.has(Number(r.과제_id))) continue
     rows.push({
       과제_id: Number(r.과제_id),
       과제명: 이름.get(Number(r.과제_id)) ?? `과제 ${r.과제_id}`,
@@ -69,6 +88,7 @@ export async function GET(req: Request) {
     })
   }
   for (const r of (정산.data ?? []) as any[]) {
+    if (!이름.has(Number(r.과제_id))) continue
     rows.push({
       과제_id: Number(r.과제_id),
       과제명: 이름.get(Number(r.과제_id)) ?? `과제 ${r.과제_id}`,
@@ -81,7 +101,8 @@ export async function GET(req: Request) {
   }
   for (const r of (집행증빙.data ?? []) as any[]) {
     const pid = 집행의과제.get(Number(r.expense_id))
-    if (!pid || !r.storage_path) continue // 과제 미지정·확정 전 파일은 사업 폴더에 넣지 않는다
+    // 과제 미지정·확정 전 파일, 그리고 지원사업이 아닌 건은 넣지 않는다
+    if (!pid || !r.storage_path || !이름.has(Number(pid))) continue
     rows.push({
       과제_id: Number(pid),
       과제명: 이름.get(Number(pid)) ?? `과제 ${pid}`,
@@ -150,8 +171,9 @@ export async function GET(req: Request) {
 
   const zip = makeZip(entries)
   const 기간 = from || to ? `_${from || "처음"}~${to || "지금"}` : ""
-  const 대상 = project ? `_${safe(이름.get(Number(project)) ?? `과제${project}`)}` : ""
-  const filename = `지원사업서류함${대상}${기간}_${new Date().toISOString().slice(0, 10)}.zip`
+  const 대상 = project ? `_${safe(이름.get(Number(project)) ?? `사업${project}`)}` : ""
+  const 함이름 = 스코프 === "project" ? "과제사업서류함" : "지원사업증빙서류함"
+  const filename = `${함이름}${대상}${기간}_${new Date().toISOString().slice(0, 10)}.zip`
 
   return new Response(new Uint8Array(zip), {
     headers: {

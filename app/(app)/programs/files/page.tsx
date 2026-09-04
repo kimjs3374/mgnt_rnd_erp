@@ -4,7 +4,11 @@ import { getProgramFiles } from "@/lib/queries-program-files"
 export const dynamic = "force-dynamic"
 
 /**
- * 지원사업 > **지원사업 서류함**.
+ * 지원사업 > **지원사업 증빙 서류함**(2026-09-04 사용자가 정한 이름).
+ *
+ * ⚠ **지원사업 관리 목록에 뜨는 사업만** 담는다. `app.projects` 한 표에 과제사업(국가 R&D)이
+ *   같이 들어 있어서, 안 거르면 R&D 과제가 섞인다 — 실제로 「커피박 …」이 섞여 나왔다.
+ *   판별은 `서류함에담나()` 한 군데에 있고 zip 라우트도 같은 것을 쓴다.
  *
  * 계상 증빙·집행 증빙·정산 서류가 각각 다른 표에 들어간다. 붙는 자리가 달라서 그렇고
  * 그건 그대로 둔다 — 대신 **한 눈에 보고 한 번에 받는 자리**를 여기 하나 만든다
@@ -14,16 +18,17 @@ export const dynamic = "force-dynamic"
  * 업체·회사에 붙고, 여러 사업이 같은 것을 쓴다(회사 > 업체 · 회사 > 서류함).
  */
 export default async function ProgramFilesPage() {
-  // false = 국가 R&D 아닌 것만. 과제사업 서류함(app/(app)/projects/files/page.tsx)이
-  // 같은 조회를 true로 부른다 — 어느 과제까지 셀지만 다르다(2026-09-04).
-  const { 파일, error } = await getProgramFiles(false)
+  // 과제사업 서류함(app/(app)/projects/files/page.tsx)이 같은 조회를 "project"로 부른다 —
+  // 어느 사업까지 셀지만 다르다(2026-09-04).
+  const { 파일, error } = await getProgramFiles("program")
 
   return (
     <div className="space-y-4 p-4">
       <div>
-        <h1 className="text-lg font-semibold">지원사업 서류함</h1>
+        <h1 className="text-lg font-semibold">지원사업 증빙 서류함</h1>
         <p className="text-sm text-muted-foreground">
-          사업마다 올린 서류를 모아 본다. 기간을 정해 거르고, 사업별 폴더로 묶어 한 번에 받는다.
+          지원사업 관리에 있는 사업에 올린 증빙을 모아 본다. 검색하고 기간을 정해 거른 다음,
+          사업별 폴더로 묶어 한 번에 받는다.
         </p>
       </div>
 
@@ -32,7 +37,7 @@ export default async function ProgramFilesPage() {
           서류 목록을 읽지 못했다: {error}
         </p>
       ) : (
-        <ProgramFiles 파일={파일} />
+        <ProgramFiles 파일={파일} 스코프="program" />
       )}
     </div>
   )

@@ -12,12 +12,14 @@ import {
 } from "@/components/ui/select"
 import { 기간프리셋, 범위정하기, 기간_전체 } from "@/lib/date-filter"
 import { 묶기, 시각표기, 크기표기, 출처목록 } from "@/lib/program-file-types"
-import type { 사업파일 } from "@/lib/program-file-types"
+import type { 사업파일, 서류함스코프 } from "@/lib/program-file-types"
 
 /**
- * 지원사업 **서류함** — 사업마다 흩어져 들어간 파일을 한 화면에 모아 놓는다.
+ * **지원사업 증빙 서류함** — 사업마다 흩어져 들어간 증빙을 한 화면에 모아 놓는다.
  * (2026-09-04 사용자 지시: "각 지원사업에 넣은 폴더를 한눈에 보기 쉽게 정리 … 한번에 모아서
- *  다운 및 특정 기간을 지정해 볼 수 있으면")
+ *  다운 및 특정 기간을 지정해 볼 수 있으면", 이어서 "지원사업 관리에 있는 사업만")
+ *
+ * 담기는 것은 **지원사업 관리 목록에 있는 사업뿐**이다(거르는 일은 조회 계층이 한다).
  *
  * 이 화면은 **보고 받는 곳**이지 올리는 곳이 아니다. 올리는 자리는 그대로 둔다 —
  * 계상 증빙은 비목 옆에서, 집행 증빙은 사용 건 옆에서, 정산 서류는 정산 탭에서 붙인다.
@@ -29,7 +31,7 @@ import type { 사업파일 } from "@/lib/program-file-types"
 
 const 모든출처 = "출처 전체"
 
-export function ProgramFiles({ 파일 }: { 파일: 사업파일[] }) {
+export function ProgramFiles({ 파일, 스코프 }: { 파일: 사업파일[]; 스코프: 서류함스코프 }) {
   const [검색, set검색] = React.useState("")
   const [출처, set출처] = React.useState<string>(모든출처)
   const [프리셋, set프리셋] = React.useState<string>(기간_전체)
@@ -73,6 +75,8 @@ export function ProgramFiles({ 파일 }: { 파일: 사업파일[] }) {
   /** 화면에 걸어 둔 조건을 그대로 zip 주소에 싣는다 — 보는 것과 받는 것이 어긋나면 안 된다. */
   function zip주소(과제_id?: number) {
     const p = new URLSearchParams()
+    // 어느 서류함인지 반드시 싣는다 — 두 서류함이 zip 라우트 하나를 같이 쓴다.
+    p.set("scope", 스코프)
     if (범위) {
       p.set("from", 범위.시작)
       p.set("to", 범위.끝)
@@ -180,7 +184,7 @@ export function ProgramFiles({ 파일 }: { 파일: 사업파일[] }) {
       {묶음.length === 0 ? (
         <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
           {파일.length === 0
-            ? "아직 올라온 서류가 없다. 계상 증빙은 연구비 계상 탭에서, 집행 증빙은 집행 탭에서, 정산 서류는 정산 탭에서 붙인다."
+            ? "지원사업에 올라온 증빙이 아직 없다. 계상 증빙은 연구비 계상 탭에서, 집행 증빙은 집행 탭에서, 정산 서류는 정산 탭에서 붙인다."
             : "그 조건에 걸리는 서류가 없다."}
         </p>
       ) : (
@@ -206,7 +210,7 @@ export function ProgramFiles({ 파일 }: { 파일: 사업파일[] }) {
                       href={`/projects/${g.과제_id}`}
                       className="text-xs text-muted-foreground hover:underline"
                     >
-                      과제 열기
+                      사업 열기
                     </a>
                     <Button
                       variant="outline"

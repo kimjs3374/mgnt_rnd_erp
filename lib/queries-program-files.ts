@@ -1,6 +1,7 @@
 import "server-only"
 import { db, safeSelect } from "@/lib/db"
-import type { 사업파일 } from "@/lib/program-file-types"
+import { 서류함에담나 } from "@/lib/program-file-types"
+import type { 사업파일, 서류함스코프 } from "@/lib/program-file-types"
 
 /**
  * 사업 **서류함** — 한 사업에 붙은 파일을 세 곳에서 모아 한 목록으로 만든다.
@@ -20,7 +21,7 @@ import type { 사업파일 } from "@/lib/program-file-types"
  * ⚠ `select("컬럼명")` 로 추리지 않는다 — supabase-js 타입 파서가 한글 식별자에서 막힌다.
  */
 
-type 과제Raw = { id: number; 과제명: string; 사업유형: string | null }
+type 과제Raw = { id: number; 과제명: string; 사업유형: string | null; 선정결과: string | null }
 type 계상Raw = {
   id: number
   과제_id: number
@@ -60,14 +61,12 @@ export type 서류함결과 = { 파일: 사업파일[]; error: string | null }
  *
  * 정렬은 **최근 넣은 것이 위**다. 서류함에서 찾는 건 대개 방금 넣은 파일이다.
  *
- * @param 과제사업만 지원사업 서류함(`/programs/files`)과 과제사업 서류함(`/projects/files`)이
+ * @param 스코프 지원사업 서류함(`/programs/files`)과 과제사업 서류함(`/projects/files`)이
  *   같은 조회·같은 화면(`ProgramFiles`)을 쓴다 — 파일 세 표(계상·정산·집행증빙)의 모양이
- *   사업유형과 무관하게 똑같기 때문이다. 다른 건 **어느 과제까지 셀지**뿐이라 여기서 하나만
- *   더 거른다(2026-09-04 사용자 지시 — "과제사업의 과제관리 아래에 과제사업 서류함 탭
- *   생성"). `undefined`(기본값)면 전부, `false`면 지원사업(국가 R&D 아님), `true`면
- *   과제사업(국가 R&D)만.
+ *   사업유형과 무관하게 똑같기 때문이다. 다른 건 **어느 사업까지 셀지**뿐이고, 그 판별은
+ *   `서류함에담나()` 한 군데에 있다(zip 라우트도 같은 것을 쓴다).
  */
-export async function getProgramFiles(과제사업만?: boolean): Promise<서류함결과> {
+export async function getProgramFiles(스코프: 서류함스코프): Promise<서류함결과> {
   const [과제, 계상, 정산, 집행증빙, 집행, 비목] = await Promise.all([
     safeSelect<과제Raw>("projects", () => db.from("projects").select("*")),
     safeSelect<계상Raw>("project_evidence_files", () =>
@@ -82,12 +81,7 @@ export async function getProgramFiles(과제사업만?: boolean): Promise<서류
     과제.error ?? 계상.error ?? 정산.error ?? 집행증빙.error ?? 집행.error ?? 비목.error ?? null
   if (error) return { 파일: [], error }
 
-  // 사업유형 코드는 원본 테이블 값이다("NATIONAL_RND") — 뷰가 붙이는 한글 라벨("국가 R&D")과
-  // 다르다(programs-stage-view.tsx와 같은 구분). 지정이 없으면(undefined) 아무것도 안 거른다.
-  const 허용된과제 =
-    과제사업만 == null
-      ? 과제.rows
-      : 과제.rows.filter((p) => (p.사업유형 === "NATIONAL_RND") === 과제사업만)
+  const 허용된과제 = 과제.rows.filter((p) => 서류함에담나(p, 스코프))
   const 허용됨 = new Set(허용된과제.map((p) => Number(p.id)))
 
   const 이름 = new Map(허용된과제.map((p) => [Number(p.id), p.과제명]))

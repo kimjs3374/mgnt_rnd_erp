@@ -31,16 +31,18 @@ import type { 사업파일, 서류함스코프, 보류증빙 } from "@/lib/progr
 
 const 모든출처 = "출처 전체"
 
-/** 서류 한 줄. 사업 묶음 안에 낱개로도, 지출 묶음을 펼친 안쪽에도 쓴다. */
-function 파일줄({ f, 지출내부 = false }: { f: 사업파일; 지출내부?: boolean }) {
+/**
+ * 서류 한 줄. 사업 묶음 안에 낱개로도, 지출 묶음을 펼친 안쪽에도 쓴다.
+ * 출처 배지는 늘 찍는다 — 지출 묶음 안에 계상 증빙·집행 증빙이 섞일 수 있어서
+ * (같은 거래를 계상 탭에서도 집행 탭에서도 각자 증빙을 붙일 수 있다), 부모 줄의
+ * "지출" 표만으로는 이 파일이 어느 쪽에서 왔는지 알 수 없다.
+ */
+function 파일줄({ f }: { f: 사업파일 }) {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 text-[14.1px]">
-      {/* 지출 묶음 안에서는 부모 줄이 이미 "집행"이라고 말했다 — 다시 안 찍는다. */}
-      {!지출내부 && (
-        <span className="w-[68px] shrink-0 rounded bg-muted px-1.5 py-0.5 text-center text-[12.1px] text-muted-foreground">
-          {f.출처.replace(" 증빙", "").replace(" 서류", "")}
-        </span>
-      )}
+      <span className="w-[68px] shrink-0 rounded bg-muted px-1.5 py-0.5 text-center text-[12.1px] text-muted-foreground">
+        {f.출처.replace(" 증빙", "").replace(" 서류", "")}
+      </span>
       <a
         href={`/api/program-files/one?key=${encodeURIComponent(f.키)}`}
         className="min-w-0 flex-1 truncate hover:underline"
@@ -296,14 +298,17 @@ export function ProgramFiles({
                   const { 낱개, 지출들 } = 지출별로가르기(g.파일)
                   return (
                     <ul className="divide-y">
-                      {/* 계상 증빙·정산 서류 — 지출 개념이 없어 예전처럼 낱개로 보여준다. */}
+                      {/* 정산 서류(항상) · 계상 증빙 중 집행_id 가 없는 것 — 지출에 못 묶인
+                          낱개는 예전처럼 그대로 보여준다. */}
                       {낱개.map((f) => (
                         <li key={f.키}>
                           <파일줄 f={f} />
                         </li>
                       ))}
-                      {/* 집행 증빙 — 지출(집행 건) 하나로 접는다. 파일이 하나뿐이어도 접어 두면
-                          「이 지출에 뭐가 붙었는지」를 늘 같은 자리에서 누르게 된다(사용자 지시). */}
+                      {/* 지출(거래 건) 하나로 접는다 — 계상 증빙(검수조서·세금계산서 등)과
+                          집행 증빙이 **같은 거래**면 여기서 합쳐진다(2026-09-04 사용자 지적:
+                          "같은 지출에 대한 지출증빙이잖아 이걸 지출명으로 잡아서 파일을 합쳐서").
+                          한 묶음 안에 출처가 섞일 수 있어 각 줄에 계상/집행 표를 그대로 둔다. */}
                       {지출들.map((e) => {
                         const 지출열림 = 지출펼침[e.지출_id] ?? false
                         return (
@@ -315,7 +320,7 @@ export function ProgramFiles({
                               className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 text-left text-[14.1px] hover:bg-muted/40"
                             >
                               <span className="w-[68px] shrink-0 rounded bg-muted px-1.5 py-0.5 text-center text-[12.1px] text-muted-foreground">
-                                집행
+                                지출
                               </span>
                               <span className="w-3 shrink-0 text-muted-foreground">
                                 {지출열림 ? "▾" : "▸"}
@@ -336,10 +341,10 @@ export function ProgramFiles({
                               </span>
                             </button>
                             {지출열림 && (
-                              <ul className="divide-y bg-muted/20 pl-[76px]">
+                              <ul className="divide-y bg-muted/20 pl-[42px]">
                                 {e.파일.map((f) => (
                                   <li key={f.키}>
-                                    <파일줄 f={f} 지출내부 />
+                                    <파일줄 f={f} />
                                   </li>
                                 ))}
                               </ul>

@@ -10,7 +10,8 @@ import type { 사업파일, 서류함스코프, 보류증빙 } from "@/lib/progr
  *
  * 파일이 세 표에 흩어져 있다. 각각 붙는 자리가 달라서 그렇게 나뉘었고, 그건 그대로 둔다 —
  * 대신 **보는 자리 하나**를 만든다(2026-09-04 사용자 지시).
- *   · `project_evidence_files` 계상 탭에서 붙인 비목별 증빙 (과제_id 직결)
+ *   · `project_evidence_files` 계상 탭에서 붙인 비목별 증빙 (과제_id 직결, 집행_id 있으면 그
+ *     지출과 한 묶음 — 2026-09-04 실측: "과제_id 직결"만 있는 줄 알았는데 집행_id 도 있었다)
  *   · `evidence`               집행 건에 붙은 증빙 (expense → 과제)
  *   · `settlement_documents`   최종 정산 서류 (과제_id 직결, db/110)
  *
@@ -30,6 +31,12 @@ type 계상Raw = {
   크기: number | null
   업로더: string | null
   업로드일시: string
+  /** 계상 탭에서 붙일 때 어느 집행 건 증빙인지 같이 적어 둔다(db/… 계상 화면).
+   *  검수조서·세금계산서·거래명세서처럼 **같은 거래를 두고 여러 장**이 붙는 게 보통이라,
+   *  이 값이 있으면 집행 증빙과 **같은 지출로 합쳐 묶는다**(2026-09-04 사용자 지적 —
+   *  "같은 지출에 대한 지출증빙이잖아 이걸 지출명으로 잡아서 파일을 합쳐서"). 예전엔
+   *  이 칼럼이 있는 줄 모르고 "과제_id 직결"이라고만 적어 뒀다 — 실제로는 있었다. */
+  집행_id: number | null
 }
 type 정산Raw = {
   id: number
@@ -103,6 +110,10 @@ export async function getProgramFiles(스코프: 서류함스코프): Promise<�
 
   for (const r of 계상.rows) {
     if (!허용됨.has(Number(r.과제_id))) continue
+    // 집행_id 가 있으면 그 지출의 집행 증빙과 **같은 묶음**이 된다(둘 다 지출.id 가 같은
+    // expense id). 화면(program-files.tsx)의 지출별로가르기() 가 출처를 안 가리고
+    // 지출.id 하나로 합쳐 준다 — 여기서는 그 값만 채우면 된다.
+    const 집행행 = r.집행_id == null ? null : 집행상세.get(Number(r.집행_id))
     전체.push({
       키: `계상:${r.id}`,
       출처: "계상 증빙",
@@ -114,6 +125,15 @@ export async function getProgramFiles(스코프: 서류함스코프): Promise<�
       크기: r.크기 == null ? null : Number(r.크기),
       일시: r.업로드일시,
       업로더: r.업로더 ?? null,
+      지출:
+        r.집행_id == null
+          ? undefined
+          : {
+              id: Number(r.집행_id),
+              거래처: 집행행?.거래처 ?? null,
+              일자: 집행행?.일자 ?? null,
+              합계: 집행행?.합계 == null ? null : Number(집행행.합계),
+            },
     })
   }
 

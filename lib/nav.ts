@@ -100,9 +100,8 @@ export const NAV: NavGroup[] = [
       // 규정 문서함(받는 규정) · 업체(업체에서 받는 서류). 넷 다 **과제보다 위**에 있고
       // 여러 과제가 같은 것을 쓴다. 과제 안에 두면 같은 등록증을 건마다 다시 받게 된다.
       { title: "업체", url: "/vendors" },
-      // 서류가 붙는 자리가 다섯이라(과제 증빙·정산·회사 서류함·규정·업체) 「누가 올렸지」를
-      // 다섯 화면에서 찾게 하면 아무도 안 찾는다. 전 과제를 가로지르므로 이 층에 둔다.
-      { title: "서류 올린 기록", url: "/uploads" },
+      // ⚠ 「서류 올린 기록」(/uploads)은 2026-09-04 사용자 지시로 지웠다 —
+      //   **로그는 Slack 으로 받기로 했다.** 화면을 또 두면 볼 자리가 둘이 된다.
     ],
   },
   {
@@ -146,9 +145,11 @@ export function crumbsFor(pathname: string): { label: string; href?: string }[] 
   // 단계정의를 그대로 쓴다(다른 데서 이미 검증된 이름과 다시 어긋나지 않게).
   const 단계경로표: Record<string, { 부모: string; 부모경로: string; 이름: string }> = {
     "/projects/applying": { 부모: "과제 관리", 부모경로: "/projects/all", 이름: "신청중" },
+    "/projects/applied": { 부모: "과제 관리", 부모경로: "/projects/all", 이름: "신청완료" },
     "/projects": { 부모: "과제 관리", 부모경로: "/projects/all", 이름: "수행중" },
     "/projects/closed": { 부모: "과제 관리", 부모경로: "/projects/all", 이름: "사업종료" },
     "/programs/applying": { 부모: "지원사업 관리", 부모경로: "/programs", 이름: "신청중" },
+    "/programs/applied": { 부모: "지원사업 관리", 부모경로: "/programs", 이름: "신청완료" },
     "/programs/executing": { 부모: "지원사업 관리", 부모경로: "/programs", 이름: "수행중" },
     "/programs/closed": { 부모: "지원사업 관리", 부모경로: "/programs", 이름: "사업종료" },
   }

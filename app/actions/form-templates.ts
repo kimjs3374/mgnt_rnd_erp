@@ -87,7 +87,6 @@ export async function uploadFormTemplate(formData: FormData): Promise<FormResult
       }
     }
 
-    revalidatePath("/rules")
     // 계상 탭이 이 목록을 쓴다. 과제마다 경로가 달라 통째로 다시 그리게 한다.
     revalidatePath("/projects", "layout")
     return { ok: true, 교체됨: !!겹침?.id }
@@ -130,7 +129,6 @@ export async function deleteFormTemplate(id: number): Promise<FormResult> {
     const { error: delErr } = await db.from("form_templates").delete().eq("id", id)
     if (delErr) return { ok: false, error: delErr.message }
 
-    revalidatePath("/rules")
     revalidatePath("/projects", "layout")
     return { ok: true }
   } catch (err) {

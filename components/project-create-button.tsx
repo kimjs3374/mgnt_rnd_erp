@@ -1,4 +1,4 @@
-import { getSchemeChoices } from "@/lib/queries-rules"
+import { getSchemeChoices } from "@/lib/queries-schemes"
 import { ProjectCreateDialog } from "@/components/project-create-dialog"
 
 /**

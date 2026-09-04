@@ -4,8 +4,12 @@ import { db, safeSelect } from "@/lib/db"
 /**
  * 서류를 **누가(아이디 기준) · 언제** 올렸나. (2026-09-04 사용자 지시)
  *
- * 서류가 붙는 표가 다섯이다 — 과제 증빙 · 과제 정산 · 회사 서류함 · 규정 문서함 · 업체 서류.
- * 다섯 화면을 각각 뒤지게 하면 「누가 올렸지」에 답이 안 나온다. 한 자리로 모은다.
+ * 서류가 붙는 표가 넷이다 — 과제 증빙 · 과제 정산 · 회사 서류함 · 업체 서류.
+ * 네 화면을 각각 뒤지게 하면 「누가 올렸지」에 답이 안 나온다. 한 자리로 모은다.
+ *
+ * ⚠ 원래 규정 문서함(`rule_documents`)까지 다섯이었는데, 그 화면이 없어져서 뺐다
+ *   (2026-09-04 사용자 지시). **표와 파일은 남아 있다** — 볼 화면이 없을 뿐이다.
+ *   규정 문서함을 되살리면 이 목록에도 다시 넣어야 한다.
  *
  * ⚠ **아이디는 저장된 이름이 아니라 `업로더_id` 로 지금 다시 찾는다.**
  *   표에 남는 `업로더` 는 그때의 **표시명**(「최고관리자」)이라 아이디가 아니고,
@@ -37,14 +41,13 @@ const s = (v: unknown) => (v == null ? "" : String(v))
 const n = (v: unknown) => (v == null ? null : Number(v))
 
 export async function getUploadLog(): Promise<{ rows: 업로드기록[]; error: string | null }> {
-  const [증빙, 정산, 회사, 규정, 업체서류, users, projects, vendors, 요건, doctypes] =
+  const [증빙, 정산, 회사, 업체서류, users, projects, vendors, 요건, doctypes] =
     await Promise.all([
       safeSelect<Row>("project_evidence_files", () =>
         db.from("project_evidence_files").select("*"),
       ),
       safeSelect<Row>("settlement_documents", () => db.from("settlement_documents").select("*")),
       safeSelect<Row>("documents", () => db.from("documents").select("*")),
-      safeSelect<Row>("rule_documents", () => db.from("rule_documents").select("*")),
       safeSelect<Row>("vendor_documents", () => db.from("vendor_documents").select("*")),
       safeSelect<Row>("users", () => db.from("users").select("*")),
       safeSelect<Row>("projects", () => db.from("projects").select("*")),
@@ -59,7 +62,6 @@ export async function getUploadLog(): Promise<{ rows: 업로드기록[]; error: 
     증빙.error ??
     정산.error ??
     회사.error ??
-    규정.error ??
     업체서류.error ??
     users.error ??
     projects.error ??
@@ -129,9 +131,6 @@ export async function getUploadLog(): Promise<{ rows: 업로드기록[]; error: 
         // ⚠ 이 표만 `업로드일시` 가 없고 `created_at` 이다. 없는 칸을 읽으면 조용히 빈칸이 된다.
         r.created_at,
       ),
-    ),
-    ...규정.rows.map((r) =>
-      만들기("rules", "규정 문서함", r, s(r.발행기관), s(r.제목) || s(r.문서종류), r.업로드일시),
     ),
     ...업체서류.rows.map((r) =>
       만들기(

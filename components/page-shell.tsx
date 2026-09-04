@@ -30,7 +30,7 @@ export function PageShell({
       {/* ② 제목 + 액션 */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-[20px] font-semibold tracking-tight">{title}</h1>
+          <h1 className="text-[22px] font-semibold tracking-tight">{title}</h1>
           {description && (
             <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
           )}

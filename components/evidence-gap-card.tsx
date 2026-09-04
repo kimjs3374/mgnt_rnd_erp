@@ -142,7 +142,7 @@ export function EvidenceGapCard({
           </DialogHeader>
 
           {msg && (
-            <p className={`text-[12.5px] ${msg.ok ? "text-muted-foreground" : "text-destructive"}`}>
+            <p className={`text-[13.8px] ${msg.ok ? "text-muted-foreground" : "text-destructive"}`}>
               {msg.text}
             </p>
           )}
@@ -155,12 +155,12 @@ export function EvidenceGapCard({
               >
                 <div className="flex flex-wrap items-baseline gap-2 border-b bg-secondary/60 p-2.5">
                   {/* 순번 — 색을 못 봐도 「몇 번째 과제」인지는 읽힌다. */}
-                  <span className="rounded bg-background px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">
+                  <span className="rounded bg-background px-1.5 py-0.5 text-[12.1px] font-medium tabular-nums text-muted-foreground">
                     {i + 1}/{과제들.length}
                   </span>
                   <Link
                     href={`/projects/${p.id}/expenses`}
-                    className="text-[13px] font-semibold underline-offset-2 hover:underline"
+                    className="text-[14.3px] font-semibold underline-offset-2 hover:underline"
                   >
                     {p.과제명}
                   </Link>
@@ -171,7 +171,7 @@ export function EvidenceGapCard({
                 </div>
                 {/* 열 이름 — 「0/4」 같은 숫자는 머리말이 없으면 무슨 수인지 모른다.
                     이 화면이 고쳐 온 문제가 정확히 그거다(단위 없는 숫자). */}
-                <div className="flex items-baseline gap-x-3 border-b px-2.5 py-1 text-[11px] text-muted-foreground">
+                <div className="flex items-baseline gap-x-3 border-b px-2.5 py-1 text-[12.1px] text-muted-foreground">
                   <span className="w-[82px] shrink-0">일자</span>
                   <span className="min-w-0 flex-1">거래처</span>
                   <span className="w-[104px] shrink-0 text-right">금액</span>
@@ -185,24 +185,24 @@ export function EvidenceGapCard({
                       {/* ⚠ 열 폭을 고정한다. flex-wrap 으로 두면 거래처 이름 길이에 따라
                           금액이 행마다 밀려서 **세로로 훑을 수가 없다**(사용자 선택: 열 맞춤). */}
                       <div className="flex items-baseline gap-x-3">
-                        <span className="w-[82px] shrink-0 text-[12.5px] tabular-nums text-muted-foreground">
+                        <span className="w-[82px] shrink-0 text-[13.8px] tabular-nums text-muted-foreground">
                           {e.일자 ?? "일자 미상"}
                         </span>
                         <span
-                          className="min-w-0 flex-1 truncate text-[13px] font-medium"
+                          className="min-w-0 flex-1 truncate text-[14.3px] font-medium"
                           title={e.거래처 ?? ""}
                         >
                           {e.거래처 ?? "거래처 미상"}
                         </span>
                         {/* 금액이 판단의 기준이다 — 우측 정렬 + 굵게. 회색 작은 글씨로 두면 안 읽힌다. */}
-                        <span className="w-[104px] shrink-0 text-right text-[12.5px] font-semibold tabular-nums">
+                        <span className="w-[104px] shrink-0 text-right text-[13.8px] font-semibold tabular-nums">
                           {won(e.합계)}
                         </span>
-                        <span className="w-[74px] shrink-0 truncate text-[12px] text-muted-foreground">
+                        <span className="w-[74px] shrink-0 truncate text-[13.2px] text-muted-foreground">
                           {e.비목_대분류 ? (비목이름[e.비목_대분류] ?? e.비목_대분류) : "—"}
                         </span>
                         <span
-                          className={`w-[46px] shrink-0 text-right text-[12px] tabular-nums ${
+                          className={`w-[46px] shrink-0 text-right text-[13.2px] tabular-nums ${
                             e.확보종 === e.필수종 ? "text-muted-foreground" : "text-[var(--warning-fg)]"
                           }`}
                           title={`필수 ${e.필수종}종 중 ${e.확보종}종 확보`}
@@ -211,7 +211,7 @@ export function EvidenceGapCard({
                         </span>
                         <Link
                           href={`/projects/${p.id}/expenses?expense=${e.집행_id}`}
-                          className="w-[96px] shrink-0 rounded-md border px-2 py-0.5 text-center text-[12px] hover:bg-secondary"
+                          className="w-[96px] shrink-0 rounded-md border px-2 py-0.5 text-center text-[13.2px] hover:bg-secondary"
                           onClick={() => set열림(false)}
                         >
                           채우러 가기 →
@@ -221,7 +221,7 @@ export function EvidenceGapCard({
                           서류마다 [면제]가 붙는다 — 거래 성격상 그 서류가 없는 건을 영원히
                           빨간 숫자로 두면 그 카드를 아무도 안 본다(사용자 지시). 사유는 필수다. */}
                       {e.빠진서류.length > 0 && (
-                        <span className="flex w-full flex-wrap items-center gap-1.5 text-[12.5px] text-[var(--warning-fg)]">
+                        <span className="flex w-full flex-wrap items-center gap-1.5 text-[13.8px] text-[var(--warning-fg)]">
                           증빙 필수 서류:
                           {e.빠진서류.map((이름, k) => (
                             <span
@@ -231,7 +231,7 @@ export function EvidenceGapCard({
                               {이름}
                               <button
                                 type="button"
-                                className="text-[11px] underline underline-offset-2 hover:no-underline"
+                                className="text-[12.1px] underline underline-offset-2 hover:no-underline"
                                 title="이 서류 없이도 정상으로 본다 — 사유를 적어야 저장된다"
                                 onClick={() => {
                                   setMsg(null)
@@ -253,7 +253,7 @@ export function EvidenceGapCard({
 
                       {/* 면제한 칸 — 지우지 않고 남긴다. 커서를 올리면 사유·처리자·일시가 보인다. */}
                       {e.면제.length > 0 && (
-                        <span className="flex w-full flex-wrap items-center gap-1.5 text-[12px] text-muted-foreground">
+                        <span className="flex w-full flex-wrap items-center gap-1.5 text-[13.2px] text-muted-foreground">
                           면제:
                           {e.면제.map((w) => (
                             <span
@@ -264,7 +264,7 @@ export function EvidenceGapCard({
                               {w.서류명}
                               <button
                                 type="button"
-                                className="text-[11px] underline underline-offset-2 hover:no-underline"
+                                className="text-[12.1px] underline underline-offset-2 hover:no-underline"
                                 title="면제를 되돌린다 — 이유를 적어야 저장된다"
                                 onClick={() => {
                                   setMsg(null)
@@ -287,7 +287,7 @@ export function EvidenceGapCard({
                       {/* 사유 칸 — 그 줄 바로 아래에서 적는다. 다른 화면으로 보내지 않는다. */}
                       {면제중?.집행_id === e.집행_id && (
                         <span className="mt-1 flex w-full flex-wrap items-center gap-1.5">
-                          <span className="text-[12px] font-medium">
+                          <span className="text-[13.2px] font-medium">
                             {면제중.서류명} {면제중.동작 === "면제" ? "면제" : "해제"} 사유
                           </span>
                           <Input
@@ -303,12 +303,12 @@ export function EvidenceGapCard({
                                 ? "예: 수의계약이라 견적의뢰서가 없음 / 무상 제공이라 세금계산서 없음"
                                 : "예: 사업주체가 서류를 요구한다고 회신"
                             }
-                            className="h-7 min-w-[280px] flex-1 text-[12.5px]"
+                            className="h-7 min-w-[280px] flex-1 text-[13.8px]"
                             aria-label="면제 사유"
                           />
                           <Button
                             type="button"
-                            className="h-7 text-[12px]"
+                            className="h-7 text-[13.2px]"
                             disabled={pending || !사유.trim()}
                             onClick={보내기}
                           >
@@ -317,7 +317,7 @@ export function EvidenceGapCard({
                           <Button
                             type="button"
                             variant="ghost"
-                            className="h-7 text-[12px]"
+                            className="h-7 text-[13.2px]"
                             onClick={() => set면제중(null)}
                           >
                             취소

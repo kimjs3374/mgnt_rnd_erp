@@ -52,7 +52,7 @@ export function EngineLlmCompare({ cmp }: { cmp: LlmCompare }) {
       {/* ⚠ 결론을 먼저 쓴다. 숫자만 늘어놓으면 "그래서 무슨 말이냐"가 된다
           (사용자 지적 2026-09-04: "이게 무슨말을 하고싶은건지 모르겠다"). */}
       <div className="mt-2 mb-3 rounded-lg border-l-4 border-l-[var(--success-fg)] bg-muted/40 p-3">
-        <p className="text-[13px] leading-relaxed">
+        <p className="text-[14.3px] leading-relaxed">
           <b>이 표가 말하는 것 —</b> LLM 은 비용 때문에{" "}
           <b>{cmp.처리량.llm_판정건수}건</b>에서 멈췄고, 규칙 엔진은{" "}
           <b>{cmp.처리량.엔진_판정건수}건</b>을 <b>LLM 호출 {cmp.처리량.엔진_llm호출}회</b>로
@@ -60,7 +60,7 @@ export function EngineLlmCompare({ cmp }: { cmp: LlmCompare }) {
           <b>{cmp.등급일치율.toFixed(0)}%</b>가 같은 결론이고, 갈린 자리는 대부분{" "}
           <b>엔진이 「본문을 못 읽었다」고 정직하게 말한 곳</b>이다.
         </p>
-        <p className="mt-1.5 text-[12px] text-muted-foreground">
+        <p className="mt-1.5 text-[13.2px] text-muted-foreground">
           <b>이 표가 말하지 않는 것 —</b> 「일치율이 높으니 엔진이 옳다」. 일치율은 얼마나
           닮았나이지 얼마나 맞나가 아니다. LLM 도 틀린다. 그래서 아래에 갈린 건을 그대로 편다.
         </p>
@@ -76,7 +76,7 @@ export function EngineLlmCompare({ cmp }: { cmp: LlmCompare }) {
               / 등급 {cmp.등급일치율.toFixed(1)}%
             </span>
           </div>
-          <div className="text-[11px] text-muted-foreground">
+          <div className="text-[12.1px] text-muted-foreground">
             글자 그대로 {cmp.일치}건 · 등급으로 묶으면 {cmp.등급일치}건 (표본 {cmp.표본}건)
           </div>
         </div>
@@ -85,7 +85,7 @@ export function EngineLlmCompare({ cmp }: { cmp: LlmCompare }) {
           <div className="mt-1 text-2xl font-bold tabular-nums">
             {첫 && 끝 ? `${첫.일치율.toFixed(1)}% → ${끝.일치율.toFixed(1)}%` : "—"}
           </div>
-          <div className="text-[11px] text-muted-foreground">
+          <div className="text-[12.1px] text-muted-foreground">
             {첫?.엔진버전} → {끝?.엔진버전} (같은 표본 {cmp.표본}건)
           </div>
         </div>
@@ -94,7 +94,7 @@ export function EngineLlmCompare({ cmp }: { cmp: LlmCompare }) {
           <div className="mt-1 text-2xl font-bold tabular-nums">
             {cmp.처리량.llm_판정건수} : {cmp.처리량.엔진_판정건수}
           </div>
-          <div className="text-[11px] text-muted-foreground">
+          <div className="text-[12.1px] text-muted-foreground">
             LLM 이 판정한 수 : 엔진이 판정한 수
           </div>
         </div>
@@ -103,8 +103,8 @@ export function EngineLlmCompare({ cmp }: { cmp: LlmCompare }) {
       {/* 버전별 일치율 추이 — **값이 바뀐 버전만** 남긴다.
           16줄을 다 그리면 같은 값이 반복돼 무엇이 달라졌는지가 안 보인다(사용자 지적). */}
       <div className="mb-4">
-        <h3 className="mb-1.5 text-[13px] font-semibold">일치율이 바뀐 지점만</h3>
-        <p className="mb-2 text-[11px] text-muted-foreground">
+        <h3 className="mb-1.5 text-[14.3px] font-semibold">일치율이 바뀐 지점만</h3>
+        <p className="mb-2 text-[12.1px] text-muted-foreground">
           같은 공고 {cmp.표본}건을 버전마다 다시 판정한 결과다(표본 고정). 값이 그대로인
           버전은 접었다 — 규칙을 고쳐서 <b>실제로 판정이 움직인 지점</b>만 남긴다.
           진한 막대가 글자 그대로 일치, 옅은 부분이 등급으로 묶었을 때(확인필요·요건미확인을
@@ -113,7 +113,7 @@ export function EngineLlmCompare({ cmp }: { cmp: LlmCompare }) {
         <div className="grid gap-1">
           {변화지점.map((v) => (
             <div key={v.엔진버전} className="flex items-center gap-2">
-              <span className="w-9 shrink-0 text-[11px] tabular-nums text-muted-foreground">
+              <span className="w-9 shrink-0 text-[12.1px] tabular-nums text-muted-foreground">
                 {v.엔진버전}
               </span>
               <div className="relative h-3 flex-1 overflow-hidden rounded bg-muted">
@@ -134,7 +134,7 @@ export function EngineLlmCompare({ cmp }: { cmp: LlmCompare }) {
                   }}
                 />
               </div>
-              <span className="w-32 shrink-0 text-right text-[11px] tabular-nums">
+              <span className="w-32 shrink-0 text-right text-[12.1px] tabular-nums">
                 {v.일치율.toFixed(1)}%
                 <span className="ml-1 text-muted-foreground">
                   / 등급 {v.등급일치율.toFixed(0)}%
@@ -147,12 +147,12 @@ export function EngineLlmCompare({ cmp }: { cmp: LlmCompare }) {
 
       {/* 혼동 행렬 */}
       <div className="mb-4">
-        <h3 className="mb-1.5 text-[13px] font-semibold">어디서 갈리나 (행 = LLM, 열 = 엔진)</h3>
-        <p className="mb-2 text-[11px] text-muted-foreground">
+        <h3 className="mb-1.5 text-[14.3px] font-semibold">어디서 갈리나 (행 = LLM, 열 = 엔진)</h3>
+        <p className="mb-2 text-[12.1px] text-muted-foreground">
           대각선이 두 방식이 같은 말을 한 자리다. 대각선을 벗어난 칸이 사람이 봐야 할 자리다.
         </p>
         <div className="overflow-x-auto">
-          <table className="text-[12px]">
+          <table className="text-[13.2px]">
             <thead>
               <tr>
                 <th className="px-2 py-1 text-left font-medium text-muted-foreground">
@@ -204,8 +204,8 @@ export function EngineLlmCompare({ cmp }: { cmp: LlmCompare }) {
 
       {/* 불일치 목록 */}
       <div>
-        <h3 className="mb-1.5 text-[13px] font-semibold">갈린 건 — 어느 쪽이 맞는지는 사람이 본다</h3>
-        <p className="mb-2 text-[11px] text-muted-foreground">
+        <h3 className="mb-1.5 text-[14.3px] font-semibold">갈린 건 — 어느 쪽이 맞는지는 사람이 본다</h3>
+        <p className="mb-2 text-[12.1px] text-muted-foreground">
           <b>일치율이 높다고 엔진이 옳은 것은 아니다.</b> LLM 도 틀린다(실측: 마감이 지난 공고를
           「확인필요」로 둔 건, 지역이 안 맞는데 60점을 준 건이 있었다). 그래서 숫자로 결론짓지
           않고 갈린 건을 그대로 편다.
@@ -214,9 +214,9 @@ export function EngineLlmCompare({ cmp }: { cmp: LlmCompare }) {
           <p className="py-4 text-center text-sm text-muted-foreground">갈린 건이 없다.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-[12.5px]">
+            <table className="w-full text-[13.8px]">
               <thead>
-                <tr className="border-b text-left text-[11px] text-muted-foreground">
+                <tr className="border-b text-left text-[12.1px] text-muted-foreground">
                   <th className="py-1.5 pr-3 font-medium">공고</th>
                   <th className="py-1.5 pr-3 font-medium">LLM</th>
                   <th className="py-1.5 pr-3 font-medium">엔진</th>

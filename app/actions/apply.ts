@@ -190,3 +190,48 @@ export async function setSelectionResult(
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   }
 }
+
+/**
+ * 지원 등록 삭제 — 잘못 등록했거나 테스트로 넣은 건을 되돌리는 길.
+ *
+ * ⚠ 아무 때나 지우지 않는다. 예산·집행·서류 확인 같은 실제 업무가 이미 그 위에
+ *   쌓였으면 삭제가 아니라 상태 변경(미선정 등)으로 남겨야 한다 — 지우면 그 과제에
+ *   돈을 왜 그렇게 썼는지 추적할 방법이 없어진다(CLAUDE.md 설계원칙 1, "핵심은 기록").
+ *   그래서 예산·집행·문서·점검 중 하나라도 붙어 있으면 막는다.
+ */
+export async function deleteApplication(과제_id: number): Promise<ApplyResult> {
+  try {
+    if (!Number.isInteger(과제_id) || 과제_id <= 0) return { ok: false, error: "과제를 찾을 수 없다." }
+
+    const [budgets, expenses, docs, checks] = await Promise.all([
+      db.from("budgets").select("id").eq("과제_id", 과제_id).limit(1),
+      db.from("expenses").select("id").eq("과제_id", 과제_id).limit(1),
+      db.from("program_documents").select("id").eq("과제_id", 과제_id).limit(1),
+      db.from("program_checks").select("id").eq("과제_id", 과제_id).limit(1),
+    ])
+    if (budgets.data?.length || expenses.data?.length || docs.data?.length || checks.data?.length) {
+      return {
+        ok: false,
+        error: "이미 예산·집행·서류가 쌓여 있어 삭제할 수 없습니다 — 대신 「미선정」으로 남기세요.",
+      }
+    }
+
+    const { data, error } = await db.from("projects").select("*").eq("id", 과제_id).limit(1)
+    if (error) return { ok: false, error: error.message }
+    const 공고_id = Number((data?.[0] as { 공고_id?: number } | undefined)?.공고_id ?? 0)
+
+    const { error: delError } = await db.from("projects").delete().eq("id", 과제_id)
+    if (delError) return { ok: false, error: delError.message }
+
+    revalidatePath("/programs")
+    revalidatePath("/projects")
+    revalidatePath("/dashboard")
+    if (공고_id) {
+      revalidatePath(`/announcements/${공고_id}`)
+      revalidatePath(`/project-announcements/${공고_id}`)
+    }
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}

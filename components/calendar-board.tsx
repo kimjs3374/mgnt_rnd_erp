@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
+import { CalendarDays } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { CalendarRow } from "@/lib/queries"
 
@@ -31,12 +32,13 @@ const 색: Record<string, { dot: string; badge: string; text: string }> = {
   보고예정: { dot: "bg-amber-500",   badge: "bg-amber-500",   text: "text-amber-600 dark:text-amber-400" },
   결과발표: { dot: "bg-violet-500",  badge: "bg-violet-500",  text: "text-violet-600 dark:text-violet-400" },
   서류만료: { dot: "bg-rose-500",    badge: "bg-rose-500",    text: "text-rose-600 dark:text-rose-400" },
+  신청마감: { dot: "bg-red-600",     badge: "bg-red-600",     text: "text-red-600 dark:text-red-400" },
 }
 const 기본색 = { dot: "bg-muted-foreground", badge: "bg-muted-foreground", text: "text-muted-foreground" }
 const 색깔 = (종류: string) => 색[종류] ?? 기본색
 
 /** 급한 순서. 한 날에 여러 종류가 겹치면 배지는 이 중 앞선 것의 색을 쓴다. */
-const 종류순서 = ["서류만료", "보고예정", "결과발표", "관심공고", "사업종료"]
+const 종류순서 = ["신청마감", "서류만료", "보고예정", "결과발표", "관심공고", "사업종료"]
 const 급한정도 = (종류: string) => {
   const i = 종류순서.indexOf(종류)
   return i < 0 ? 99 : i
@@ -140,7 +142,10 @@ export function CalendarBoard({
           가장자리로 밀린다). 가운데 월 이동은 **절대 위치로 화면 가운데 고정**하고,
           오른쪽 「오늘」은 없을 때도 자리를 차지하게 `invisible` 로 둔다.
           그러면 셋 중 뭐가 나타나든 사라지든 가운데는 흔들리지 않는다. */}
-      <div className="relative flex items-center border-b px-4 py-2.5">
+      <div className="relative flex items-center gap-2 border-b px-4 py-2.5">
+        <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-[var(--warning)] text-[var(--warning-fg)]">
+          <CalendarDays className="size-3.5" />
+        </span>
         <h2 className="text-sm font-semibold">일정</h2>
 
         <div className="absolute left-1/2 flex -translate-x-1/2 items-center gap-2">
@@ -152,7 +157,7 @@ export function CalendarBoard({
           >
             ‹
           </button>
-          <span className="min-w-[68px] text-center text-[15px] font-medium tabular-nums">
+          <span className="min-w-[68px] text-center text-[16.5px] font-medium tabular-nums">
             {cy}.{pad(cm)}
           </span>
           <button
@@ -182,7 +187,7 @@ export function CalendarBoard({
       </div>
 
       {error ? (
-        <p className="px-4 py-10 text-center text-[13px] text-muted-foreground">
+        <p className="px-4 py-10 text-center text-[14.3px] text-muted-foreground">
           일정을 불러오지 못했습니다. 달력 없이도 나머지 화면은 그대로 동작합니다.
           <span className="mt-1 block text-xs opacity-70">{error}</span>
         </p>
@@ -230,7 +235,7 @@ export function CalendarBoard({
                   >
                     <span
                       className={cn(
-                        "inline-flex size-6 items-center justify-center rounded-full text-[13px] tabular-nums",
+                        "inline-flex size-6 items-center justify-center rounded-full text-[14.3px] tabular-nums",
                         오늘
                           ? "bg-foreground font-semibold text-background"
                           : !이번달
@@ -248,7 +253,7 @@ export function CalendarBoard({
                       <span
                         className={cn(
                           "inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1",
-                          "text-[10px] font-semibold tabular-nums text-white",
+                          "text-[11px] font-semibold tabular-nums text-white",
                           색깔(그날[0].종류).badge,
                           !이번달 && "opacity-50",
                         )}
@@ -266,7 +271,7 @@ export function CalendarBoard({
           <div className="flex-1 border-t p-3">
             {지난것.length > 0 && (
               <div className="mb-2 rounded border border-destructive/30 bg-destructive/5 p-2">
-                <h3 className="mb-1 text-[11px] font-semibold tracking-wide text-destructive">
+                <h3 className="mb-1 text-[12.1px] font-semibold tracking-wide text-destructive">
                   지난 일정 {지난것.length}건
                 </h3>
                 <Items rows={지난것} 지남 />
@@ -274,18 +279,18 @@ export function CalendarBoard({
             )}
 
             <div className="mb-1 flex items-baseline justify-between">
-              <h3 className="text-[11px] font-semibold tracking-wide text-muted-foreground">
+              <h3 className="text-[12.1px] font-semibold tracking-wide text-muted-foreground">
                 {선택
                   ? `${Number(선택.slice(5, 7))}월 ${Number(선택.slice(8))}일`
                   : `${cm}월 일정`}
               </h3>
-              <span className="text-[11px] tabular-nums text-muted-foreground">
+              <span className="text-[12.1px] tabular-nums text-muted-foreground">
                 {목록.length}건
               </span>
             </div>
 
             {목록.length === 0 ? (
-              <p className="py-3 text-center text-[13px] text-muted-foreground">
+              <p className="py-3 text-center text-[14.3px] text-muted-foreground">
                 {선택 ? (
                   "이 날 일정이 없습니다"
                 ) : 다음것 ? (
@@ -331,7 +336,7 @@ function Items({
               aria-hidden
             />
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-[13px]">{r.제목}</span>
+              <span className="block truncate text-[14.3px]">{r.제목}</span>
               {/* 색만으로 구분하지 않는다 — 종류를 글자로 같이 적는다. */}
               <span className="block truncate text-xs text-muted-foreground">
                 <span className={색깔(r.종류).text}>{r.종류}</span>

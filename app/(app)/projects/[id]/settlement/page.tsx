@@ -187,7 +187,7 @@ export default async function ProjectSettlementPage({
       {reqs.error && <DbError what="증빙 요건" error={reqs.error} />}
       {files.error && <DbError what="증빙 파일" error={files.error} />}
 
-      <div className="rounded-lg border bg-card p-4 text-[13px] text-muted-foreground">
+      <div className="rounded-lg border bg-card p-4 text-[14.3px] text-muted-foreground">
         <span className="font-medium text-foreground">RCMS 는 외부 API 가 없습니다.</span>{" "}
         이건 「연동」이 아니라 사람이 RCMS 화면에 옮겨 적기 직전 상태를 완성해두는 것입니다.
         마지막 입력은 사람이 합니다.
@@ -196,7 +196,7 @@ export default async function ProjectSettlementPage({
       {/* ── 과제비 원장 */}
       <Card>
         <div className="flex flex-wrap items-baseline gap-2 border-b p-3">
-          <span className="text-[13px] font-medium">과제비 원장</span>
+          <span className="text-[14.3px] font-medium">과제비 원장</span>
           <span className="text-xs text-muted-foreground">
             집행 인정 상태: 확정 · 제출 · 정산완료 · 재원은{" "}
             <span className="text-foreground">현금(출연금+기관부담 현금) · 현물</span> 둘로 묶었습니다
@@ -231,7 +231,7 @@ export default async function ProjectSettlementPage({
                 return (
                   <TableRow
                     key={`${b.비목_대분류}-${b.재원구분}-${i}`}
-                    className="h-[38px] text-[13px]"
+                    className="h-[38px] text-[14.3px]"
                   >
                     <TableCell className="font-medium">
                       {b.비목명 ?? 이름.get(b.비목_대분류) ?? b.비목_대분류}
@@ -272,7 +272,7 @@ export default async function ProjectSettlementPage({
                   </TableRow>
                 )
               })}
-              <TableRow className="h-[38px] bg-secondary/40 text-[13px] font-medium hover:bg-secondary/40">
+              <TableRow className="h-[38px] bg-secondary/40 text-[14.3px] font-medium hover:bg-secondary/40">
                 <TableCell colSpan={2}>합계</TableCell>
                 <TableCell className="text-right tabular-nums">{won(총배정)}</TableCell>
                 <TableCell className="text-right tabular-nums">{won(총집행)}</TableCell>
@@ -284,7 +284,7 @@ export default async function ProjectSettlementPage({
         )}
 
         {초과.length > 0 && (
-          <div className="border-t p-3 text-[13px]">
+          <div className="border-t p-3 text-[14.3px]">
             <span className="font-medium text-destructive">
               배정액 초과 {초과.length}건
             </span>
@@ -303,7 +303,7 @@ export default async function ProjectSettlementPage({
       {/* ── 사용 건 */}
       <Card>
         <div className="flex flex-wrap items-baseline gap-2 border-b p-3">
-          <span className="text-[13px] font-medium">사용 건</span>
+          <span className="text-[14.3px] font-medium">사용 건</span>
           <span className="text-xs text-muted-foreground">{exp.rows.length}건</span>
         </div>
         {exp.rows.length === 0 ? (
@@ -325,7 +325,7 @@ export default async function ProjectSettlementPage({
             </TableHeader>
             <TableBody>
               {exp.rows.map((e) => (
-                <TableRow key={e.id} className="h-[42px] text-[13px]">
+                <TableRow key={e.id} className="h-[42px] text-[14.3px]">
                   <TableCell className="tabular-nums text-muted-foreground">
                     {e.일자 ?? "—"}
                   </TableCell>
@@ -357,7 +357,7 @@ export default async function ProjectSettlementPage({
       {출장회의건.length > 0 && (
         <Card>
           <div className="flex flex-wrap items-baseline gap-2 border-b p-3">
-            <span className="text-[13px] font-medium">출장·회의 증빙 확보 현황</span>
+            <span className="text-[14.3px] font-medium">출장·회의 증빙 확보 현황</span>
             <span className="text-xs text-muted-foreground">
               RCMS 는 건별로 서류를 묶어 받습니다 — 얼마를 썼는지가 아니라{" "}
               <span className="text-foreground">제출할 서류가 다 모였는지</span>를 봅니다
@@ -380,7 +380,7 @@ export default async function ProjectSettlementPage({
             </TableHeader>
             <TableBody>
               {출장회의현황.map((c) => (
-                <TableRow key={c.집행.id} className="h-[42px] text-[13px]">
+                <TableRow key={c.집행.id} className="h-[42px] text-[14.3px]">
                   <TableCell className="tabular-nums text-muted-foreground">
                     {c.집행.일자 ?? "—"}
                   </TableCell>
@@ -395,7 +395,7 @@ export default async function ProjectSettlementPage({
                   >
                     {c.확보}/{c.필수}
                   </TableCell>
-                  <TableCell className="text-[12px] text-muted-foreground">
+                  <TableCell className="text-[13.2px] text-muted-foreground">
                     {c.미확보서류.length ? c.미확보서류.join(" · ") : "—"}
                   </TableCell>
                   <TableCell>
@@ -412,11 +412,11 @@ export default async function ProjectSettlementPage({
           </Table>
 
           {미완료건.length === 0 ? (
-            <p className="border-t p-3 text-[13px] text-muted-foreground">
+            <p className="border-t p-3 text-[14.3px] text-muted-foreground">
               출장·회의 건 {출장회의건.length}건 모두 필수 서류를 확보했습니다.
             </p>
           ) : (
-            <p className="border-t p-3 text-[13px] text-[var(--warning-fg)]">
+            <p className="border-t p-3 text-[14.3px] text-[var(--warning-fg)]">
               {미완료건.length}건에 서류가 빠졌습니다 —{" "}
               <Link
                 href={`/projects/${id}/expenses`}
@@ -433,7 +433,7 @@ export default async function ProjectSettlementPage({
       {/* ── RCMS 입력 대조 */}
       <Card>
         <div className="flex flex-wrap items-baseline gap-2 border-b p-3">
-          <span className="text-[13px] font-medium">RCMS 입력 대조</span>
+          <span className="text-[14.3px] font-medium">RCMS 입력 대조</span>
           <span className="text-xs text-muted-foreground">
             제출 순서(일자)대로 정렬했습니다. 위에서부터 그대로 옮겨 적으면 됩니다.
           </span>
@@ -459,7 +459,7 @@ export default async function ProjectSettlementPage({
             </TableHeader>
             <TableBody>
               {대조.map((e, i) => (
-                <TableRow key={e.id} className="h-[38px] text-[13px]">
+                <TableRow key={e.id} className="h-[38px] text-[14.3px]">
                   <TableCell className="tabular-nums text-muted-foreground">{i + 1}</TableCell>
                   <TableCell className="tabular-nums">{e.일자 ?? "—"}</TableCell>
                   <TableCell>
@@ -477,7 +477,7 @@ export default async function ProjectSettlementPage({
                   </TableCell>
                 </TableRow>
               ))}
-              <TableRow className="h-[38px] bg-secondary/40 text-[13px] font-medium hover:bg-secondary/40">
+              <TableRow className="h-[38px] bg-secondary/40 text-[14.3px] font-medium hover:bg-secondary/40">
                 <TableCell colSpan={5}>합계 {대조.length}건</TableCell>
                 <TableCell className="text-right tabular-nums">
                   {won(대조.reduce((s, e) => s + Number(e.공급가액 ?? 0), 0))}

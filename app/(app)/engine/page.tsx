@@ -51,7 +51,7 @@ export default async function EnginePage() {
           펼쳐 두고, 사람이 다르게 보면 바로 확정을 뒤집을 수 있게 했다.
         </p>
         {되돌림후보.전체 > 되돌림후보.rows.length && (
-          <p className="mb-2 text-[11px] text-muted-foreground">
+          <p className="mb-2 text-[12.1px] text-muted-foreground">
             마감 전 후보 {되돌림후보.전체.toLocaleString()}건 중 <b>확신도가 낮은
             {" "}{되돌림후보.rows.length}건</b>만 띄운다 — 기계가 덜 확신한 것일수록 사람이
             볼 값어치가 크다. 나머지는 공고 탐색에서 「불가 숨김」을 끄면 전부 보인다.
@@ -75,7 +75,7 @@ export default async function EnginePage() {
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-[13px]">
+            <table className="w-full text-[14.3px]">
               <thead>
                 <tr className="border-b text-left text-xs text-muted-foreground">
                   <th className="py-1.5 pr-3 font-medium">공고</th>

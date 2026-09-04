@@ -50,7 +50,7 @@ export default async function SettlementPage() {
             </TableHeader>
             <TableBody>
               {rows.map((s) => (
-                <TableRow key={`${s.과제_id}-${s.연차}`} className="h-[38px] text-[13px]">
+                <TableRow key={`${s.과제_id}-${s.연차}`} className="h-[38px] text-[14.3px]">
                   <TableCell className="font-medium">
                     {/* RCMS 대조표와 사용 건은 과제 안에 있다. 여기는 어느 과제를 열지 고르는 자리다. */}
                     <Link
@@ -89,7 +89,7 @@ export default async function SettlementPage() {
         )}
       </Card>
 
-      <div className="rounded-lg border bg-card p-4 text-[13px] text-muted-foreground">
+      <div className="rounded-lg border bg-card p-4 text-[14.3px] text-muted-foreground">
         지자체·TP 사업은 선집행 후 세금계산서·이체증을 제출하고, 국가 R&D 는 RCMS 에 입력한다.
         <span className="text-foreground"> 사업유형에 따라 절차가 갈린다 —</span> 코드에 박지 않고
         데이터로 둔 이유다.

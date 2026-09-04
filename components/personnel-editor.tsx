@@ -222,13 +222,13 @@ export function PersonnelEditor({
   // 손으로 부르던 `반영()` 은 없앴다 — `savePersonnelRows` 가 저장하면서 같이 맞춘다.
   // 서버의 `applyPersonnelToBudget` 은 남겨 뒀다(스크립트·복구용). 화면에서는 안 부른다.
 
-  const cell = "h-7 text-[12.5px]"
-  const num = "h-7 text-right text-[12.5px] tabular-nums"
+  const cell = "h-7 text-[13.8px]"
+  const num = "h-7 text-right text-[13.8px] tabular-nums"
 
   return (
     <div className="rounded-lg border bg-card p-4">
       <div className="mb-3 flex flex-wrap items-baseline gap-2">
-        <span className="text-[13px] font-medium">개인별 인건비 계상</span>
+        <span className="text-[14.3px] font-medium">개인별 인건비 계상</span>
         <div className="flex flex-wrap gap-1">
           {연차목록.map((y) => {
             const 인원 = rows.filter((r) => Number(r.연차) === y).length
@@ -237,7 +237,7 @@ export function PersonnelEditor({
                 key={y}
                 type="button"
                 variant={y === 연차 ? "default" : "outline"}
-                className="h-6 px-2 text-[11.5px]"
+                className="h-6 px-2 text-[12.7px]"
                 onClick={() => set연차(y)}
                 title={연차연도[y - 1] ? `${연차연도[y - 1]}년` : undefined}
               >
@@ -253,7 +253,7 @@ export function PersonnelEditor({
           <Button
             type="button"
             variant="ghost"
-            className="h-6 px-2 text-[11.5px] text-muted-foreground"
+            className="h-6 px-2 text-[12.7px] text-muted-foreground"
             onClick={() => {
               const 다음 = 최대연차 + 1
               set최대연차(다음)
@@ -272,7 +272,7 @@ export function PersonnelEditor({
           {협약연수 > 최대연차 && (
             // ⚠ 「협약 2년」이라고 쓰면 안 된다 — 기간과 연차 개수는 다르다.
             //    2022-06~2024-05 는 기간 2년, 연차는 3개다(lib/fiscal-year.ts).
-            <span className="self-center text-[11px] text-muted-foreground">
+            <span className="self-center text-[12.1px] text-muted-foreground">
               협약 {협약연수}개 연차
               {연차연도.length ? ` (${연차연도.join(" · ")})` : ""}
             </span>
@@ -286,27 +286,27 @@ export function PersonnelEditor({
         <Button
           type="button"
           variant="ghost"
-          className="ml-auto h-6 px-2 text-[12px] text-muted-foreground"
+          className="ml-auto h-6 px-2 text-[13.2px] text-muted-foreground"
           onClick={() => set상세((v) => !v)}
         >
           {상세 ? "기본 열만" : "상세 열 보기"}
         </Button>
       </div>
 
-      <p className="mb-2 text-[11.5px] text-[var(--warning-fg)]">
+      <p className="mb-2 text-[12.7px] text-[var(--warning-fg)]">
         ⚠ 공개 주소에는 실명·실제 급여를 올리지 않습니다. 대회 기간에는 표시명에 가명을 쓰세요 —
         급여이체증·4대보험 명부 업로드도 코드가 막고 있습니다.
       </p>
 
       {초과.length > 0 && (
-        <p className="mb-2 text-[12px] text-destructive">
+        <p className="mb-2 text-[13.2px] text-destructive">
           참여율 합이 100%를 넘습니다 —{" "}
           {초과.map((x) => `${x.표시명} ${x.합}%`).join(" · ")} (정산에서 걸립니다)
         </p>
       )}
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1100px] border-collapse text-[12.5px]">
+        <table className="w-full min-w-[1100px] border-collapse text-[13.8px]">
           <thead>
             <tr className="border-b text-left text-muted-foreground">
               <th className="w-[92px] pb-1 font-normal">자격</th>
@@ -349,7 +349,7 @@ export function PersonnelEditor({
                 </td>
                 <td className="py-1 pr-1">
                   <select
-                    className="h-7 w-full rounded-md border bg-transparent px-1 text-[12.5px]"
+                    className="h-7 w-full rounded-md border bg-transparent px-1 text-[13.8px]"
                     value={r.내외부}
                     onChange={(e) => 수정(r, { 내외부: e.target.value })}
                     aria-label="내외부"
@@ -489,7 +489,7 @@ export function PersonnelEditor({
                   {/* 지급구분(지급/미지급)을 없앴다(db/107) — 현금·현물 둘만 직접 고른다.
                       "출연금은 다 현금"이라 재원 칸에서도 출연금은 빼서 헷갈릴 여지를 줄였다. */}
                   <select
-                    className="h-7 w-full rounded-md border bg-transparent px-1 text-[12.5px]"
+                    className="h-7 w-full rounded-md border bg-transparent px-1 text-[13.8px]"
                     value={r.재원구분}
                     onChange={(e) =>
                       수정(r, { 재원구분: e.target.value as "현금" | "현물" })
@@ -510,7 +510,7 @@ export function PersonnelEditor({
                   <Button
                     type="button"
                     variant="ghost"
-                    className="h-7 px-1.5 text-[11.5px] text-muted-foreground"
+                    className="h-7 px-1.5 text-[12.7px] text-muted-foreground"
                     disabled={pending}
                     onClick={() => 줄삭제(r)}
                   >
@@ -528,24 +528,24 @@ export function PersonnelEditor({
           그렇다고 말해야 사람이 공고문을 확인한다. */}
       {!읽기전용 && (
         <div className="mt-3 flex flex-wrap items-baseline gap-2 rounded-md border bg-secondary/30 px-3 py-2">
-          <span className="text-[12.5px] font-medium">신규채용 기준</span>
-          <span className="text-[12.5px] text-muted-foreground">
+          <span className="text-[13.8px] font-medium">신규채용 기준</span>
+          <span className="text-[13.8px] text-muted-foreground">
             {신규기준.기준일.무엇} {신규기준.기준일.날짜 ?? "—"} 기준, 입사
           </span>
           <input
             type="number"
             min={0}
             max={20}
-            className="h-6 w-14 rounded-md border bg-background px-1 text-right text-[12.5px] tabular-nums"
+            className="h-6 w-14 rounded-md border bg-background px-1 text-right text-[13.8px] tabular-nums"
             value={기준연수}
             onChange={(e) => set기준연수(e.target.value)}
             aria-label="신규채용 기준연수"
           />
-          <span className="text-[12.5px] text-muted-foreground">년 이내면 신규</span>
+          <span className="text-[13.8px] text-muted-foreground">년 이내면 신규</span>
           <Button
             type="button"
             variant="outline"
-            className="h-6 text-[12px]"
+            className="h-6 text-[13.2px]"
             disabled={pending || 기준연수 === String(신규기준.기준연수 ?? "")}
             onClick={() =>
               start(async () => {
@@ -570,7 +570,7 @@ export function PersonnelEditor({
           >
             기준 저장
           </Button>
-          <span className="text-[11.5px] text-muted-foreground">
+          <span className="text-[12.7px] text-muted-foreground">
             {신규기준.상태 === "확정"
               ? `확정 · ${신규기준.적용범위} 적용`
               : "제안 — 사업주체 공고문으로 확인하세요"}
@@ -579,7 +579,7 @@ export function PersonnelEditor({
       )}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <Button type="button" variant="outline" className="h-7 text-[12.8px]" onClick={줄추가}>
+        <Button type="button" variant="outline" className="h-7 text-[14.1px]" onClick={줄추가}>
           + 인원 추가
         </Button>
 
@@ -588,7 +588,7 @@ export function PersonnelEditor({
         {!읽기전용 &&
           (명부.length > 0 ? (
             <select
-              className="h-7 rounded-md border bg-transparent px-2 text-[12.5px] text-foreground"
+              className="h-7 rounded-md border bg-transparent px-2 text-[13.8px] text-foreground"
               value=""
               aria-label="명부에서 연구원 넣기"
               onChange={(e) => {
@@ -609,7 +609,7 @@ export function PersonnelEditor({
           ) : (
             <a
               href="/researchers"
-              className="text-[11.5px] text-muted-foreground underline underline-offset-2"
+              className="text-[12.7px] text-muted-foreground underline underline-offset-2"
             >
               연구원 명부에 등록해 두면 골라 넣을 수 있습니다
             </a>
@@ -620,8 +620,8 @@ export function PersonnelEditor({
           href={`/api/personnel/xlsx?project=${과제_id}&year=${연차}`}
           className={
             보이는.length === 0 || 더러움
-              ? "pointer-events-none rounded-md border px-2 py-1 text-[12.8px] text-muted-foreground opacity-50"
-              : "rounded-md border px-2 py-1 text-[12.8px] text-muted-foreground hover:bg-secondary/60"
+              ? "pointer-events-none rounded-md border px-2 py-1 text-[14.1px] text-muted-foreground opacity-50"
+              : "rounded-md border px-2 py-1 text-[14.1px] text-muted-foreground hover:bg-secondary/60"
           }
           title={
             더러움
@@ -635,8 +635,8 @@ export function PersonnelEditor({
           href={`/api/personnel/xlsx?project=${과제_id}`}
           className={
             rows.length === 0 || 더러움
-              ? "pointer-events-none rounded-md border px-2 py-1 text-[12.8px] text-muted-foreground opacity-50"
-              : "rounded-md border px-2 py-1 text-[12.8px] text-muted-foreground hover:bg-secondary/60"
+              ? "pointer-events-none rounded-md border px-2 py-1 text-[14.1px] text-muted-foreground opacity-50"
+              : "rounded-md border px-2 py-1 text-[14.1px] text-muted-foreground hover:bg-secondary/60"
           }
         >
           전체 연차
@@ -646,24 +646,24 @@ export function PersonnelEditor({
             안 누른 사람의 비목 인건비가 개인별과 어긋난 채 남는다.
             그 버튼은 **고른 연차만** 반영해서 2년 합계를 1년치로 덮은 사고도 있었다. */}
         {!읽기전용 && (
-          <span className="text-[11.5px] text-muted-foreground">
+          <span className="text-[12.7px] text-muted-foreground">
             저장하면 비목 인건비가 자동으로 맞춰집니다
           </span>
         )}
         <span className="ml-auto" />
         {msg && (
-          <span className={msg.ok ? "text-[12.5px] text-muted-foreground" : "text-[12.5px] text-destructive"}>
+          <span className={msg.ok ? "text-[13.8px] text-muted-foreground" : "text-[13.8px] text-destructive"}>
             {msg.text}
           </span>
         )}
         {읽기전용 ? (
-          <span className="text-[12.5px] text-muted-foreground">
+          <span className="text-[13.8px] text-muted-foreground">
             예산 확정 — 볼 수만 있습니다 (엑셀은 그대로 받을 수 있습니다)
           </span>
         ) : (
           <Button
             type="button"
-            className="h-7 text-[12.8px]"
+            className="h-7 text-[14.1px]"
             disabled={pending || !더러움}
             onClick={저장}
           >
@@ -672,7 +672,7 @@ export function PersonnelEditor({
         )}
       </div>
 
-      <p className="mt-2 text-[11px] text-muted-foreground">
+      <p className="mt-2 text-[12.1px] text-muted-foreground">
         총액 = 월급여 × 참여율 × 참여개월수 · 급여총액 = 월급여 × 12 · 재원은 현금(실제 급여이체) ·
         현물(기관부담) 둘 중 고릅니다. <b>저장하면 아래 연구비 계상의 인건비 줄이 재원별로 자동으로
         맞춰집니다</b>(연차를 가리지 않고 전 연차 합계입니다). 그래서 아래 표의 인건비 칸은 직접 못

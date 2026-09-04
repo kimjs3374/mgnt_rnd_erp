@@ -126,7 +126,7 @@ export default async function ProjectOverviewPage({
       {과제사업 && (
         <Card className="p-4">
           <div className="mb-2 flex items-baseline gap-2">
-            <span className="text-[13px] font-medium">한도 검증</span>
+            <span className="text-[14.3px] font-medium">한도 검증</span>
             {/* 종료된 과제에는 계상으로 가는 길을 두지 않는다 — 탭·대장 링크와 같은 규칙이다.
                 지난 계상은 이 화면의 「한도 검증」과 정산 탭 원장에서 그대로 본다. */}
             {p?.상태 !== "종료" && (
@@ -146,7 +146,7 @@ export default async function ProjectOverviewPage({
           ) : (
             <ul className="space-y-1.5">
               {checks.map((c) => (
-                <li key={c.키} className="flex flex-wrap items-baseline gap-x-2 text-[13px]">
+                <li key={c.키} className="flex flex-wrap items-baseline gap-x-2 text-[14.3px]">
                   <span
                     className={
                       c.통과 === false
@@ -176,13 +176,13 @@ export default async function ProjectOverviewPage({
       )}
 
       <Card className="p-4">
-        <div className="mb-2 text-[13px] font-medium">집행 상태</div>
+        <div className="mb-2 text-[14.3px] font-medium">집행 상태</div>
         {exp.rows.length === 0 ? (
-          <p className="text-[13px] text-muted-foreground">
+          <p className="text-[14.3px] text-muted-foreground">
             집행 건이 없습니다. Slack 채널에 증빙을 올리면 「검토대기」로 쌓입니다.
           </p>
         ) : (
-          <ul className="space-y-1 text-[13px]">
+          <ul className="space-y-1 text-[14.3px]">
             {[...상태별.entries()].map(([s, n]) => (
               <li key={s} className="flex justify-between">
                 <span className="text-muted-foreground">{s}</span>

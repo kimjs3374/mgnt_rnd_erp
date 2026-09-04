@@ -1,4 +1,5 @@
 import { db } from "@/lib/db"
+import { 공개주소 } from "@/lib/storage-url"
 
 /**
  * 서류함에서 **파일 하나** 내려받기 — `/api/program-files/one?key=계상:12`
@@ -36,5 +37,5 @@ export async function GET(req: Request) {
   if (서명오류 || !signed?.signedUrl) {
     return new Response(`내려받기 주소를 만들지 못했다: ${서명오류?.message ?? ""}`, { status: 500 })
   }
-  return Response.redirect(signed.signedUrl, 302)
+  return Response.redirect(공개주소(signed.signedUrl), 302)
 }

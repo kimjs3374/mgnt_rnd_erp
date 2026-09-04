@@ -5,6 +5,7 @@ import { db } from "@/lib/db"
 import { getCurrentUser } from "@/lib/current-user"
 import { 문서_확장자, 문서파일_점검 } from "@/lib/upload-limits"
 import { 사업자번호_숫자만, 사업자번호_점검 } from "@/lib/vendor-types"
+import { 공개주소 } from "@/lib/storage-url"
 
 /**
  * 업체(거래처) 대장 — 등록·수정 · 사업자등록증/통장사본 업로드 · 다운로드 · 삭제.
@@ -202,7 +203,7 @@ export async function getVendorDownloadUrl(id: number): Promise<VendorActionResu
     if (sErr || !signed?.signedUrl) {
       return { ok: false, error: sErr?.message ?? "내려받을 주소를 만들지 못했습니다." }
     }
-    return { ok: true, url: signed.signedUrl }
+    return { ok: true, url: 공개주소(signed.signedUrl) }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   }

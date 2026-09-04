@@ -72,7 +72,7 @@ export function ProjectTabs({
             href={t.href}
             aria-current={on ? "page" : undefined}
             className={cn(
-              "-mb-px border-b-2 px-3 py-2 text-[13px] transition-colors",
+              "-mb-px border-b-2 px-3 py-2 text-[14.3px] transition-colors",
               on
                 ? "border-foreground font-medium text-foreground"
                 : "border-transparent text-muted-foreground hover:text-foreground",

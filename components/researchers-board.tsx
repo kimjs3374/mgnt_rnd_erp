@@ -136,7 +136,7 @@ export function ResearchersBoard({
     })
   }
 
-  const cell = "h-7 text-[12.5px]"
+  const cell = "h-7 text-[13.8px]"
 
   return (
     <>
@@ -145,14 +145,14 @@ export function ResearchersBoard({
           value={검색}
           onChange={(e) => set검색(e.target.value)}
           placeholder="이름·등록번호·부서 검색"
-          className="h-7 w-56 text-[13px]"
+          className="h-7 w-56 text-[14.3px]"
         />
         <span className="text-xs text-muted-foreground tabular-nums">
           {보이는.length}명{보이는.length !== rows.length ? ` (전체 ${rows.length}명)` : ""}
         </span>
         <Button
           type="button"
-          className="ml-auto h-7 text-[12.8px]"
+          className="ml-auto h-7 text-[14.1px]"
           disabled={pending}
           onClick={() => {
             set편집(빈줄(올해))
@@ -164,18 +164,18 @@ export function ResearchersBoard({
       </div>
 
       {/* 절대규칙 5 — 배포 URL 은 열려 있다. 서버가 실명을 가릴 수는 없으니 여기서 말한다. */}
-      <p className="px-1 text-[11.5px] text-muted-foreground">
+      <p className="px-1 text-[12.7px] text-muted-foreground">
         공개 주소에는 <b>가명</b>을 쓰세요. 연봉은 <b>1년 단위</b>로 갱신하며 기준연도별로 쌓입니다 —
         지난 계상의 근거가 그 해 연봉이라 덮어쓰지 않습니다. 인건비 계상에서 쓰는 <b>월급여 = 연봉 ÷ 12</b>.
       </p>
 
       {편집 && (
         <div className="rounded-lg border bg-card p-3">
-          <div className="mb-2 text-[13px] font-medium">
+          <div className="mb-2 text-[14.3px] font-medium">
             {편집.id ? "연구원 고치기" : "연구원 등록"}
           </div>
           <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
-            <label className="text-[12px] text-muted-foreground">
+            <label className="text-[13.2px] text-muted-foreground">
               연구원 성명 (가명)
               <Input
                 className={cell}
@@ -184,7 +184,7 @@ export function ResearchersBoard({
                 aria-label="연구원 성명"
               />
             </label>
-            <label className="text-[12px] text-muted-foreground">
+            <label className="text-[13.2px] text-muted-foreground">
               연구자등록번호
               <Input
                 className={cell}
@@ -193,7 +193,7 @@ export function ResearchersBoard({
                 aria-label="연구자등록번호"
               />
             </label>
-            <label className="text-[12px] text-muted-foreground">
+            <label className="text-[13.2px] text-muted-foreground">
               입사일자
               <Input
                 type="date"
@@ -203,16 +203,16 @@ export function ResearchersBoard({
                 aria-label="입사일자"
               />
             </label>
-            <label className="text-[12px] text-muted-foreground">
+            <label className="text-[13.2px] text-muted-foreground">
               연봉 (대략)
               <MoneyInput
                 value={편집.연봉}
                 onValueChange={(n) => set편집({ ...편집, 연봉: n })}
-                className="h-7 text-right text-[12.5px] tabular-nums"
+                className="h-7 text-right text-[13.8px] tabular-nums"
                 aria-label="연봉"
               />
             </label>
-            <label className="text-[12px] text-muted-foreground">
+            <label className="text-[13.2px] text-muted-foreground">
               연봉 기준연도
               <Input
                 type="number"
@@ -222,7 +222,7 @@ export function ResearchersBoard({
                 aria-label="연봉 기준연도"
               />
             </label>
-            <label className="text-[12px] text-muted-foreground">
+            <label className="text-[13.2px] text-muted-foreground">
               소속부서
               <Input
                 className={cell}
@@ -231,7 +231,7 @@ export function ResearchersBoard({
                 aria-label="소속부서"
               />
             </label>
-            <label className="text-[12px] text-muted-foreground">
+            <label className="text-[13.2px] text-muted-foreground">
               직급
               <Input
                 className={cell}
@@ -240,7 +240,7 @@ export function ResearchersBoard({
                 aria-label="직급"
               />
             </label>
-            <label className="flex items-end gap-1.5 text-[12px] text-muted-foreground">
+            <label className="flex items-end gap-1.5 text-[13.2px] text-muted-foreground">
               <input
                 type="checkbox"
                 checked={편집.재직}
@@ -251,20 +251,20 @@ export function ResearchersBoard({
             </label>
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span className="text-[11.5px] text-muted-foreground">
+            <span className="text-[12.7px] text-muted-foreground">
               월급여로 환산하면 <b className="tabular-nums">{won(월급여(편집.연봉))}</b> 입니다
             </span>
             <span className="ml-auto" />
             <Button
               type="button"
               variant="ghost"
-              className="h-7 text-[12.8px] text-muted-foreground"
+              className="h-7 text-[14.1px] text-muted-foreground"
               disabled={pending}
               onClick={() => set편집(null)}
             >
               취소
             </Button>
-            <Button type="button" className="h-7 text-[12.8px]" disabled={pending} onClick={저장}>
+            <Button type="button" className="h-7 text-[14.1px]" disabled={pending} onClick={저장}>
               {pending ? "저장 중…" : "저장"}
             </Button>
           </div>
@@ -272,7 +272,7 @@ export function ResearchersBoard({
       )}
 
       {msg && (
-        <p className={msg.ok ? "px-1 text-[12.5px] text-muted-foreground" : "px-1 text-[12.5px] text-destructive"}>
+        <p className={msg.ok ? "px-1 text-[13.8px] text-muted-foreground" : "px-1 text-[13.8px] text-destructive"}>
           {msg.text}
         </p>
       )}
@@ -303,11 +303,11 @@ export function ResearchersBoard({
               {보이는.map((r) => {
                 const 이 = (이력맵.get(r.id) ?? []).slice(0, 3)
                 return (
-                  <TableRow key={r.id} className={"h-[38px] text-[13px] " + (r.재직 ? "" : "opacity-60")}>
+                  <TableRow key={r.id} className={"h-[38px] text-[14.3px] " + (r.재직 ? "" : "opacity-60")}>
                     <TableCell className="font-medium">
                       {r.표시명}
                       {!r.재직 && (
-                        <span className="ml-1.5 rounded bg-secondary px-1 py-0.5 text-[10.5px] text-muted-foreground">
+                        <span className="ml-1.5 rounded bg-secondary px-1 py-0.5 text-[11.6px] text-muted-foreground">
                           퇴사
                         </span>
                       )}
@@ -323,7 +323,7 @@ export function ResearchersBoard({
                     <TableCell className="text-right tabular-nums">
                       {won(r.연봉)}
                       {r.연봉_기준연도 ? (
-                        <span className="ml-1 text-[11px] text-muted-foreground">
+                        <span className="ml-1 text-[12.1px] text-muted-foreground">
                           {r.연봉_기준연도}년
                         </span>
                       ) : null}
@@ -331,7 +331,7 @@ export function ResearchersBoard({
                     <TableCell className="text-right tabular-nums text-muted-foreground">
                       {won(월급여(Number(r.연봉)))}
                     </TableCell>
-                    <TableCell className="text-[11.5px] text-muted-foreground">
+                    <TableCell className="text-[12.7px] text-muted-foreground">
                       {이.length ? 이.map((s) => `${s.연도} ${won(s.연봉)}`).join(" · ") : "—"}
                     </TableCell>
                     <TableCell className="text-right">

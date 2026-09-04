@@ -38,7 +38,15 @@
     ".next-check/types/**/*.ts",
     ".next-check/dev/types/**/*.ts",
     ".next-prod/types/**/*.ts",
-    ".next-prod/dev/types/**/*.ts"
+    ".next-prod/dev/types/**/*.ts",
+    ".next-buildcheck/types/**/*.ts",
+    ".next-buildcheck/dev/types/**/*.ts",
+    ".next-rehearsal/types/**/*.ts",
+    ".next-rehearsal/dev/types/**/*.ts",
+    ".next-recheck/types/**/*.ts",
+    ".next-recheck/dev/types/**/*.ts",
+    ".next-mgnt2-681d22a7/types/**/*.ts",
+    ".next-mgnt2-681d22a7/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

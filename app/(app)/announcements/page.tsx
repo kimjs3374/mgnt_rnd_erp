@@ -1,5 +1,6 @@
 import { AnnouncementsView } from "@/components/announcements-view"
 import { SyncAnnouncementsButton } from "@/components/sync-announcements-button"
+import { RecentJudgmentsFeed } from "@/components/recent-judgments-feed"
 import { getProgramAnnouncements } from "@/lib/queries-programs"
 
 export const dynamic = "force-dynamic"
@@ -49,35 +50,40 @@ export default async function AnnouncementsPage() {
       banner={banner}
       actions={<SyncAnnouncementsButton />}
       showSource
+      detailBasePath="/announcements"
       emptyHint="「동기화」를 누르면 기업마당·K-Startup 오픈API 목록이 채워집니다."
       footer={
-        <div className="rounded-lg border bg-card p-4 text-[13px]">
-          <h2 className="mb-2 text-sm font-semibold">판정 등급 4종</h2>
-          <ul className="space-y-1 text-muted-foreground">
-            <li>
-              <span className="font-medium text-foreground">가능</span> — 지역·지원대상이 모두
-              우리와 맞는다
-            </li>
-            <li>
-              <span className="font-medium text-foreground">불가</span> — 공고가 밝힌 지역이
-              우리 밖이거나, 지원대상에 우리가 없다
-            </li>
-            <li>
-              <span className="font-medium text-foreground">확인 필요</span> — 공고가 지원대상을
-              안 밝혔다. <b>「불가」로 적지 않는다</b> — 그러면 신청할 수 있는 공고가 조용히
-              사라진다
-            </li>
-            <li>
-              <span className="font-medium text-foreground">요건 미확인</span> — 회사 프로필이
-              비어 대조 자체를 못 했다
-            </li>
-          </ul>
-          <p className="mt-3 text-xs text-muted-foreground">
-            지역은 기관이 사업명에 붙인 대괄호 태그와 소관부처에서 읽는다(기업마당), 또는
-            API 가 준 지역 필드를 쓴다(K-Startup). 둘 다 없으면 「미상」으로 두고 걸러내지 않는다.
-            접수기간도 절반 이상이 날짜가 아니다(상시·소진시·회차별 상이) — 파싱되면 D-day,
-            안 되면 유형 배지. <b>날짜를 지어내지 않는다.</b>
-          </p>
+        <div className="space-y-4">
+          <div className="rounded-lg border bg-card p-4 text-[14.3px]">
+            <h2 className="mb-2 text-sm font-semibold">판정 등급 4종</h2>
+            <ul className="space-y-1 text-muted-foreground">
+              <li>
+                <span className="font-medium text-foreground">가능</span> — 지역·지원대상이 모두
+                우리와 맞는다
+              </li>
+              <li>
+                <span className="font-medium text-foreground">불가</span> — 공고가 밝힌 지역이
+                우리 밖이거나, 지원대상에 우리가 없다
+              </li>
+              <li>
+                <span className="font-medium text-foreground">확인 필요</span> — 공고가 지원대상을
+                안 밝혔다. <b>「불가」로 적지 않는다</b> — 그러면 신청할 수 있는 공고가 조용히
+                사라진다
+              </li>
+              <li>
+                <span className="font-medium text-foreground">요건 미확인</span> — 회사 프로필이
+                비어 대조 자체를 못 했다
+              </li>
+            </ul>
+            <p className="mt-3 text-xs text-muted-foreground">
+              지역은 기관이 사업명에 붙인 대괄호 태그와 소관부처에서 읽는다(기업마당), 또는
+              API 가 준 지역 필드를 쓴다(K-Startup). 둘 다 없으면 「미상」으로 두고 걸러내지 않는다.
+              접수기간도 절반 이상이 날짜가 아니다(상시·소진시·회차별 상이) — 파싱되면 D-day,
+              안 되면 유형 배지. <b>날짜를 지어내지 않는다.</b>
+            </p>
+          </div>
+
+          <RecentJudgmentsFeed />
         </div>
       }
     />

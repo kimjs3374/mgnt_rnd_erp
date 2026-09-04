@@ -73,15 +73,15 @@ export function EngineHumanImpact({ impact }: { impact: HumanImpact }) {
           <div key={s.라벨} className="rounded-lg border bg-background p-3">
             <div className="text-xs text-muted-foreground">{s.라벨}</div>
             <div className="mt-0.5 text-2xl font-bold tabular-nums">{s.값}</div>
-            <div className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{s.곁}</div>
+            <div className="mt-0.5 text-[12.1px] leading-snug text-muted-foreground">{s.곁}</div>
           </div>
         ))}
       </div>
 
       {/* 그 입력이 판정에 닿은 정도 */}
       <div className="mb-4 rounded-lg border bg-background p-3">
-        <h3 className="mb-2 text-[13px] font-semibold">그래서 판정에 얼마나 닿았나</h3>
-        <ul className="grid gap-1.5 text-[12.5px]">
+        <h3 className="mb-2 text-[14.3px] font-semibold">그래서 판정에 얼마나 닿았나</h3>
+        <ul className="grid gap-1.5 text-[13.8px]">
           <li className="flex justify-between gap-3">
             <span className="text-muted-foreground">
               사람 답변이 얹힌 판정 (판정경로에 「사람」이 붙은 건)
@@ -119,10 +119,10 @@ export function EngineHumanImpact({ impact }: { impact: HumanImpact }) {
 
       {/* 판정 분포가 실제로 어떻게 움직였나 */}
       <div>
-        <h3 className="mb-1 text-[13px] font-semibold">판정 분포가 실제로 어떻게 움직였나</h3>
+        <h3 className="mb-1 text-[14.3px] font-semibold">판정 분포가 실제로 어떻게 움직였나</h3>
         {구간 && 시작행 && 끝행 ? (
           <>
-            <p className="mb-2 text-[11px] text-muted-foreground">
+            <p className="mb-2 text-[12.1px] text-muted-foreground">
               <b>대상 {구간.합계.toLocaleString()}건이 동일한 {구간.시작}~{구간.끝} 구간</b>만
               잘라서 잰다 — 마감 제외를 도입하며 대상 자체가 줄어든 구간을 끼워 넣으면
               「좋아졌다」가 거짓말이 된다.
@@ -132,15 +132,15 @@ export function EngineHumanImpact({ impact }: { impact: HumanImpact }) {
                 const d = 델타(시작행[k], 끝행[k])
                 return (
                   <div key={k} className="rounded-md border bg-background p-2.5">
-                    <div className="text-[11px]" style={{ color: 등급색[k] }}>{k}</div>
+                    <div className="text-[12.1px]" style={{ color: 등급색[k] }}>{k}</div>
                     <div className="mt-0.5 flex items-baseline gap-1.5">
-                      <span className="text-[13px] tabular-nums text-muted-foreground">
+                      <span className="text-[14.3px] tabular-nums text-muted-foreground">
                         {시작행[k]}
                       </span>
-                      <span className="text-[11px] text-muted-foreground">→</span>
+                      <span className="text-[12.1px] text-muted-foreground">→</span>
                       <span className="text-lg font-bold tabular-nums">{끝행[k]}</span>
                     </div>
-                    <div className="text-[11px] font-medium tabular-nums" style={{ color: d.색 }}>
+                    <div className="text-[12.1px] font-medium tabular-nums" style={{ color: d.색 }}>
                       {d.글}
                     </div>
                   </div>
@@ -149,7 +149,7 @@ export function EngineHumanImpact({ impact }: { impact: HumanImpact }) {
             </div>
           </>
         ) : (
-          <p className="mb-2 text-[11px] text-muted-foreground">
+          <p className="mb-2 text-[12.1px] text-muted-foreground">
             아직 대상 건수가 같은 연속 구간이 없어 전/후를 재지 않는다.
           </p>
         )}
@@ -158,7 +158,7 @@ export function EngineHumanImpact({ impact }: { impact: HumanImpact }) {
         <div className="grid gap-1">
           {비교대상.map((t) => (
             <div key={t.엔진버전} className="flex items-center gap-2">
-              <span className="w-9 shrink-0 text-[11px] tabular-nums text-muted-foreground">
+              <span className="w-9 shrink-0 text-[12.1px] tabular-nums text-muted-foreground">
                 {t.엔진버전}
               </span>
               <div className="flex h-3.5 flex-1 overflow-hidden rounded">
@@ -176,13 +176,13 @@ export function EngineHumanImpact({ impact }: { impact: HumanImpact }) {
                   ) : null,
                 )}
               </div>
-              <span className="w-28 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground">
+              <span className="w-28 shrink-0 text-right text-[12.1px] tabular-nums text-muted-foreground">
                 가능 {t.가능} · 확인 {t.확인필요}
               </span>
             </div>
           ))}
         </div>
-        <div className="mt-1.5 flex flex-wrap gap-3 text-[10.5px] text-muted-foreground">
+        <div className="mt-1.5 flex flex-wrap gap-3 text-[11.6px] text-muted-foreground">
           {(["가능", "확인필요", "요건미확인", "불가", "해당없음"] as const).map((k) => (
             <span key={k} className="inline-flex items-center gap-1">
               <span
@@ -200,14 +200,14 @@ export function EngineHumanImpact({ impact }: { impact: HumanImpact }) {
 
       {/* 사람이 넣은 것 — 최근 순 */}
       <div className="mt-4">
-        <h3 className="mb-1.5 text-[13px] font-semibold">사람이 넣은 것 (최근 순)</h3>
+        <h3 className="mb-1.5 text-[14.3px] font-semibold">사람이 넣은 것 (최근 순)</h3>
         {impact.타임라인.length === 0 ? (
           <p className="py-4 text-center text-sm text-muted-foreground">아직 입력이 없다.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-[12.5px]">
+            <table className="w-full text-[13.8px]">
               <thead>
-                <tr className="border-b text-left text-[11px] text-muted-foreground">
+                <tr className="border-b text-left text-[12.1px] text-muted-foreground">
                   <th className="py-1.5 pr-3 font-medium">종류</th>
                   <th className="py-1.5 pr-3 font-medium">내용</th>
                   <th className="py-1.5 pr-3 font-medium">사람</th>

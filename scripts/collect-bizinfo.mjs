@@ -14,6 +14,7 @@ import { readFileSync } from "node:fs"
 import { pgUpsertByFilter, pgSelect, pgInsert } from "./lib/pgrest.mjs"
 import { extractText, findSections } from "./lib/extract.mjs"
 import { extractDocuments, selectRelevant } from "./lib/llm.mjs"
+import { uploadFile, contentTypeFor } from "./lib/storage.mjs"
 import { 기업마당행, 태그제거 } from "../lib/sources.mjs"
 
 function loadEnv(path = "/web/rnd/.env.local") {
@@ -113,6 +114,23 @@ async function processOne(rec, workdir) {
       const ext = await extractText(path)
       text = ext.text
       row.파싱상태 = text ? "파싱완료" : "파싱실패"
+      // 원본(기업마당) 서버 링크가 나중에 끊길 수 있다 — 우리 버킷에도 사본을 남긴다.
+      // 판독 자체는 실패해도(파싱실패) 파일은 받았으니 사본은 올린다.
+      try {
+        const buf = readFileSync(path)
+        // ⚠ Supabase Storage 키는 한글·공백이 든 원본 파일명을 그대로 받지 않는다
+        //   (실측: InvalidKey 400). 폴더·파일명 전부 ASCII 로 — 원래 파일명은
+        //   공고문_파일명 컬럼에 이미 있으니 화면은 그쪽을 보여준다.
+        const 확장자 = (name.split(".").pop() || "bin").toLowerCase()
+        row.공고문_bucket_url = await uploadFile(
+          "announcements",
+          `bizinfo/${rec.pblancId}.${확장자}`,
+          buf,
+          contentTypeFor(name),
+        )
+      } catch (e) {
+        console.error(`  [${rec.pblancId}] 버킷 업로드 실패: ${e.message}`)
+      }
     } catch (e) {
       row.파싱상태 = "파싱실패"
       console.error(`  [${rec.pblancId}] 첨부 다운로드/추출 실패: ${e.message}`)

@@ -73,7 +73,7 @@ function DocSlot({
       } ${막힘 ? "cursor-not-allowed" : ""}`}
     >
       <div className="flex flex-wrap items-baseline gap-2">
-        <span className="text-[13px] font-medium">{종류}</span>
+        <span className="text-[14.3px] font-medium">{종류}</span>
         {목록.length === 0 ? (
           <span className="text-xs text-muted-foreground">미제출</span>
         ) : (
@@ -84,7 +84,7 @@ function DocSlot({
             <Button
               type="button"
               variant="outline"
-              className="ml-auto h-6 text-[12px]"
+              className="ml-auto h-6 text-[13.2px]"
               disabled={pending}
               onClick={() => 입력.current?.click()}
             >
@@ -111,7 +111,7 @@ function DocSlot({
       ) : (
         <ul className="mt-2 space-y-1">
           {목록.map((d) => (
-            <li key={d.id} className="flex flex-wrap items-baseline gap-2 text-[13px]">
+            <li key={d.id} className="flex flex-wrap items-baseline gap-2 text-[14.3px]">
               <button
                 type="button"
                 className="underline-offset-2 hover:underline"
@@ -251,7 +251,7 @@ export function SettlementDocuments({
   return (
     <div className="rounded-lg border bg-card">
       <div className="flex flex-wrap items-baseline gap-2 border-b p-3">
-        <span className="text-[13px] font-medium">최종 정산 서류</span>
+        <span className="text-[14.3px] font-medium">최종 정산 서류</span>
         <span className="text-xs text-muted-foreground">
           {기간끝남
             ? `협약기간이 끝났습니다(종료 ${종료일 ?? "미정"}) — 제출한 서류를 여기 보관합니다`
@@ -264,7 +264,7 @@ export function SettlementDocuments({
 
       <div className="space-y-2 p-3">
         {msg && (
-          <p className={`text-[12.5px] ${msg.ok ? "text-muted-foreground" : "text-destructive"}`}>
+          <p className={`text-[13.8px] ${msg.ok ? "text-muted-foreground" : "text-destructive"}`}>
             {msg.text}
           </p>
         )}
@@ -277,7 +277,7 @@ export function SettlementDocuments({
                 type="date"
                 value={제출일}
                 onChange={(e) => set제출일(e.target.value)}
-                className="mt-1 h-7 w-[150px] text-[13px]"
+                className="mt-1 h-7 w-[150px] text-[14.3px]"
                 aria-label="정산 제출일"
               />
             </label>
@@ -291,7 +291,7 @@ export function SettlementDocuments({
                   placeholder="마지막"
                   value={정산연차}
                   onChange={(e) => set정산연차(e.target.value)}
-                  className="mt-1 h-7 w-[110px] text-[13px] tabular-nums"
+                  className="mt-1 h-7 w-[110px] text-[14.3px] tabular-nums"
                   aria-label="정산연차"
                 />
               </label>
@@ -314,7 +314,7 @@ export function SettlementDocuments({
             {기타
               .filter((d) => d.서류종류 !== "기타")
               .map((d) => (
-                <li key={d.id} className="flex flex-wrap items-baseline gap-2 text-[13px]">
+                <li key={d.id} className="flex flex-wrap items-baseline gap-2 text-[14.3px]">
                   <span className="font-medium">{d.서류종류}</span>
                   <button
                     type="button"

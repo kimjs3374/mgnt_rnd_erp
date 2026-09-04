@@ -94,27 +94,27 @@ export function BudgetConfirmBar({
     return (
       <div className="rounded-lg border border-primary bg-primary/5 p-4">
         <div className="flex flex-wrap items-baseline gap-2">
-          <span className="text-[13px] font-medium">예산 확정됨</span>
-          <span className="text-[12px] text-muted-foreground">
+          <span className="text-[14.3px] font-medium">예산 확정됨</span>
+          <span className="text-[13.2px] text-muted-foreground">
             {/* 로그인이 아직 없다 — 확인된 행위자만 적는다. 시각은 언제나 사실이다. */}
             {최신 ? 시각(최신.일시) : ""}
             {최신?.행위자_인증 ? ` · ${최신.행위자}` : ""}
           </span>
           <Link
             href="/projects"
-            className="ml-auto text-[12.5px] underline underline-offset-2 hover:text-foreground"
+            className="ml-auto text-[13.8px] underline underline-offset-2 hover:text-foreground"
           >
             사업 대장에서 보기 →
           </Link>
         </div>
 
-        <p className="mt-1 text-[12.5px] text-muted-foreground">
+        <p className="mt-1 text-[13.8px] text-muted-foreground">
           이 과제의 관리 위치는 <b className="text-foreground">사업 대장</b>입니다. 계상 탭은 볼 수만
           있습니다 — 정산 탭의 과제비 원장이 아래 배정액을 기준으로 집행과 대조하기 때문에, 확정 뒤에
           숫자가 바뀌면 대조 기준이 조용히 달라집니다.
         </p>
 
-        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-muted-foreground">
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13.2px] text-muted-foreground">
           <span className="tabular-nums">
             확정 시점 총사업비 {원(최신?.총사업비_스냅샷)}원 · 계상 {원(최신?.배정합_스냅샷)}원
           </span>
@@ -129,14 +129,14 @@ export function BudgetConfirmBar({
         {해제열림 ? (
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <Input
-              className="h-7 w-96 text-[12.5px]"
+              className="h-7 w-96 text-[13.8px]"
               placeholder="왜 다시 여는지 한 줄 (예: 변경협약으로 총사업비가 늘었다)"
               value={사유}
               onChange={(e) => set사유(e.target.value)}
             />
             <Button
               type="button"
-              className="h-7 text-[12.8px]"
+              className="h-7 text-[14.1px]"
               disabled={pending || !사유.trim()}
               onClick={해제하기}
             >
@@ -145,7 +145,7 @@ export function BudgetConfirmBar({
             <Button
               type="button"
               variant="ghost"
-              className="h-7 text-[12.8px]"
+              className="h-7 text-[14.1px]"
               disabled={pending}
               onClick={() => {
                 set해제열림(false)
@@ -161,7 +161,7 @@ export function BudgetConfirmBar({
             <Button
               type="button"
               variant="outline"
-              className="h-7 text-[12.8px]"
+              className="h-7 text-[14.1px]"
               onClick={() => set해제열림(true)}
             >
               확정 해제
@@ -170,7 +170,7 @@ export function BudgetConfirmBar({
               <Button
                 type="button"
                 variant="ghost"
-                className="h-7 text-[12.8px] text-muted-foreground"
+                className="h-7 text-[14.1px] text-muted-foreground"
                 onClick={() => set이력열림((v) => !v)}
               >
                 {이력열림 ? "이력 접기" : `이력 ${이력.length}건`}
@@ -180,7 +180,7 @@ export function BudgetConfirmBar({
         )}
 
         {이력열림 && <HistoryList 이력={이력} />}
-        {err && <p className="mt-2 text-[12px] text-destructive">{err}</p>}
+        {err && <p className="mt-2 text-[13.2px] text-destructive">{err}</p>}
       </div>
     )
   }
@@ -188,24 +188,24 @@ export function BudgetConfirmBar({
   return (
     <div className="rounded-lg border bg-card p-4">
       <div className="flex flex-wrap items-baseline gap-2">
-        <span className="text-[13px] font-medium">계상 진행 중</span>
-        <span className="text-[12px] text-muted-foreground tabular-nums">
+        <span className="text-[14.3px] font-medium">계상 진행 중</span>
+        <span className="text-[13.2px] text-muted-foreground tabular-nums">
           계상 {원(배정합)}원 / 총사업비 {원(총사업비)}원
         </span>
         {총사업비 > 0 && 차이 !== 0 && (
-          <span className="text-[12px] text-[var(--warning-fg)] tabular-nums">
+          <span className="text-[13.2px] text-[var(--warning-fg)] tabular-nums">
             {차이 > 0 ? `${원(차이)}원 많음` : `${원(-차이)}원 남음`}
           </span>
         )}
         {위반수 > 0 && (
-          <span className="text-[12px] text-destructive">한도 경고 {위반수}건</span>
+          <span className="text-[13.2px] text-destructive">한도 경고 {위반수}건</span>
         )}
       </div>
 
       {/* ⚠ 예전 문구는 「관리 위치가 사업 대장으로 넘어갑니다」였는데 **사실이 아니다**
           (2026-09-04 사용자 지적). 사이드바의 「사업 대장」은 지원사업 쪽 대장(`/programs`)이고
           과제는 「과제 계상」·「과제 관리」로 갈렸다. 확정 뒤에 실제로 일어나는 일만 적는다. */}
-      <p className="mt-1 text-[12.5px] text-muted-foreground">
+      <p className="mt-1 text-[13.8px] text-muted-foreground">
         다 잡았으면 <b className="text-foreground">[예산 확정]</b>을 누르세요. 확정하면 이 탭은 볼
         수만 있게 되고 <b className="text-foreground">과제 목록으로 돌아갑니다.</b> 다시 고치려면{" "}
         [확정 해제]를 누르고, 그때 사유가 남습니다. 그다음 할 일은{" "}
@@ -217,14 +217,14 @@ export function BudgetConfirmBar({
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <Button
           type="button"
-          className="h-7 text-[12.8px]"
+          className="h-7 text-[14.1px]"
           disabled={pending || !맞음}
           onClick={확정하기}
         >
           {pending ? "확정 중…" : "예산 확정"}
         </Button>
         {!맞음 && (
-          <span className="text-[12px] text-muted-foreground">
+          <span className="text-[13.2px] text-muted-foreground">
             {총사업비 <= 0
               ? "총사업비가 없습니다 — 과제 계상 화면에서 협약금액을 먼저 확정하세요."
               : 배정합 === 0
@@ -236,7 +236,7 @@ export function BudgetConfirmBar({
           <Button
             type="button"
             variant="ghost"
-            className="ml-auto h-7 text-[12.8px] text-muted-foreground"
+            className="ml-auto h-7 text-[14.1px] text-muted-foreground"
             onClick={() => set이력열림((v) => !v)}
           >
             {이력열림 ? "이력 접기" : `확정 이력 ${이력.length}건`}
@@ -245,7 +245,7 @@ export function BudgetConfirmBar({
       </div>
 
       {이력열림 && <HistoryList 이력={이력} />}
-      {err && <p className="mt-2 text-[12px] text-destructive">{err}</p>}
+      {err && <p className="mt-2 text-[13.2px] text-destructive">{err}</p>}
     </div>
   )
 }
@@ -258,7 +258,7 @@ function HistoryList({ 이력 }: { 이력: ConfirmRow[] }) {
   return (
     <ul className="mt-2 space-y-1 border-t pt-2">
       {이력.map((h) => (
-        <li key={h.id} className="text-[11.5px] text-muted-foreground">
+        <li key={h.id} className="text-[12.7px] text-muted-foreground">
           <span className="tabular-nums">{시각(h.일시)}</span> · <b>{h.동작}</b>
           {h.행위자_인증 ? ` · ${h.행위자}` : ""}
           {h.사유 ? ` — ${h.사유}` : ""}

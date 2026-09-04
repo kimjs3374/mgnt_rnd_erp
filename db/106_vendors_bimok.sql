@@ -1,0 +1,28 @@
+﻿-- 거래처 사전에 비목 대분류를 붙인다. 실집행 이력이 없는 거래처도 조회로 답할 수 있게.
+begin;
+alter table app.vendors add column if not exists 비목_대분류 text;
+comment on column app.vendors.비목_대분류 is '사내 실집행 772파일에서 추출한 최빈 비목. 이력이 없을 때의 1차 근거로 쓴다.';
+update app.vendors set 비목_대분류 = 'FACILITY' where 사업자번호 = '1198666372';
+update app.vendors set 비목_대분류 = 'FACILITY' where 사업자번호 = '6428102515';
+update app.vendors set 비목_대분류 = 'ACTIVITY' where 사업자번호 = '3128204676';
+update app.vendors set 비목_대분류 = 'FACILITY' where 사업자번호 = '1191262526';
+update app.vendors set 비목_대분류 = 'ACTIVITY' where 사업자번호 = '2590951818';
+update app.vendors set 비목_대분류 = 'FACILITY' where 사업자번호 = '1248547496';
+update app.vendors set 비목_대분류 = 'FACILITY' where 사업자번호 = '1098625113';
+update app.vendors set 비목_대분류 = 'FACILITY' where 사업자번호 = '7408802652';
+update app.vendors set 비목_대분류 = 'FACILITY' where 사업자번호 = '3048125799';
+update app.vendors set 비목_대분류 = 'ACTIVITY' where 사업자번호 = '3128206577';
+update app.vendors set 비목_대분류 = 'ACTIVITY' where 사업자번호 = '5438600802';
+update app.vendors set 비목_대분류 = 'ACTIVITY' where 사업자번호 = '2208855844';
+update app.vendors set 비목_대분류 = 'FACILITY' where 사업자번호 = '1198666372';
+update app.vendors set 비목_대분류 = 'FACILITY' where 사업자번호 = '3038149444';
+update app.vendors set 비목_대분류 = 'FACILITY' where 사업자번호 = '2688700567';
+update app.vendors set 비목_대분류 = 'FACILITY' where 사업자번호 = '1388197298';
+update app.vendors set 비목_대분류 = 'FACILITY' where 사업자번호 = '4091905349';
+update app.vendors set 비목_대분류 = 'FACILITY' where 사업자번호 = '4388600908';
+update app.vendors set 비목_대분류 = 'FACILITY' where 사업자번호 = '1078688859';
+update app.vendors set 비목_대분류 = 'FACILITY' where 사업자번호 = '5068101452';
+update app.vendors set 비목_대분류 = 'INDIRECT' where 사업자번호 = '2208855844';
+update app.vendors set 비목_대분류 = 'INDIRECT' where 사업자번호 = '7258101558';
+commit;
+notify pgrst, 'reload schema';

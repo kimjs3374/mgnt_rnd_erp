@@ -99,7 +99,7 @@ export function ReversePanel({ rows }: { rows: ReversibleRow[] }) {
             </span>
           </button>
         ))}
-        <span className="ml-auto text-[11px] text-muted-foreground">
+        <span className="ml-auto text-[12.1px] text-muted-foreground">
           확신도가 낮은 것부터 — 기계가 덜 확신한 것일수록 사람이 볼 값어치가 크다
         </span>
       </div>
@@ -123,13 +123,13 @@ export function ReversePanel({ rows }: { rows: ReversibleRow[] }) {
       ) : (
         <ul className="grid gap-2">
           {보이는.map((r) => (
-            <li key={r.id} className="rounded-lg border bg-card p-3 text-[13px]">
+            <li key={r.id} className="rounded-lg border bg-card p-3 text-[14.3px]">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span
                       className={
-                        "rounded border px-1.5 py-0.5 text-[11px] font-medium " +
+                        "rounded border px-1.5 py-0.5 text-[12.1px] font-medium " +
                         (r.판정 === "불가"
                           ? "border-destructive/40 text-destructive"
                           : "border-border text-muted-foreground")
@@ -145,7 +145,7 @@ export function ReversePanel({ rows }: { rows: ReversibleRow[] }) {
                     </Link>
                     <ExternalLink className="size-3 shrink-0 text-muted-foreground" />
                   </div>
-                  <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                  <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[12.1px] text-muted-foreground">
                     <span>{r.출처}</span>
                     <span>· {남은날(r.접수종료, r.마감유형)}</span>
                     {/* ⚠ 가운뎃점은 본문이지 클래스가 아니다 — 처음에 className 템플릿
@@ -197,7 +197,7 @@ export function ReversePanel({ rows }: { rows: ReversibleRow[] }) {
 
               {/* 왜 걸렸는지 — 근거를 봐야 되돌릴지 판단할 수 있다 */}
               {(r.걸린게이트.length > 0 || r.근거.length > 0) && (
-                <div className="mt-2 rounded-md bg-muted/50 p-2 text-[12px]">
+                <div className="mt-2 rounded-md bg-muted/50 p-2 text-[13.2px]">
                   {r.걸린게이트.map((g) => (
                     <div key={g.키}>
                       <b>{g.키}</b>
@@ -249,7 +249,7 @@ export function ReversePanel({ rows }: { rows: ReversibleRow[] }) {
                       value={사유}
                       onChange={(e) => set사유(e.target.value)}
                     />
-                    <p className="mt-1 text-[11px] text-muted-foreground">
+                    <p className="mt-1 text-[12.1px] text-muted-foreground">
                       이 한 줄이 판단 우선순위 1층(정정 이력)에 쌓인다 — 엔진은 앞으로 이 공고를
                       덮지 않고, 뜻이 비슷한 다음 공고에서 참고 사례로 뜬다.
                     </p>

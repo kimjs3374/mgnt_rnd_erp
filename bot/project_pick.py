@@ -84,12 +84,25 @@ def guess(일자: str | None) -> tuple[int | None, list[dict], str]:
         return None, cands, f"집행일 {일자} 에 겹치는 수행중 사업이 {len(활성기간내)}건 — 골라야 한다"
 
     기간내 = [r for r in cands if in_period(r, 일자)]
+    if len(기간내) == 1:
+        # ★ 종료된 사업이어도 **기간이 맞는 게 하나뿐이면 기본값으로 제안한다.**
+        #   우리 실집행은 대부분 이미 종료된 과제(RS-2023-00227285, 2023-04~2025-03)에
+        #   속한다. 여기서 None 을 돌려주면 **모든 건이 미지정이 되어 확정 버튼이
+        #   아예 사라진다** — 실제로 그렇게 막혀 있었다.
+        #   자동 확정이 아니다. 상태를 그대로 보여주고 사람이 눌러야 확정된다.
+        r0 = 기간내[0]
+        return (
+            r0["id"],
+            cands,
+            f"집행일 {일자} 에 협약기간이 겹치는 사업이 "
+            f"「{r0.get('사업명') or r0['id']}」 하나뿐 (상태: {r0.get('상태') or '미상'}) "
+            f"— 맞는지 확인하고 확정해 주세요",
+        )
     if 기간내:
-        # 종료된 사업에 새 집행을 자동으로 붙이지 않는다. 사람이 확인해야 한다.
         return (
             None,
             cands,
-            f"집행일 {일자} 에 겹치는 사업이 {len(기간내)}건인데 모두 종료·신청중 — 확인 필요",
+            f"집행일 {일자} 에 겹치는 사업이 {len(기간내)}건인데 모두 종료·신청중 — 골라야 한다",
         )
     return None, cands, f"집행일 {일자} 가 어느 사업의 협약기간에도 안 든다 — 확인 필요"
 
@@ -120,6 +133,22 @@ def options(cands: list[dict], 일자: str | None = None) -> list[dict]:
             }
         )
     return out
+
+
+def recent_default() -> int | None:
+    """직전에 지원사업이 지정된 집행 건의 과제 id.
+
+    일자만으로 과제를 못 정하는 경우가 대부분이다(협약기간이 겹치고, 대상 과제가 이미
+    종료됐다). 그때 **미지정으로 두면 확정 버튼이 사라져** 아무 일도 못 한다.
+    사람이 마지막으로 고른 값을 이어 쓰는 게 실제 사용 방식에 맞다. 추측이 아니라
+    **사람이 직전에 한 선택의 재사용**이고, 화면에 그대로 표시된다.
+    """
+    try:
+        rows = rest.select(
+            "expenses", "과제_id=not.is.null&select=과제_id&order=id.desc&limit=1")
+    except Exception:
+        return None
+    return rows[0]["과제_id"] if rows else None
 
 
 def name_of(pid: int | None) -> str:

@@ -63,15 +63,15 @@ function Field({
   필수?: boolean
 }) {
   return (
-    <label className={"flex flex-col gap-1 text-[11.5px] text-muted-foreground " + (넓게 ? "sm:col-span-2" : "")}>
+    <label className={"flex flex-col gap-1 text-[12.7px] text-muted-foreground " + (넓게 ? "sm:col-span-2" : "")}>
       <span>
         {라벨}
         {필수 && <span className="text-destructive"> *</span>}
-        {힌트 && <span className="ml-1 text-[10.5px]">{힌트}</span>}
+        {힌트 && <span className="ml-1 text-[11.6px]">{힌트}</span>}
       </span>
       <Input
         type={타입}
-        className="h-7 text-[12.5px]"
+        className="h-7 text-[13.8px]"
         value={값}
         onChange={(e) => 놓기(e.target.value)}
       />
@@ -172,7 +172,7 @@ export function ProjectCreateDialog({ 사업유형들 }: { 사업유형들: { �
       <Button
         type="button"
         variant="outline"
-        className="h-7 text-[12.8px]"
+        className="h-7 text-[14.1px]"
         onClick={() => set열림(true)}
       >
         + 기존 사업 옮겨 담기
@@ -199,13 +199,13 @@ export function ProjectCreateDialog({ 사업유형들 }: { 사업유형들: { �
               {결과.주의.length > 0 ? (
                 <ul className="flex flex-col gap-1">
                   {결과.주의.map((w, i) => (
-                    <li key={i} className="text-[12px] text-[var(--warning-fg)]">
+                    <li key={i} className="text-[13.2px] text-[var(--warning-fg)]">
                       · {w}
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="text-[12.5px] text-muted-foreground">
+                <p className="text-[13.8px] text-muted-foreground">
                   걸리는 것 없이 들어갔습니다. 이제 그 과제 안에서 연구비를 계상할 수 있습니다.
                 </p>
               )}
@@ -214,7 +214,7 @@ export function ProjectCreateDialog({ 사업유형들 }: { 사업유형들: { �
                 <Button
                   type="button"
                   variant="ghost"
-                  className="h-7 text-[12.8px]"
+                  className="h-7 text-[14.1px]"
                   onClick={() => set결과(null)}
                 >
                   하나 더 넣기
@@ -222,7 +222,7 @@ export function ProjectCreateDialog({ 사업유형들 }: { 사업유형들: { �
                 <Button
                   type="button"
                   variant="outline"
-                  className="ml-auto h-7 text-[12.8px]"
+                  className="ml-auto h-7 text-[14.1px]"
                   onClick={() => {
                     set열림(false)
                     set결과(null)
@@ -232,7 +232,7 @@ export function ProjectCreateDialog({ 사업유형들 }: { 사업유형들: { �
                 </Button>
                 <Button
                   type="button"
-                  className="h-7 text-[12.8px]"
+                  className="h-7 text-[14.1px]"
                   onClick={() => {
                     set열림(false)
                     set결과(null)
@@ -264,10 +264,10 @@ export function ProjectCreateDialog({ 사업유형들 }: { 사업유형들: { �
               넓게
             />
 
-            <label className="flex flex-col gap-1 text-[11.5px] text-muted-foreground">
+            <label className="flex flex-col gap-1 text-[12.7px] text-muted-foreground">
               <span>사업유형</span>
               <select
-                className="h-7 rounded-md border bg-background px-2 text-[12.5px]"
+                className="h-7 rounded-md border bg-background px-2 text-[13.8px]"
                 value={사업유형}
                 onChange={(e) => set사업유형(e.target.value)}
               >
@@ -293,10 +293,10 @@ export function ProjectCreateDialog({ 사업유형들 }: { 사업유형들: { �
             <Field 라벨="기관부담 현물" 값={현물} 놓기={set현물} 힌트="원" />
 
             <Field 라벨="연차" 값={연차} 놓기={set연차} />
-            <label className="flex flex-col gap-1 text-[11.5px] text-muted-foreground">
+            <label className="flex flex-col gap-1 text-[12.7px] text-muted-foreground">
               <span>상태</span>
               <select
-                className="h-7 rounded-md border bg-background px-2 text-[12.5px]"
+                className="h-7 rounded-md border bg-background px-2 text-[13.8px]"
                 value={상태}
                 onChange={(e) => set상태(e.target.value as 과제상태)}
               >
@@ -307,7 +307,7 @@ export function ProjectCreateDialog({ 사업유형들 }: { 사업유형들: { �
                 ))}
               </select>
             </label>
-            <div className="sm:col-span-2 self-end pb-1 text-[11px] text-muted-foreground">
+            <div className="sm:col-span-2 self-end pb-1 text-[12.1px] text-muted-foreground">
               {과제상태_설명[상태]}
             </div>
 
@@ -317,27 +317,27 @@ export function ProjectCreateDialog({ 사업유형들 }: { 사업유형들: { �
           {/* 막지 않고 보이게만 하는 것들 */}
           <div className="flex flex-col gap-1">
             {기간뒤집힘 && (
-              <span className="text-[12px] text-destructive">
+              <span className="text-[13.2px] text-destructive">
                 종료일이 시작일보다 빠릅니다.
               </span>
             )}
             {재원어긋남 && 총 != null && (
-              <span className="text-[12px] text-[var(--warning-fg)]">
+              <span className="text-[13.2px] text-[var(--warning-fg)]">
                 재원 합계 {원(재원합)}원이 총사업비 {원(총)}원과 {원(Math.abs(재원합 - 총))}원
                 다릅니다. 그대로 만들 수 있고, 연구비 계상 탭에서 맞추면 됩니다.
               </span>
             )}
-            {err && <span className="text-[12px] text-destructive">{err}</span>}
+            {err && <span className="text-[13.2px] text-destructive">{err}</span>}
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-[11px] text-muted-foreground">
+            <span className="text-[12.1px] text-muted-foreground">
               공고는 붙지 않습니다 — 이 길로 들어온 건은 공고 레코드가 없는 건입니다
             </span>
             <Button
               type="button"
               variant="ghost"
-              className="ml-auto h-7 text-[12.8px]"
+              className="ml-auto h-7 text-[14.1px]"
               disabled={pending}
               onClick={() => {
                 비우기()
@@ -346,7 +346,7 @@ export function ProjectCreateDialog({ 사업유형들 }: { 사업유형들: { �
             >
               취소
             </Button>
-            <Button type="button" className="h-7 text-[12.8px]" disabled={!낼수있나} onClick={저장}>
+            <Button type="button" className="h-7 text-[14.1px]" disabled={!낼수있나} onClick={저장}>
               {pending ? "만드는 중…" : "대장에 넣기"}
             </Button>
           </div>

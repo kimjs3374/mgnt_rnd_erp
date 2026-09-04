@@ -1,6 +1,7 @@
 "use client"
 
-import { useActionState, useState } from "react"
+import { useActionState, useState, type ReactNode } from "react"
+import { Users, UserCheck, UserX, Clock, Building2, ShieldCheck, UserRound } from "lucide-react"
 import {
   changeUserRole,
   changeUserDepartment,
@@ -11,6 +12,8 @@ import {
   type ActionResult,
 } from "@/app/actions/admin-users"
 import { Button } from "@/components/ui/button"
+import { Stat } from "@/components/page-shell"
+import { cn } from "@/lib/utils"
 import { formatKstDateTime } from "@/lib/kst"
 import { DEPARTMENTS, DEPARTMENT_LABEL, POSITIONS_BY_DEPARTMENT, type Department } from "@/lib/positions"
 
@@ -31,10 +34,21 @@ export type Account = {
 export type Stats = { total: number; active: number; inactive: number; pending: number }
 
 const STATUS_LABEL: Record<Account["status"], string> = { approved: "정상", suspended: "정지됨" }
+// 상태 배지 색 — 계정 정지는 조치가 필요한 신호라 danger, 정상은 조용한 success.
+const STATUS_TONE: Record<Account["status"], string> = {
+  approved: "bg-[var(--success)] text-[var(--success-fg)]",
+  suspended: "bg-destructive/10 text-destructive",
+}
 const ROLE_LABEL: Record<Account["role"], string> = {
   super_admin: "슈퍼관리자",
   admin: "관리자",
   member: "일반회원",
+}
+// 등급 배지 색 — 슈퍼관리자만 눈에 띄게, 나머지는 무난하게.
+const ROLE_TONE: Record<Account["role"], string> = {
+  super_admin: "bg-primary/10 text-primary",
+  admin: "bg-secondary text-secondary-foreground",
+  member: "border border-border text-muted-foreground",
 }
 const EXTRA_MENU_LABEL: Record<"research" | "planning", string> = {
   research: "과제사업 · 과제 관리",
@@ -43,12 +57,25 @@ const EXTRA_MENU_LABEL: Record<"research" | "planning", string> = {
 
 type Bucket = Department | "super_admin"
 
-function StatCard({ label, value }: { label: string; value: number }) {
+/** 이름 첫 글자 원형 아바타 — 목록·상세 둘 다에서 사람을 한눈에 구분하게 한다. */
+function Avatar({ name, role }: { name: string; role: Account["role"] }) {
   return (
-    <div className="rounded-lg border bg-card p-3">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-1 text-xl font-semibold">{value}</p>
-    </div>
+    <span
+      className={cn(
+        "flex size-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold",
+        role === "super_admin" ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground",
+      )}
+    >
+      {name.slice(0, 1)}
+    </span>
+  )
+}
+
+function Pill({ className, children }: { className: string; children: ReactNode }) {
+  return (
+    <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", className)}>
+      {children}
+    </span>
   )
 }
 
@@ -126,10 +153,20 @@ function PersonDetail({
   return (
     <div className="space-y-6 rounded-lg border bg-card p-4">
       <div>
-        <h3 className="text-base font-semibold">
-          {account.name} <span className="text-sm font-normal text-muted-foreground">({account.username})</span>
-        </h3>
-        <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+        <div className="flex items-center gap-3">
+          <Avatar name={account.name} role={account.role} />
+          <div>
+            <h3 className="text-base font-semibold">
+              {account.name}{" "}
+              <span className="text-sm font-normal text-muted-foreground">({account.username})</span>
+            </h3>
+            <div className="mt-1 flex items-center gap-1.5">
+              <Pill className={ROLE_TONE[account.role]}>{ROLE_LABEL[account.role]}</Pill>
+              <Pill className={STATUS_TONE[account.status]}>{STATUS_LABEL[account.status]}</Pill>
+            </div>
+          </div>
+        </div>
+        <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
           <dt className="text-muted-foreground">연락처</dt>
           <dd>{account.phone ?? "-"}</dd>
           <dt className="text-muted-foreground">이메일</dt>
@@ -311,13 +348,13 @@ export function AdminAccountsManagement({
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label="전체 인원" value={stats.total} />
-        <StatCard label="활성 직원" value={stats.active} />
-        <StatCard label="비활성/퇴사" value={stats.inactive} />
-        <StatCard label="승인 대기" value={stats.pending} />
+        <Stat icon={Users} label="전체 인원" value={stats.total} />
+        <Stat icon={UserCheck} label="활성 직원" value={stats.active} />
+        <Stat icon={UserX} label="비활성/퇴사" value={stats.inactive} tone={stats.inactive > 0 ? "warn" : "default"} />
+        <Stat icon={Clock} label="승인 대기" value={stats.pending} tone={stats.pending > 0 ? "warn" : "default"} />
       </div>
 
-      <div className="grid grid-cols-[140px_220px_1fr] gap-4">
+      <div className="grid grid-cols-[160px_240px_1fr] gap-4">
         <div className="space-y-1 rounded-lg border bg-card p-2">
           {bucketList.map((b) => (
             <button
@@ -327,14 +364,19 @@ export function AdminAccountsManagement({
                 setBucket(b.key)
                 setSelectedId(null)
               }}
-              className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm ${
+              className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm ${
                 bucket === b.key
                   ? "bg-accent font-medium text-primary"
                   : "text-muted-foreground hover:bg-muted"
               }`}
             >
-              <span>{b.label}</span>
-              <span className="text-xs">{countFor(b.key)}</span>
+              {b.key === "super_admin" ? (
+                <ShieldCheck className="size-3.5 shrink-0" />
+              ) : (
+                <Building2 className="size-3.5 shrink-0" />
+              )}
+              <span className="flex-1">{b.label}</span>
+              <span className="text-xs tabular-nums">{countFor(b.key)}</span>
             </button>
           ))}
         </div>
@@ -348,16 +390,20 @@ export function AdminAccountsManagement({
               key={a.id}
               type="button"
               onClick={() => setSelectedId(a.id)}
-              className={`flex w-full flex-col rounded-md px-2 py-1.5 text-left text-sm ${
+              className={`flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm ${
                 selectedId === a.id ? "bg-accent" : "hover:bg-muted"
               }`}
             >
-              <span className="font-medium">
-                {a.name} <span className="font-normal text-muted-foreground">({a.username})</span>
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {a.position ?? "직급 미지정"} · {STATUS_LABEL[a.status]}
-              </span>
+              <Avatar name={a.name} role={a.role} />
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-medium">
+                  {a.name} <span className="font-normal text-muted-foreground">({a.username})</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span>{a.position ?? "직급 미지정"}</span>
+                  <Pill className={STATUS_TONE[a.status]}>{STATUS_LABEL[a.status]}</Pill>
+                </div>
+              </div>
             </button>
           ))}
         </div>
@@ -365,8 +411,12 @@ export function AdminAccountsManagement({
         {selected ? (
           <PersonDetail account={selected} onUpdate={updateAccount} />
         ) : (
-          <div className="flex items-center justify-center rounded-lg border bg-card p-8 text-sm text-muted-foreground">
-            왼쪽에서 인원을 선택하세요.
+          <div className="flex flex-col items-center justify-center gap-2 rounded-lg border bg-card p-8 text-center">
+            <span className="flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
+              <UserRound className="size-5" />
+            </span>
+            <p className="text-sm font-medium">인원을 선택하세요</p>
+            <p className="text-sm text-muted-foreground">왼쪽 목록에서 사람을 누르면 상세 정보가 여기 뜹니다.</p>
           </div>
         )}
       </div>

@@ -129,8 +129,9 @@ export function BudgetEditor({
   //    규칙 없는 비목을 초록으로 칠하면 「검산했다」는 거짓 신호가 된다(설계원칙 5).
   //    ⚠ `TableRow` 기본 클래스에 `hover:bg-muted/50` 이 있고 cn(tailwind-merge)을 거치므로
   //       `hover:` 도 같이 줘야 마우스를 올렸을 때 색이 사라지지 않는다(대장에서 겪었다).
-  const 초록 = "bg-green-100 hover:bg-green-200 dark:bg-green-950 dark:hover:bg-green-900"
-  const 빨강 = "bg-red-100 hover:bg-red-200 dark:bg-red-950 dark:hover:bg-red-900"
+  // 2026-09-04 재조정 — 다른 화면(단계별 줄 색) 연하게 맞춘 김에 여기도 사용자 확인 받고 같이 낮췄다.
+  const 초록 = "bg-green-100/50 hover:bg-green-200/60 dark:bg-green-950/60 dark:hover:bg-green-900/60"
+  const 빨강 = "bg-red-100/50 hover:bg-red-200/60 dark:bg-red-950/60 dark:hover:bg-red-900/60"
 
   /** 그 비목에 걸리는 한도 검사. 없으면 null — 한도 규칙이 없는 비목이다. */
   const 줄검사 = (l: Line) => {
@@ -276,7 +277,7 @@ export function BudgetEditor({
       {/* 검증 — 표 위에 둔다. 고치는 동안 계속 보여야 하는 것이라 아래에 두면 안 보인다. */}
       <div className="rounded-lg border bg-card p-4">
         <div className="mb-2 flex flex-wrap items-baseline gap-2">
-          <span className="text-[13px] font-medium">한도 검증</span>
+          <span className="text-[14.3px] font-medium">한도 검증</span>
           {/* 손볼 것이 몇 개인지가 먼저다. 「통과 4」는 그 다음에 알아도 되는 숫자다. */}
           {할일.length > 0 ? (
             <span className="rounded bg-[var(--warning)] px-1.5 py-0.5 text-xs font-medium text-[var(--warning-fg)]">
@@ -300,7 +301,7 @@ export function BudgetEditor({
         </div>
 
         {checks.length === 0 ? (
-          <p className="text-[13px] text-muted-foreground">
+          <p className="text-[14.3px] text-muted-foreground">
             비목별 배정액을 넣으면 한도를 검산합니다.
           </p>
         ) : (
@@ -316,11 +317,11 @@ export function BudgetEditor({
                   return (
                     <li
                       key={`${t.대상}-${t.판정}`}
-                      className="flex flex-wrap items-baseline gap-x-2 text-[13px] text-[var(--warning-fg)]"
+                      className="flex flex-wrap items-baseline gap-x-2 text-[14.3px] text-[var(--warning-fg)]"
                     >
                       <span className="font-medium">{t.말}</span>
                       {t.금액 > 0 && (
-                        <span className="text-[15px] font-semibold tabular-nums">
+                        <span className="text-[16.5px] font-semibold tabular-nums">
                           {t.판정 === "부족" ? "+" : "−"}
                           {won(t.금액)}
                         </span>
@@ -349,7 +350,7 @@ export function BudgetEditor({
                 })}
               </ul>
             ) : (
-              <p className="mb-3 rounded-md border bg-secondary/40 px-3 py-2 text-[13px] text-muted-foreground">
+              <p className="mb-3 rounded-md border bg-secondary/40 px-3 py-2 text-[14.3px] text-muted-foreground">
                 손볼 것이 없습니다 — 계상이 협약 금액과 맞고 한도 안에 있습니다.
               </p>
             )}
@@ -370,13 +371,13 @@ export function BudgetEditor({
                   <li
                     key={c.키}
                     className={
-                      "rounded-md px-2 py-1.5 text-[13px] " +
+                      "rounded-md px-2 py-1.5 text-[14.3px] " +
                       (문제 || p === "확인필요" ? "bg-secondary/50" : "")
                     }
                   >
                     <div className="flex flex-wrap items-baseline gap-x-2">
                       {/* 상태를 **말로** 적는다. ✓/✗ 두 가지로는 「한도 안이지만 여유가 있다」를 못 말한다. */}
-                      <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${배지}`}>
+                      <span className={`rounded px-1.5 py-0.5 text-[12.1px] font-medium ${배지}`}>
                         {p === "맞음" ? "맞음" : p}
                       </span>
                       <span className={문제 ? "font-medium" : ""}>{c.이름}</span>
@@ -428,7 +429,7 @@ export function BudgetEditor({
           <TableBody>
             {lines.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="py-10 text-center text-[13px] text-muted-foreground">
+                <TableCell colSpan={7} className="py-10 text-center text-[14.3px] text-muted-foreground">
                   {읽기전용
                     ? "계상된 비목이 없습니다."
                     : "계상된 비목이 없습니다. 아래에서 비목을 골라 추가하세요."}
@@ -440,13 +441,13 @@ export function BudgetEditor({
                 return (
                   <TableRow
                     key={`${l.비목_대분류}-${l.재원구분}`}
-                    className={`h-[42px] text-[13px] ${줄색(l)}`}
+                    className={`h-[42px] text-[14.3px] ${줄색(l)}`}
                   >
                     <TableCell className="font-medium">
                       {l.비목명 ?? l.비목_대분류}
                       {/* 이 줄이 어디서 오는지 줄에서 바로 보여야 한다. 안 적으면 「왜 못 고치지」가 된다. */}
                       {인건비자동 && l.비목_대분류 === "PERSONNEL" && (
-                        <span className="ml-1.5 rounded bg-secondary px-1 py-0.5 text-[10.5px] font-normal text-muted-foreground">
+                        <span className="ml-1.5 rounded bg-secondary px-1 py-0.5 text-[11.6px] font-normal text-muted-foreground">
                           개인별에서 자동
                         </span>
                       )}
@@ -462,7 +463,7 @@ export function BudgetEditor({
                           value={Number(l.배정액) || 0}
                           // Ⓑ 한도가 걸리는 비목은 상한을 넘겨 넣을 수 없다(넘기면 상한으로 맞추고 말해 준다).
                           onValueChange={(n) => 배정액수정(i, n)}
-                          className="h-7 text-right text-[13px] tabular-nums"
+                          className="h-7 text-right text-[14.3px] tabular-nums"
                           aria-label={`${l.비목명 ?? l.비목_대분류} ${l.재원구분} 배정액`}
                         />
                       )}
@@ -485,7 +486,7 @@ export function BudgetEditor({
                               한도비율: e.target.value === "" ? null : Number(e.target.value),
                             })
                           }
-                          className="h-7 text-right text-[13px] tabular-nums"
+                          className="h-7 text-right text-[14.3px] tabular-nums"
                           aria-label={`${l.비목명 ?? l.비목_대분류} 한도 비율`}
                         />
                       ) : (
@@ -503,7 +504,7 @@ export function BudgetEditor({
                           const 상한 = 한도상한(i)
                           return (
                             <span
-                              className={`mt-0.5 block text-right text-[11px] tabular-nums ${
+                              className={`mt-0.5 block text-right text-[12.1px] tabular-nums ${
                                 넘음 ? "font-medium text-destructive" : "text-muted-foreground"
                               }`}
                               title={
@@ -527,7 +528,7 @@ export function BudgetEditor({
                           return (
                             <button
                               type="button"
-                              className="mt-1 block w-full rounded-md border border-destructive/40 px-1 py-0.5 text-[11px] text-destructive hover:bg-destructive/10"
+                              className="mt-1 block w-full rounded-md border border-destructive/40 px-1 py-0.5 text-[12.1px] text-destructive hover:bg-destructive/10"
                               onClick={() => 배정액수정(i, 상한)}
                               title={`${won(Number(l.배정액) || 0)} → ${won(상한)} 로 맞춥니다(저장은 따로 누릅니다)`}
                             >
@@ -553,7 +554,7 @@ export function BudgetEditor({
                         <Button
                           type="button"
                           variant="ghost"
-                          className="h-7 px-2 text-[12px] text-muted-foreground"
+                          className="h-7 px-2 text-[13.2px] text-muted-foreground"
                           disabled={pending}
                           onClick={() => 줄삭제(i)}
                         >
@@ -567,7 +568,7 @@ export function BudgetEditor({
             )}
             {/* 합계 줄은 협약 총사업비와 맞는지로 칠한다. 협약액이 없으면 칠하지 않는다. */}
             <TableRow
-              className={`h-[38px] text-[13px] font-medium ${
+              className={`h-[38px] text-[14.3px] font-medium ${
                 합계색 || "bg-secondary/40 hover:bg-secondary/40"
               }`}
             >
@@ -583,7 +584,7 @@ export function BudgetEditor({
       </div>
 
       {읽기전용 ? (
-        <p className="text-[12.5px] text-muted-foreground">
+        <p className="text-[13.8px] text-muted-foreground">
           예산이 확정되어 <b>볼 수만 있습니다.</b> 고쳐야 하면 위에서 [확정 해제]를 먼저 하세요 —
           정산 대조 기준이 바뀌는 일이라 사유가 남습니다.
         </p>
@@ -592,7 +593,7 @@ export function BudgetEditor({
         <select
           value={새줄}
           onChange={(e) => set새줄(e.target.value)}
-          className="h-7 rounded-md border bg-transparent px-2 text-[13px]"
+          className="h-7 rounded-md border bg-transparent px-2 text-[14.3px]"
           aria-label="추가할 비목과 재원"
         >
           <option value="">비목 · 재원 추가…</option>
@@ -605,7 +606,7 @@ export function BudgetEditor({
         <Button
           type="button"
           variant="outline"
-          className="h-7 text-[12.8px]"
+          className="h-7 text-[14.1px]"
           disabled={!새줄}
           onClick={추가}
         >
@@ -617,7 +618,7 @@ export function BudgetEditor({
         {msg && (
           <span
             className={
-              msg.ok ? "text-[13px] text-muted-foreground" : "text-[13px] text-destructive"
+              msg.ok ? "text-[14.3px] text-muted-foreground" : "text-[14.3px] text-destructive"
             }
           >
             {msg.text}
@@ -625,7 +626,7 @@ export function BudgetEditor({
         )}
         <Button
           type="button"
-          className="h-7 text-[12.8px]"
+          className="h-7 text-[14.1px]"
           disabled={pending || !더러움}
           onClick={저장}
         >
@@ -676,7 +677,7 @@ function CheckAutoFix({
   if (후보.length === 0) {
     // 고칠 줄이 아예 없다 — 눌러도 할 게 없는 버튼을 보여주지 않는다.
     return check.차이 == null ? null : (
-      <span className={"text-[11.5px] font-normal text-[var(--warning-fg)]/80 " + className}>
+      <span className={"text-[12.7px] font-normal text-[var(--warning-fg)]/80 " + className}>
         먼저 비목을 추가해야 채울 수 있습니다
       </span>
     )
@@ -708,7 +709,7 @@ function CheckAutoFix({
       <button
         type="button"
         className={
-          "rounded-md border border-[var(--warning-fg)]/40 px-2 py-0.5 text-[11.5px] font-normal " +
+          "rounded-md border border-[var(--warning-fg)]/40 px-2 py-0.5 text-[12.7px] font-normal " +
           "text-[var(--warning-fg)] hover:bg-[var(--warning-fg)]/10 disabled:opacity-50 " +
           className
         }
@@ -726,10 +727,10 @@ function CheckAutoFix({
           </DialogHeader>
 
           {후보.length > 1 && (
-            <label className="flex flex-col gap-1 text-[11.5px] text-muted-foreground">
+            <label className="flex flex-col gap-1 text-[12.7px] text-muted-foreground">
               어느 줄에 채울까요 — {후보.length}개 중 하나를 고르세요
               <select
-                className="h-8 rounded-md border bg-background px-2 text-[13px]"
+                className="h-8 rounded-md border bg-background px-2 text-[14.3px]"
                 value={선택}
                 onChange={(e) => set선택(Number(e.target.value))}
               >
@@ -742,7 +743,7 @@ function CheckAutoFix({
             </label>
           )}
 
-          <p className="text-[13.5px]">
+          <p className="text-[14.9px]">
             <b>
               {대상줄.비목명 ?? 대상줄.비목_대분류} · {대상줄.재원구분}
             </b>{" "}
@@ -751,13 +752,13 @@ function CheckAutoFix({
           </p>
 
           {미해결 > 0 && (
-            <p className="text-[12px] text-[var(--warning-fg)]">
+            <p className="text-[13.2px] text-[var(--warning-fg)]">
               이 줄만으로는 다 못 줄입니다 — {won(미해결)}이 남습니다(0원 아래로는 못 내려갑니다).
               남는 만큼은 다른 줄에서 마저 줄이세요.
             </p>
           )}
           {대상줄.집행액 > 새값 && (
-            <p className="text-[12px] text-destructive">
+            <p className="text-[13.2px] text-destructive">
               이미 {won(대상줄.집행액)} 집행됐습니다 — 그보다 적게 배정하면 잔액이 음수가 됩니다.
             </p>
           )}
@@ -766,12 +767,12 @@ function CheckAutoFix({
             <Button
               type="button"
               variant="ghost"
-              className="h-7 text-[12.8px]"
+              className="h-7 text-[14.1px]"
               onClick={() => set열림(false)}
             >
               취소
             </Button>
-            <Button type="button" className="ml-auto h-7 text-[12.8px]" onClick={적용}>
+            <Button type="button" className="ml-auto h-7 text-[14.1px]" onClick={적용}>
               적용하고 표에 넣기
             </Button>
           </div>

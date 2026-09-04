@@ -67,7 +67,7 @@ export function ProjectLeadCell({
         title="눌러서 연구책임자를 바꿉니다"
       >
         <span className={값 ? "" : "text-muted-foreground"}>{값 || "미지정"}</span>
-        <span className="text-[10px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
+        <span className="text-[11px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
           ✎
         </span>
       </button>
@@ -90,17 +90,17 @@ export function ProjectLeadCell({
               set오류(null)
             }
           }}
-          className="h-7 w-28 text-[12.5px]"
+          className="h-7 w-28 text-[13.8px]"
           aria-label="연구책임자"
         />
         {/* shadcn Button 기본이 type="button" 이라 폼 안에서도 제출되지 않는다(CLAUDE.md §7). */}
-        <Button type="button" className="h-7 px-2 text-[11.5px]" disabled={pending} onClick={저장}>
+        <Button type="button" className="h-7 px-2 text-[12.7px]" disabled={pending} onClick={저장}>
           {pending ? "…" : "저장"}
         </Button>
         <Button
           type="button"
           variant="ghost"
-          className="h-7 px-1.5 text-[11.5px] text-muted-foreground"
+          className="h-7 px-1.5 text-[12.7px] text-muted-foreground"
           disabled={pending}
           onClick={() => {
             set고침(false)
@@ -111,10 +111,10 @@ export function ProjectLeadCell({
         </Button>
       </div>
       {오류 ? (
-        <span className="text-[11px] text-destructive">{오류}</span>
+        <span className="text-[12.1px] text-destructive">{오류}</span>
       ) : (
         // 절대규칙 5 — 배포 URL 은 열려 있다. 서버가 실명을 걸러낼 수는 없으니 여기서 말한다.
-        <span className="text-[11px] text-muted-foreground">
+        <span className="text-[12.1px] text-muted-foreground">
           공개 주소에는 가명을 쓰세요
         </span>
       )}

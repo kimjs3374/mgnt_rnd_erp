@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
+import { ListChecks } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 /**
@@ -136,17 +137,31 @@ export function TodoCard({ 갈래들 }: { 갈래들: 큐갈래[] }) {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden rounded-lg border bg-card">
-      <div className="flex items-baseline justify-between border-b px-4 py-2.5">
-        <h2 className="text-sm font-semibold">확인 및 조치</h2>
+      {/* 2026-09-04 심사용 최종본 — 헤더를 "공고 확인"(announcement-board.tsx)과
+          같은 모양으로 맞췄다: 아이콘 배지 + 제목 + 오른쪽 건수. 대시보드 카드끼리
+          첫인상이 다르면 한 화면인데도 따로 만든 것처럼 보인다는 지적(심사용). */}
+      <div className="flex items-baseline justify-between gap-2 border-b px-4 py-2.5">
+        <div className="flex items-baseline gap-2">
+          <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+            <ListChecks className="size-3.5" />
+          </span>
+          <h2 className="text-sm font-semibold">확인 및 조치</h2>
+        </div>
         <span className="text-xs tabular-nums text-muted-foreground">{총건수}건</span>
       </div>
 
       {걸린것.length === 0 ? (
-        <p className="flex flex-1 items-center justify-center text-[13px] text-muted-foreground">
+        <p className="flex flex-1 items-center justify-center text-[14.3px] text-muted-foreground">
           지금 손댈 것이 없습니다
         </p>
       ) : (
-        <div className="flex-1 overflow-y-auto p-2">
+        /* 2026-09-04 심사용 최종본 — 줄을 고정 높이(h-8)로 쌓지 않고 flex-col +
+           flex-1 로 5칸이 카드 남는 세로 공간을 똑같이 나눠 갖게 한다. 왼쪽 달력
+           카드가 길어서(팀원이 일정 목록을 늘림) 이 카드가 flex-1 로 따라 늘어나면,
+           줄은 그대로 h-8 인데 카드만 커져서 밑에 빈칸이 크게 남았다(사용자 지적,
+           "아래 빈칸이 너무 많아"). 5칸이 남는 높이를 나눠 가지면 빈칸 없이 카드
+           높이만큼 꽉 찬다. */
+        <div className="flex flex-1 flex-col overflow-y-auto p-2.5">
           {보이는행.map((it, i) => {
             const 스타일 = 갈래스타일[it.갈래] ?? {
               짧은: it.갈래.slice(0, 2),
@@ -154,8 +169,8 @@ export function TodoCard({ 갈래들 }: { 갈래들: 큐갈래[] }) {
             }
             const 행동 = 행동문구(it.갈래, it.꼬리)
             const 상세 = 상세문구(it.갈래, it.꼬리, it.상세)
-            // 갈래가 바뀌는 지점에만 구분선을 둔다 — 페이지 중간에서 갈래가 갈려도
-            // 줄마다 배지가 있어서 헷갈리진 않지만, 선으로 한 번 더 갈라 준다.
+            // 갈래가 바뀌는 지점만 진하게, 나머지 줄 사이는 옅게 — 줄마다 간격이
+            // 눈에 똑같이 잡혀야 훑기 편하다(2026-09-04 심사용, 간격 불규칙 지적).
             const 갈래바뀜 = i > 0 && 보이는행[i - 1].갈래 !== it.갈래
 
             return (
@@ -165,46 +180,54 @@ export function TodoCard({ 갈래들 }: { 갈래들: 큐갈래[] }) {
                 data-group={it.갈래}
                 title={it.꼬리 !== 행동.문구 ? `원래 값: ${it.꼬리}` : undefined}
                 className={cn(
-                  "flex h-7 items-center gap-2 rounded px-1 hover:bg-muted",
+                  // 이름 칸을 128→184px 로 넓혔다(2026-09-04) — "4대보험 가입자명부"처럼
+                  // 긴 서류명이 잘려 보인다는 지적. 상세 칸은 좁혔다가(200px 고정)
+                  // 사용자가 원래(1fr)로 되돌려 달라고 해서 되돌린다.
+                  // 칸 사이 gap 만 3→2 로 살짝 좁혔다(2026-09-04, "조금만 좁게") — 칸
+                  // 폭 자체(1fr)는 그대로 둔다. 폭을 고정하면 총사업비 칸 배지 정렬이
+                  // 다시 어긋난 적이 있어(실측 사고) gap 만 건드리는 쪽이 안전하다.
+                  "grid flex-1 min-h-8 grid-cols-[44px_184px_1fr_80px] items-center gap-2 rounded px-1.5 hover:bg-muted",
                   // ⚠ margin 이 아니라 border 를 쓴다. margin-top 은 줄 높이 바깥에 공간을
                   //   더하는데, 페이지마다 그 페이지 안에서 갈래가 몇 번 바뀌는지가 달라서
                   //   페이지 넘길 때마다 카드 높이가 246px→240px 로 흔들렸다(실측).
-                  //   border 는 h-7 박스 안에서(box-border) 자리를 차지해 높이가 안 늘어난다.
-                  갈래바뀜 && "border-t border-border/50",
+                  //   border 는 h-8 박스 안에서(box-border) 자리를 차지해 높이가 안 늘어난다.
+                  i > 0 && (갈래바뀜 ? "border-t border-border/70" : "border-t border-border/25"),
                 )}
               >
+                {/* 2026-09-04 심사용 최종본 — flex 고정폭 대신 grid 고정 칸(44·128·1fr·80)으로
+                    바꿨다. flex 는 gap 이 내용 길이에 따라 살짝 밀리는데, grid 칸은 내용과
+                    무관하게 항상 같은 자리다. 칸마다 내용도 가운데 정렬한다 — 왼쪽 정렬이면
+                    글자 길이가 다른 줄마다 시작점은 같아도 "가운데 줄"이 안 맞아 보인다는
+                    지적(심사용). */}
+                {/* ⚠ 배지도 w-11/w-20 같은 고정 rem폭 대신 w-full 을 쓴다 — 폰트 110%
+                    확대(전역 font-size)에서 rem 폭이 grid 칸의 실제 px 폭(44·80)보다
+                    커져 배지가 칸 밖으로 살짝 삐져나오는 걸 실측으로 확인했다(사용자
+                    지적 "간격이 다 맞는거야?"). w-full 은 항상 칸 폭 그대로다. */}
                 <span
                   className={cn(
-                    "inline-flex h-4 shrink-0 items-center rounded border px-1 text-[10px] font-medium leading-none",
+                    "inline-flex h-5 w-full shrink-0 items-center justify-center rounded border text-[12.1px] font-medium leading-none",
                     스타일.색,
                   )}
                 >
                   {스타일.짧은}
                 </span>
-                <span
-                  className={cn(
-                    "truncate text-[13px]",
-                    상세 ? "max-w-[45%] shrink-0" : "min-w-0 flex-1",
-                  )}
-                >
-                  {it.이름}
+                <span className="w-full truncate text-center text-sm">{it.이름}</span>
+                <span className="min-w-0 truncate text-center text-xs text-muted-foreground">
+                  {상세 ?? ""}
                 </span>
-                {상세 && (
-                  <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-                    {상세}
-                  </span>
-                )}
                 {행동.색 ? (
                   <span
                     className={cn(
-                      "inline-flex h-5 shrink-0 items-center rounded border px-1.5 text-[11px] font-medium leading-none",
+                      "inline-flex h-5 w-full shrink-0 items-center justify-center rounded border px-1.5 text-[12.1px] font-medium leading-none",
                       행동.색,
                     )}
                   >
                     {행동.문구}
                   </span>
                 ) : (
-                  <span className="shrink-0 text-xs text-muted-foreground">{행동.문구}</span>
+                  <span className="w-full truncate text-center text-xs text-muted-foreground">
+                    {행동.문구}
+                  </span>
                 )}
               </Link>
             )
@@ -212,7 +235,7 @@ export function TodoCard({ 갈래들 }: { 갈래들: 큐갈래[] }) {
 
           {/* 줄 수를 고정한다 — 데이터가 아무리 많아져도 카드 안 표시 줄 수는 항상 같다. */}
           {Array.from({ length: 페이지당 - 보이는행.length }).map((_, i) => (
-            <div key={`filler-${i}`} aria-hidden className="h-7" />
+            <div key={`filler-${i}`} aria-hidden className="flex-1 min-h-8" />
           ))}
         </div>
       )}

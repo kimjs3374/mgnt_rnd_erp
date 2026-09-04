@@ -104,21 +104,21 @@ export function FundingShareCard({
   return (
     <div className="rounded-lg border bg-card p-4">
       <div className="mb-3 flex flex-wrap items-baseline gap-2">
-        <span className="text-[13px] font-medium">재원 구성 — 정부출연금 · 민간부담금</span>
+        <span className="text-[14.3px] font-medium">재원 구성 — 정부출연금 · 민간부담금</span>
 
         {자동 == null ? (
           <span className="text-xs text-[var(--warning-fg)]">근거 없음 — 확인 필요</span>
         ) : (
           <>
-            <span className="rounded bg-secondary px-1.5 py-0.5 text-[11px] text-muted-foreground">
+            <span className="rounded bg-secondary px-1.5 py-0.5 text-[12.1px] text-muted-foreground">
               {자동.규칙.announcement_id != null ? "공고 규칙" : "규정 기본값"} ·{" "}
               {자동.규칙.기관유형}
             </span>
             <span
               className={
                 자동.자동확정
-                  ? "rounded bg-secondary px-1.5 py-0.5 text-[11px] text-muted-foreground"
-                  : "rounded px-1.5 py-0.5 text-[11px] text-[var(--warning-fg)]"
+                  ? "rounded bg-secondary px-1.5 py-0.5 text-[12.1px] text-muted-foreground"
+                  : "rounded px-1.5 py-0.5 text-[12.1px] text-[var(--warning-fg)]"
               }
             >
               {자동.자동확정 ? "근거 확정" : `근거 ${자동.규칙.상태} — 사람이 확인해야 한다`}
@@ -133,7 +133,7 @@ export function FundingShareCard({
         <Button
           type="button"
           variant="ghost"
-          className="ml-auto h-6 px-2 text-[12px] text-muted-foreground"
+          className="ml-auto h-6 px-2 text-[13.2px] text-muted-foreground"
           onClick={() => set열림((v) => !v)}
         >
           {열림 ? "접기" : "펼치기"}
@@ -143,7 +143,7 @@ export function FundingShareCard({
       {/* 근거가 없을 때가 가장 중요한 화면이다. 빈 상태를 만들지 않으면 「모른다」를 말할 수 없다. */}
       {자동 == null ? (
         <div className="flex flex-col gap-2">
-          <p className="text-[13px] text-muted-foreground">
+          <p className="text-[14.3px] text-muted-foreground">
             {없는이유 ??
               "이 과제에 적용할 재원 분담 규칙을 찾지 못했다. 공고 규칙이나 기관유형 규정이 등록되면 자동으로 계산한다."}
           </p>
@@ -168,14 +168,14 @@ export function FundingShareCard({
               return (
                 <div key={키} className="rounded-md border p-2.5">
                   <div className="mb-1 flex items-baseline justify-between gap-2">
-                    <span className="text-[12.5px] text-muted-foreground">{이름}</span>
+                    <span className="text-[13.8px] text-muted-foreground">{이름}</span>
                     <span
                       className={
                         c?.통과 === false
-                          ? "text-[11px] text-destructive"
+                          ? "text-[12.1px] text-destructive"
                           : c?.통과 === null
-                            ? "text-[11px] text-[var(--warning-fg)]"
-                            : "text-[11px] text-muted-foreground"
+                            ? "text-[12.1px] text-[var(--warning-fg)]"
+                            : "text-[12.1px] text-muted-foreground"
                       }
                     >
                       {c?.통과 === false ? "✗ 규정 위반" : c?.통과 === null ? "? 미입력" : "✓"}
@@ -184,20 +184,20 @@ export function FundingShareCard({
                   <MoneyInput
                     value={값[키]}
                     onValueChange={(n) => set값((prev) => ({ ...prev, [키]: n }))}
-                    className="h-7 text-right text-[13px] tabular-nums"
+                    className="h-7 text-right text-[14.3px] tabular-nums"
                     aria-label={`${이름} 금액`}
                   />
-                  <div className="mt-1 text-[11.5px] text-muted-foreground">
+                  <div className="mt-1 text-[12.7px] text-muted-foreground">
                     규정 계산 {won(규정값)}
                     {총사업비 ? ` · 총사업비의 ${((규정값 / 총사업비) * 100).toFixed(1)}%` : ""}
                   </div>
-                  {c && <div className="text-[11.5px] text-muted-foreground">{c.설명}</div>}
+                  {c && <div className="text-[12.7px] text-muted-foreground">{c.설명}</div>}
                 </div>
               )
             })}
           </div>
 
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px]">
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13.8px]">
             <span className="text-muted-foreground">
               합계 <span className="tabular-nums">{won(합계)}</span>
               {총사업비 != null ? (
@@ -222,7 +222,7 @@ export function FundingShareCard({
           </div>
 
           {열림 && (
-            <ul className="mt-3 space-y-1 border-t pt-3 text-[11.5px] text-muted-foreground">
+            <ul className="mt-3 space-y-1 border-t pt-3 text-[12.7px] text-muted-foreground">
               {자동.근거.map((g, i) => (
                 <li key={i}>· {g}</li>
               ))}
@@ -230,7 +230,7 @@ export function FundingShareCard({
           )}
 
           {읽기전용 ? (
-            <p className="mt-3 text-[12.5px] text-muted-foreground">
+            <p className="mt-3 text-[13.8px] text-muted-foreground">
               계상이 확정되어 재원 구성도 잠겼습니다. 계상 합계가 이 금액에 맞춰져 있어서,
               한쪽만 바꾸면 검증이 어긋납니다.
             </p>
@@ -239,7 +239,7 @@ export function FundingShareCard({
             <Button
               type="button"
               variant="outline"
-              className="h-7 text-[12.8px]"
+              className="h-7 text-[14.1px]"
               disabled={pending}
               onClick={규정값으로채우기}
             >
@@ -249,7 +249,7 @@ export function FundingShareCard({
             {msg && (
               <span
                 className={
-                  msg.ok ? "text-[12.5px] text-muted-foreground" : "text-[12.5px] text-destructive"
+                  msg.ok ? "text-[13.8px] text-muted-foreground" : "text-[13.8px] text-destructive"
                 }
               >
                 {msg.text}
@@ -257,7 +257,7 @@ export function FundingShareCard({
             )}
             <Button
               type="button"
-              className="h-7 text-[12.8px]"
+              className="h-7 text-[14.1px]"
               disabled={pending || !더러움 || 합계어긋남}
               onClick={저장}
             >
@@ -335,15 +335,15 @@ function TotalBudgetInline({ 과제_id }: { 과제_id: number }) {
 
   return (
     <div className="flex flex-col gap-2 rounded-md border bg-card p-3">
-      <label className="flex flex-col gap-1 text-[11.5px] text-muted-foreground">
+      <label className="flex flex-col gap-1 text-[12.7px] text-muted-foreground">
         <span>
           총사업비 <span className="text-destructive">*</span>{" "}
-          <span className="text-[10.5px]">
+          <span className="text-[11.6px]">
             원 · 신청서에 적을 금액이든 협약서에 적힌 금액이든, 지금 확정된 금액을 그대로
           </span>
         </span>
         <Input
-          className="h-8 max-w-xs text-[13px]"
+          className="h-8 max-w-xs text-[14.3px]"
           value={금액}
           onChange={(e) => set금액(e.target.value)}
           placeholder="137,000,000"
@@ -352,45 +352,45 @@ function TotalBudgetInline({ 과제_id }: { 과제_id: number }) {
 
       {미리보기 && (
         <div className="flex flex-col gap-2 rounded-md border p-2.5">
-          <div className="grid grid-cols-3 gap-2 text-[12.5px]">
+          <div className="grid grid-cols-3 gap-2 text-[13.8px]">
             <div>
-              <div className="text-[11px] text-muted-foreground">정부출연금</div>
+              <div className="text-[12.1px] text-muted-foreground">정부출연금</div>
               <div className="tabular-nums">{won(미리보기.채운값.정부지원금 ?? 0)}</div>
             </div>
             <div>
-              <div className="text-[11px] text-muted-foreground">민간부담 현금</div>
+              <div className="text-[12.1px] text-muted-foreground">민간부담 현금</div>
               <div className="tabular-nums">{won(미리보기.채운값.기관부담_현금 ?? 0)}</div>
             </div>
             <div>
-              <div className="text-[11px] text-muted-foreground">민간부담 현물</div>
+              <div className="text-[12.1px] text-muted-foreground">민간부담 현물</div>
               <div className="tabular-nums">{won(미리보기.채운값.기관부담_현물 ?? 0)}</div>
             </div>
           </div>
           <ul className="flex flex-col gap-0.5">
             {미리보기.근거.map((g, i) => (
-              <li key={i} className="text-[11.5px] text-muted-foreground">
+              <li key={i} className="text-[12.7px] text-muted-foreground">
                 · {g}
               </li>
             ))}
           </ul>
           {미리보기.주의.map((w, i) => (
-            <span key={i} className="text-[11.5px] text-[var(--warning-fg)]">
+            <span key={i} className="text-[12.7px] text-[var(--warning-fg)]">
               {w}
             </span>
           ))}
         </div>
       )}
 
-      {err && <span className="text-[12px] text-destructive">{err}</span>}
+      {err && <span className="text-[13.2px] text-destructive">{err}</span>}
 
       <div className="flex items-center gap-2">
-        <span className="text-[11px] text-muted-foreground">
+        <span className="text-[12.1px] text-muted-foreground">
           공고 규정 또는 기관유형 규정 기본값으로 정부출연금·민간부담을 나눠 채운다
         </span>
         <Button
           type="button"
           variant="outline"
-          className="ml-auto h-7 text-[12.8px]"
+          className="ml-auto h-7 text-[14.1px]"
           disabled={!낼수있나}
           onClick={계산}
         >
@@ -398,7 +398,7 @@ function TotalBudgetInline({ 과제_id }: { 과제_id: number }) {
         </Button>
         <Button
           type="button"
-          className="h-7 text-[12.8px]"
+          className="h-7 text-[14.1px]"
           disabled={!낼수있나 || !미리보기}
           onClick={저장}
         >

@@ -25,7 +25,7 @@ export function SyncAnnouncementsButton() {
       <Button
         type="button"
         variant="outline"
-        className="h-7 text-[12.8px]"
+        className="h-7 text-[14.1px]"
         disabled={state === "loading"}
         title="기업마당·K-Startup 오픈API에서 목록을 다시 받는다. 첨부 서류판독은 서버 배치가 처리한다."
         onClick={async () => {

@@ -51,12 +51,23 @@ function extractPdf(path) {
   )
 }
 
+/**
+ * Postgres text 컬럼은 코드포인트 0(NUL 바이트)을 저장하지 못한다 — 넣으면
+ * "22P05 unsupported Unicode escape sequence" 로 insert/update 전체가 실패한다
+ * (실측: PDF/HWP 파서가 드물게 이 바이트를 섞어 낸다). 판독 결과에서 항상 걷어낸다 —
+ * 호출부마다 각자 걷어내게 두면 한 곳이라도 빠뜨리면 재발한다.
+ */
+function stripNul(s) {
+  const NUL = String.fromCharCode(0)
+  return s.indexOf(NUL) === -1 ? s : s.split(NUL).join("")
+}
+
 /** 확장자로 파서를 고른다. 반환 {kind, text}. 지원 밖이면 text 는 빈 문자열. */
 export async function extractText(path) {
   const ext = path.split(".").pop().toLowerCase()
   try {
-    if (ext === "pdf") return { kind: "pdf", text: extractPdf(path) }
-    if (ext === "hwp" || ext === "hwpx") return { kind: ext, text: await extractHwp(path) }
+    if (ext === "pdf") return { kind: "pdf", text: stripNul(extractPdf(path)) }
+    if (ext === "hwp" || ext === "hwpx") return { kind: ext, text: stripNul(await extractHwp(path)) }
     return { kind: ext, text: "" }
   } catch (e) {
     return { kind: ext, text: "", error: e.message }

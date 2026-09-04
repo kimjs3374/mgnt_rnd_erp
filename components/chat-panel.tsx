@@ -73,7 +73,7 @@ export function ChatPanel() {
         </Button>
       </header>
 
-      <div className="flex-1 space-y-4 overflow-y-auto p-4 text-[13px]">
+      <div className="flex-1 space-y-4 overflow-y-auto p-4 text-[14.3px]">
         {turns.length === 0 && (
           <div className="space-y-3">
             <p className="text-muted-foreground">
@@ -140,7 +140,7 @@ export function ChatPanel() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="무엇이든 물어보세요"
-          className="h-8 text-[13px]"
+          className="h-8 text-[14.3px]"
           disabled={pending}
         />
         {/* ⚠ shadcn Button 은 기본이 type="button" 이다. 폼에서 submit 을 명시하지 않으면

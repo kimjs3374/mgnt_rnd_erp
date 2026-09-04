@@ -5,6 +5,7 @@ import { db } from "@/lib/db"
 import { getCurrentUser } from "@/lib/current-user"
 import { 문서_확장자, 문서파일_점검 } from "@/lib/upload-limits"
 import { 기간끝났나, 오늘_KST } from "@/lib/settlement-types"
+import { 공개주소 } from "@/lib/storage-url"
 
 /**
  * 최종 정산 서류 — 업로드 · 다운로드 · 삭제. (2026-09-04 사용자 지시)
@@ -159,7 +160,7 @@ export async function getSettlementDownloadUrl(id: number): Promise<SettlementFi
     if (sErr || !signed?.signedUrl) {
       return { ok: false, error: sErr?.message ?? "내려받을 주소를 만들지 못했습니다." }
     }
-    return { ok: true, url: signed.signedUrl }
+    return { ok: true, url: 공개주소(signed.signedUrl) }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   }

@@ -157,14 +157,14 @@ export function FormTemplates({
   return (
     <div className="rounded-lg border bg-card p-4">
       <div className="mb-3 flex flex-wrap items-baseline gap-2">
-        <span className="text-[13px] font-medium">서식 (문서 통일화)</span>
+        <span className="text-[14.3px] font-medium">서식 (문서 통일화)</span>
         <span className="text-xs text-muted-foreground">
           이 과제에 필요한 서류 {목록.length}종 중 표준 양식 {등록수}종 등록
         </span>
         <Button
           type="button"
           variant="ghost"
-          className="ml-auto h-6 px-2 text-[12px] text-muted-foreground"
+          className="ml-auto h-6 px-2 text-[13.2px] text-muted-foreground"
           onClick={() => set전체보기((v) => !v)}
         >
           {전체보기 ? "계상한 비목만" : "모든 서류 보기"}
@@ -172,7 +172,7 @@ export function FormTemplates({
       </div>
 
       {목록.length === 0 ? (
-        <p className="text-[13px] text-muted-foreground">
+        <p className="text-[14.3px] text-muted-foreground">
           계상한 비목이 없어 필요한 서류도 없습니다. 위에서 비목별 배정액을 넣으면 그 비목이 요구하는
           서류가 여기 뜨고, 서류마다 회사 표준 양식을 걸어 둘 수 있습니다.
         </p>
@@ -186,11 +186,11 @@ export function FormTemplates({
                 key={r.서류명}
                 {...드롭영역(키, (files) => 올리기(r.서류명, files))}
                 className={
-                  "flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-[12.5px] transition-colors " +
+                  "flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-[13.8px] transition-colors " +
                   (드롭대상 === 키 ? 드롭강조.받음 : "")
                 }
               >
-                <span className="w-5 text-right text-[11px] text-muted-foreground tabular-nums">
+                <span className="w-5 text-right text-[12.1px] text-muted-foreground tabular-nums">
                   {r.순번 === 99 ? "" : r.순번}
                 </span>
                 <span className={t ? "" : "font-medium"}>
@@ -200,23 +200,23 @@ export function FormTemplates({
                 <span
                   className={
                     r.필수
-                      ? "rounded bg-secondary px-1 py-0.5 text-[10.5px]"
-                      : "rounded px-1 py-0.5 text-[10.5px] text-muted-foreground"
+                      ? "rounded bg-secondary px-1 py-0.5 text-[11.6px]"
+                      : "rounded px-1 py-0.5 text-[11.6px] text-muted-foreground"
                   }
                 >
                   {r.필수 ? "필수" : "해당시"}
                 </span>
-                <span className="text-[11px] text-muted-foreground">
+                <span className="text-[12.1px] text-muted-foreground">
                   {[...r.비목].map((c) => 비목이름[c] ?? c).join(" · ")}
                 </span>
                 {r.개인정보 && (
-                  <span className="text-[11px] text-[var(--warning-fg)]">
+                  <span className="text-[12.1px] text-[var(--warning-fg)]">
                     개인정보 — 빈 양식만 공유, 채운 파일은 RCMS 에 직접
                   </span>
                 )}
 
                 {t ? (
-                  <span className="ml-auto flex flex-wrap items-center gap-x-2 text-[11.5px] text-muted-foreground">
+                  <span className="ml-auto flex flex-wrap items-center gap-x-2 text-[12.7px] text-muted-foreground">
                     <span className="text-foreground">{t.파일명}</span>
                     <span className="tabular-nums">{KB(t.크기)}</span>
                     {t.버전 && <span>{t.버전}</span>}
@@ -241,7 +241,7 @@ export function FormTemplates({
                     </button>
                   </span>
                 ) : (
-                  <span className="ml-auto flex items-center gap-2 text-[11.5px] text-muted-foreground">
+                  <span className="ml-auto flex items-center gap-2 text-[12.7px] text-muted-foreground">
                     표준 양식 미등록
                     <label className="cursor-pointer rounded-md border px-2 py-0.5 hover:bg-secondary/60">
                       양식 올리기
@@ -264,22 +264,22 @@ export function FormTemplates({
       )}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <label className="flex items-center gap-1 text-[11.5px] text-muted-foreground">
+        <label className="flex items-center gap-1 text-[12.7px] text-muted-foreground">
           버전
           <Input
-            className="h-6 w-40 text-[12px]"
+            className="h-6 w-40 text-[13.2px]"
             placeholder="2026-v1 (선택)"
             value={버전}
             onChange={(e) => set버전(e.target.value)}
           />
         </label>
-        {pending && <span className="text-[12.5px] text-muted-foreground">처리 중…</span>}
+        {pending && <span className="text-[13.8px] text-muted-foreground">처리 중…</span>}
         {msg && (
-          <span className={msg.ok ? "text-[12.5px] text-muted-foreground" : "text-[12.5px] text-destructive"}>
+          <span className={msg.ok ? "text-[13.8px] text-muted-foreground" : "text-[13.8px] text-destructive"}>
             {msg.text}
           </span>
         )}
-        <span className="ml-auto text-[11px] text-muted-foreground">
+        <span className="ml-auto text-[12.1px] text-muted-foreground">
           서류 줄에 파일을 끌어다 놓아도 등록됩니다 · <b>서류당 표준은 하나</b>라 새로 올리면
           교체됩니다 · 여기 올린 양식은 모든 과제에서 같이 받습니다
         </span>

@@ -317,7 +317,7 @@ export default async function ProjectBudgetPage({
               계상하러 온 사람에게 명부가 먼저 보이면 그것도 순서가 거꾸로다. */}
           {!읽기전용 && (
             <details className="rounded-lg border bg-card">
-              <summary className="cursor-pointer list-none p-3 text-[13px] font-medium">
+              <summary className="cursor-pointer list-none p-3 text-[14.3px] font-medium">
                 연구원 명부 ({명부.rows.filter((r) => r.재직).length}명 재직 · 전체{" "}
                 {명부.rows.length}명)
                 <span className="ml-2 text-xs font-normal text-muted-foreground">

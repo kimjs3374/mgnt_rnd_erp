@@ -1,4 +1,5 @@
 import { AnnouncementsView } from "@/components/announcements-view"
+import { RecentJudgmentsFeed } from "@/components/recent-judgments-feed"
 import { getRndAnnouncements, 정보성 } from "@/lib/queries"
 
 export const dynamic = "force-dynamic"
@@ -20,8 +21,9 @@ export const dynamic = "force-dynamic"
 export default async function ProjectAnnouncementsPage() {
   const { rows, error } = await getRndAnnouncements()
 
+  // NTIS 국가R&D 과제검색(정보성)은 접수기간·공고문이 없는 「이미 수행 중인 과제」 메타정보라
+  // 신청 대상이 아니다 — 화면에서 아예 뺀다(2026-09-04, 사용자 요청: "참고 내용은 다 삭제").
   const 공고 = rows.filter((a) => !정보성(a))
-  const 참고 = rows.filter((a) => 정보성(a))
 
   const 미확정 = 공고.filter((r) => r.자격판정 === "확인필요" || r.자격판정 === "요건미확인").length
   const 중복건수 = 공고.filter((r) => r.중복후보).length
@@ -37,15 +39,14 @@ export default async function ProjectAnnouncementsPage() {
   return (
     <AnnouncementsView
       title="공고 탐색 (과제사업)"
-      description="IRIS 공고문(HWP·PDF)을 받아 판독해 자격 요건·제출 서류를 뽑고 우리 것과 대조한다. NTIS 과제검색은 접수기간·공고문이 없어 참고로만 둔다."
+      description="IRIS 공고문(HWP·PDF)을 받아 판독해 자격 요건·제출 서류를 뽑고 우리 것과 대조한다."
       rows={공고}
       error={error}
       banner={banner}
       showSource
       detailBasePath="/project-announcements"
       emptyHint="IRIS 수집(scripts/collect-iris.mjs)이 돌면 여기에 채워집니다."
-      referenceRows={참고}
-      referenceLabel={`참고 — NTIS 국가R&D 과제검색 ${참고.length}건 · 접수기간·공고문이 없다. 이미 수행 중인 과제 정보이고 신청 대상이 아니다.`}
+      footer={<RecentJudgmentsFeed />}
     />
   )
 }

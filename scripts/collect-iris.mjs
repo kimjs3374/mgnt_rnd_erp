@@ -10,9 +10,11 @@
 import { writeFileSync, mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { readFileSync } from "node:fs"
 import { pgSelect, pgUpsertByFilter, pgInsert, pgPatch } from "./lib/pgrest.mjs"
 import { extractText, findSections } from "./lib/extract.mjs"
 import { extractDocuments } from "./lib/llm.mjs"
+import { uploadFile, contentTypeFor } from "./lib/storage.mjs"
 
 const BASE = "https://www.iris.go.kr"
 const LIST_URL = BASE + "/contents/retrieveMainPageBsnsAncmList.do"
@@ -114,6 +116,22 @@ async function processOne(rec, workdir) {
       const ext = await extractText(path)
       text = ext.text
       row.파싱상태 = text ? "파싱완료" : "파싱실패"
+      // 원본(IRIS) 서버 링크가 나중에 끊길 수 있다(실측: 마감 지난 공고가 목록에서 빠진다)
+      // — 우리 버킷에도 사본을 남긴다. 판독이 실패해도 파일은 받았으니 사본은 올린다.
+      try {
+        const buf = readFileSync(path)
+        // ⚠ Supabase Storage 키는 한글·공백이 든 원본 파일명을 그대로 받지 않는다
+        //   (실측: InvalidKey 400, collect-bizinfo.mjs 에서 먼저 걸림). ASCII 로만 만든다.
+        const 확장자 = (notice.name.split(".").pop() || "bin").toLowerCase()
+        row.공고문_bucket_url = await uploadFile(
+          "announcements",
+          `iris/${rec.ancmId}.${확장자}`,
+          buf,
+          contentTypeFor(notice.name),
+        )
+      } catch (e) {
+        console.error(`  [${rec.ancmId}] 버킷 업로드 실패: ${e.message}`)
+      }
     } catch (e) {
       row.파싱상태 = "파싱실패"
       // announcements 에는 비고 컬럼이 없다(스키마를 더 넓히지 않는다) — 콘솔에만 남긴다.
@@ -191,7 +209,20 @@ async function fixMissingUrls() {
         continue
       }
       const url = `${FILE_URL}?atchDocId=${encodeURIComponent(notice.doc_id)}&atchFileId=${encodeURIComponent(notice.file_id)}`
-      await pgPatch("announcements", `id=eq.${r.id}`, { 공고문_url: url })
+      const patch = { 공고문_url: url }
+      try {
+        const path = await downloadFile(notice, "/tmp")
+        const 확장자 = (notice.name.split(".").pop() || "bin").toLowerCase()
+        patch.공고문_bucket_url = await uploadFile(
+          "announcements",
+          `iris/${r.출처_id}.${확장자}`,
+          readFileSync(path),
+          contentTypeFor(notice.name),
+        )
+      } catch (e) {
+        console.error(`  [${r.출처_id}] 버킷 업로드 실패: ${e.message}`)
+      }
+      await pgPatch("announcements", `id=eq.${r.id}`, patch)
       console.log("고침")
     } catch (e) {
       console.log(`실패: ${e.message}`)

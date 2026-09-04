@@ -1,0 +1,1113 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>과제 · 연구비 계상 · RCMS 정산 — 시제품</title>
+<style>
+:root{
+  --bg:#f6f7f9; --card:#fff; --line:#e3e6ea; --line2:#eef0f3;
+  --tx:#1a1d21; --tx2:#5b6470; --tx3:#8a929c;
+  --pri:#1f5fd0; --pri-bg:#eaf1fd;
+  --ok:#1a7f4b; --ok-bg:#e8f5ee;
+  --warn:#a8620a; --warn-bg:#fdf3e4;
+  --bad:#c0392b; --bad-bg:#fdecea;
+  --lock:#6b5bd2; --lock-bg:#efedfc;
+  --r:8px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);
+  font:14px/1.6 "Pretendard","맑은 고딕","Malgun Gothic",system-ui,sans-serif}
+h1,h2,h3,h4{margin:0;font-weight:700;letter-spacing:-.01em}
+button{font:inherit;cursor:pointer}
+input,select,textarea{font:inherit}
+table{border-collapse:collapse;width:100%}
+a{color:var(--pri)}
+
+/* ── 레이아웃 ─────────────────────────────── */
+.top{background:#fff;border-bottom:1px solid var(--line);padding:12px 20px;
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;position:sticky;top:0;z-index:30}
+.top h1{font-size:16px}
+.proto{font-size:11.5px;color:var(--warn);background:var(--warn-bg);
+  border:1px solid #f0dcbb;padding:3px 9px;border-radius:99px;font-weight:600}
+.top .sp{flex:1}
+.wrap{max-width:1180px;margin:0 auto;padding:20px}
+
+/* ── 공통 부품 ─────────────────────────────── */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  padding:18px;margin-bottom:16px}
+.card>h3{font-size:14.5px;margin-bottom:4px}
+.card>.sub{font-size:12.5px;color:var(--tx2);margin-bottom:14px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:#fff;color:var(--tx);
+  padding:7px 13px;border-radius:6px;font-size:13px;font-weight:600}
+.btn:hover{background:#f2f4f7}
+.btn.pri{background:var(--pri);border-color:var(--pri);color:#fff}
+.btn.pri:hover{background:#1a52b4}
+.btn.sm{padding:4px 9px;font-size:12px;font-weight:500}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:18px;
+  flex-wrap:wrap}
+.tabs button{background:none;border:0;border-bottom:2px solid transparent;
+  padding:9px 14px;font-size:13.5px;color:var(--tx2);font-weight:600;margin-bottom:-1px}
+.tabs button.on{color:var(--pri);border-bottom-color:var(--pri)}
+.tabs button:hover{color:var(--tx)}
+.badge{display:inline-block;font-size:11.5px;font-weight:600;padding:2px 8px;
+  border-radius:99px;white-space:nowrap}
+.b-plan{background:#eef0f3;color:var(--tx2)}
+.b-run{background:var(--pri-bg);color:var(--pri)}
+.b-done{background:var(--lock-bg);color:var(--lock)}
+.b-ok{background:var(--ok-bg);color:var(--ok)}
+.b-warn{background:var(--warn-bg);color:var(--warn)}
+.b-bad{background:var(--bad-bg);color:var(--bad)}
+.num{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line2);font-size:13px}
+th{background:#fafbfc;text-align:left;color:var(--tx2);font-weight:600;font-size:12.5px;
+  white-space:nowrap}
+tbody tr:hover{background:#fafbfc}
+tfoot td{font-weight:700;background:#fafbfc;border-top:2px solid var(--line)}
+.muted{color:var(--tx3)}
+.small{font-size:12px}
+input[type=text],input[type=number],input[type=date],select,textarea{
+  border:1px solid var(--line);border-radius:6px;padding:6px 9px;width:100%;background:#fff}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--pri-bg);border-color:var(--pri)}
+input.num{text-align:right}
+.f{display:flex;flex-direction:column;gap:4px}
+.f label{font-size:12px;color:var(--tx2);font-weight:600}
+.grid{display:grid;gap:12px}
+
+/* KPI */
+.kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.kpi div{background:#fafbfc;border:1px solid var(--line2);border-radius:6px;padding:11px 13px}
+.kpi .k{font-size:11.5px;color:var(--tx2);font-weight:600}
+.kpi .v{font-size:19px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+.kpi .u{font-size:11.5px;color:var(--tx3);font-weight:500}
+
+/* 진행바 */
+.bar{height:6px;background:#eef0f3;border-radius:99px;overflow:hidden;min-width:70px}
+.bar i{display:block;height:100%;background:var(--pri)}
+.bar i.over{background:var(--bad)}
+.bar i.near{background:var(--warn)}
+
+/* 알림 박스 */
+.note{border-radius:6px;padding:10px 13px;font-size:12.5px;margin-bottom:12px;
+  border:1px solid}
+.note.i{background:var(--pri-bg);border-color:#cfe0fa;color:#174a9e}
+.note.w{background:var(--warn-bg);border-color:#f0dcbb;color:var(--warn)}
+.note.e{background:var(--bad-bg);border-color:#f6cfca;color:var(--bad)}
+.note.o{background:var(--ok-bg);border-color:#cbe8d8;color:var(--ok)}
+.note b{font-weight:700}
+.quote{border-left:3px solid var(--line);padding:2px 0 2px 11px;color:var(--tx2);
+  font-size:12px;margin-top:6px}
+
+/* 과제 목록 */
+.plist{display:grid;gap:10px}
+.pitem{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;
+  cursor:pointer;display:grid;grid-template-columns:1fr auto;gap:10px}
+.pitem:hover{border-color:var(--pri);box-shadow:0 1px 6px rgba(31,95,208,.09)}
+.pitem .nm{font-weight:700;font-size:14px;margin-bottom:3px}
+.pitem .meta{font-size:12px;color:var(--tx2)}
+.pitem .rt{text-align:right;min-width:190px}
+
+/* 모달 */
+.mask{position:fixed;inset:0;background:rgba(20,24,30,.42);display:flex;
+  align-items:center;justify-content:center;padding:20px;z-index:50}
+.modal{background:#fff;border-radius:10px;max-width:620px;width:100%;
+  max-height:88vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.2)}
+.modal .hd{padding:16px 20px;border-bottom:1px solid var(--line);font-weight:700}
+.modal .bd{padding:20px}
+.modal .ft{padding:14px 20px;border-top:1px solid var(--line);display:flex;
+  justify-content:flex-end;gap:8px;background:#fafbfc;position:sticky;bottom:0}
+
+/* 체크리스트 */
+.chk{display:flex;align-items:center;gap:10px;padding:7px 0;
+  border-bottom:1px solid var(--line2);font-size:13px}
+.chk .nm{flex:1}
+.chk .tg{display:flex;gap:4px}
+.tg button{border:1px solid var(--line);background:#fff;padding:3px 9px;
+  border-radius:5px;font-size:11.5px;color:var(--tx2)}
+.tg button.on{background:var(--ok-bg);border-color:#a8d6bd;color:var(--ok);font-weight:700}
+.tg button.na.on{background:#eef0f3;border-color:#d6dae0;color:var(--tx2)}
+
+.hide{display:none!important}
+.stack{display:flex;flex-direction:column;gap:2px}
+.wide{overflow-x:auto}
+.foot{color:var(--tx3);font-size:11.5px;text-align:center;padding:26px 0}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <h1>과제 통합 관리 플랫폼</h1>
+  <span class="proto">단독 시제품 · 다른 화면과 아직 합치지 않음</span>
+  <span class="sp"></span>
+  <button class="btn sm" onclick="resetAll()">초기 데이터로 되돌리기</button>
+</div>
+
+<div class="wrap" id="app"></div>
+<div class="foot">시제품 — 과제 · 연구비 계상 · RCMS 정산 · 2026-09-03</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   0. 상수 — 중기부 5직접비 + 간접비
+   ══════════════════════════════════════════════════════════════ */
+const CATS = [
+  {c:'PERSONNEL', n:'인건비',                  direct:true},
+  {c:'STUDENT',   n:'학생인건비',              direct:true},
+  {c:'FACILITY',  n:'연구시설·장비 및 재료비', direct:true},
+  {c:'ACTIVITY',  n:'연구활동비',              direct:true},
+  {c:'ALLOWANCE', n:'연구수당',                direct:true},
+  {c:'INDIRECT',  n:'간접비',                  direct:false},
+];
+const SUBS = {
+  PERSONNEL:['세부 항목 없음'],
+  STUDENT:['세부 항목 없음'],
+  ALLOWANCE:['세부 항목 없음'],
+  INDIRECT:['기관공통비용','연구실안전관리비'],
+  FACILITY:['연구시설·장비 구입·설치비','연구시설·장비 임차비','연구시설·장비 운영·유지비',
+            '연구인프라 조성비','연구재료 구입비','연구재료 제작비',
+            '연구개발과제 관리비','위탁연구개발비'],
+  ACTIVITY:['지식재산 창출 활동비','외부 전문기술 활용비','회의비','출장비',
+            '소프트웨어 활용비','연구실 운영비','연구인력 지원비','종합사업관리비','그 밖의 비용'],
+};
+const SRCS = ['출연금','현금','현물'];
+const PAYS = ['계좌송금','법인카드','현금'];
+const STATES = ['검토대기','확정','제출','정산완료','반려','보완중'];
+const COUNTED = ['확정','제출','정산완료'];   // 집행으로 인정하는 상태
+
+// 증빙 세트 규칙 — 결제수단·금액에 따라 필요 서류가 갈린다
+const EV_RULES = [
+  {d:'지출결의서', pay:null,       req:true,  min:0,      why:'모든 건에 필수'},
+  {d:'세금계산서', pay:'계좌송금', req:true,  min:0,      why:'계좌송금 건의 금액 증빙'},
+  {d:'카드전표',   pay:'법인카드', req:true,  min:0,      why:'카드 건은 세금계산서 대신'},
+  {d:'거래명세표', pay:null,       req:true,  min:0,      why:'품목·수량 증빙'},
+  {d:'검수조서',   pay:null,       req:true,  min:0,      why:'납품 확인'},
+  {d:'발주서',     pay:null,       req:true,  min:500000, why:'50만원 이상 발주 건'},
+  {d:'견적서',     pay:null,       req:true,  min:500000, why:'50만원 이상. 가격 적정성 근거'},
+  {d:'견적의뢰',   pay:null,       req:false, min:500000, why:'있으면 좋다'},
+];
+
+/* ══════════════════════════════════════════════════════════════
+   1. 상태
+   ══════════════════════════════════════════════════════════════ */
+let S, view = {page:'list', pid:null, tab:'개요', ptab:'진행중', year:1};
+
+function seed(){
+  return {
+    seq: 100,
+    projects: [
+      { id:1, code:'RS-2025-00410021',
+        name:'커피박 유래 실리콘 복합음극재 기반 고에너지밀도 원통형 이차전지 개발',
+        dept:'중소벤처기업부', agency:'중소기업기술정보진흥원',
+        biz:'산학연 Collabo R&D', pact:'2025-CL-0410021',
+        from:'2025-04-01', to:'2027-03-31', years:2, year:2,
+        orgType:'중소기업', status:'진행중',
+        annName:'2026년 지역혁신선도기업육성(R&D) 시행계획 공고',
+        contract:137000000, memo:'2차년도 수행 중. 연구수당이 한도를 넘겨 조정 필요.',
+        fixed:true, closedMemo:'' },
+      { id:2, code:'RS-2026-00544301',
+        name:'원통형 21700 셀 열폭주 지연 케이스 부자재 개발',
+        dept:'중소벤처기업부', agency:'중소기업기술정보진흥원',
+        biz:'창업성장기술개발', pact:'',
+        from:'2026-06-01', to:'2027-05-31', years:1, year:1,
+        orgType:'중소기업', status:'진행 예정',
+        annName:'2026년 창업성장기술개발사업 공고',
+        contract:0, memo:'선정 대기. 협약 과제비 미확정.',
+        fixed:false, closedMemo:'' },
+      { id:3, code:'RS-2023-00305514',
+        name:'커피박 바이오매스 활용 이차전지 음극 소재 예비연구',
+        dept:'중소벤처기업부', agency:'중소기업기술정보진흥원',
+        biz:'산학연 Collabo R&D(예비연구)', pact:'2023-CL-0305514',
+        from:'2023-04-01', to:'2025-03-31', years:2, year:2,
+        orgType:'중소기업', status:'완료',
+        annName:'2023년 산학연 Collabo R&D 공고',
+        contract:96000000, memo:'',
+        fixed:true, closedMemo:'2차년도 최종정산 제출 완료' },
+    ],
+    // 계상 — 단위 천원. {pid, cat, src, y1, y2}
+    budgets: [
+      {pid:1,cat:'PERSONNEL',src:'출연금',y:[3000,3000]},
+      {pid:1,cat:'PERSONNEL',src:'현물',  y:[5700,5700]},
+      {pid:1,cat:'STUDENT',  src:'출연금',y:[1200,1200]},
+      {pid:1,cat:'FACILITY', src:'출연금',y:[30000,30000]},
+      {pid:1,cat:'FACILITY', src:'현금',  y:[9000,9000]},
+      {pid:1,cat:'ACTIVITY', src:'출연금',y:[10575,10575]},
+      {pid:1,cat:'ACTIVITY', src:'현금',  y:[1925,1925]},
+      {pid:1,cat:'ALLOWANCE',src:'출연금',y:[2100,2100]},   // ← 한도 초과 (시연용)
+      {pid:1,cat:'INDIRECT', src:'출연금',y:[4500,4500]},
+      {pid:1,cat:'INDIRECT', src:'현금',  y:[500,500]},
+
+      {pid:3,cat:'PERSONNEL',src:'출연금',y:[2400,2400]},
+      {pid:3,cat:'PERSONNEL',src:'현물',  y:[4000,4000]},
+      {pid:3,cat:'STUDENT',  src:'출연금',y:[900,900]},
+      {pid:3,cat:'FACILITY', src:'출연금',y:[21000,21000]},
+      {pid:3,cat:'ACTIVITY', src:'출연금',y:[7500,7500]},
+      {pid:3,cat:'ALLOWANCE',src:'출연금',y:[1300,1300]},
+      {pid:3,cat:'INDIRECT', src:'출연금',y:[3400,3400]},
+    ],
+    expenses: [
+      ex(1,'2026-05-12','FACILITY','연구재료 구입비','음극소재(실리콘 복합체) 5kg','(주)한빛소재',
+         1127273,112727,'계좌송금','권태호','확정','출연금',['지출결의서','세금계산서','거래명세표','검수조서','발주서','견적서']),
+      ex(1,'2026-05-20','FACILITY','연구재료 구입비','구리집전체 10롤','정우신소재(주)',
+         845455,84545,'계좌송금','권태호','제출','출연금',['지출결의서','세금계산서','거래명세표','검수조서','발주서','견적서','견적의뢰']),
+      ex(1,'2026-06-03','FACILITY','연구재료 구입비','분리막 시트 200매','(주)세림배터리소재',
+         709091,70909,'계좌송금','나예찬','확정','출연금',['지출결의서','세금계산서','거래명세표']),
+      ex(1,'2026-06-11','FACILITY','연구시설·장비 운영·유지비','충방전기 검교정','광명계측기(주)',
+         600000,60000,'계좌송금','나예찬','확정','출연금',['지출결의서','세금계산서','거래명세표','검수조서','발주서','견적서']),
+      ex(1,'2026-06-24','ACTIVITY','연구실 운영비','프린터 토너 외 소모품','(주)오피스원',
+         218182,21818,'법인카드','곽아림','확정','현금',['지출결의서','카드전표','거래명세표','검수조서']),
+      ex(1,'2026-07-02','ACTIVITY','출장비','기술교류 출장(대전 2인)','남도관광(주)',
+         381818,38182,'법인카드','곽아림','확정','출연금',['지출결의서','카드전표']),
+      ex(1,'2026-07-15','FACILITY','연구재료 구입비','전해액 20L','대성케미칼(주)',
+         963636,96364,'계좌송금','권태호','확정','출연금',['지출결의서','세금계산서','거래명세표','검수조서','발주서','견적서']),
+      ex(1,'2026-07-28','ACTIVITY','외부 전문기술 활용비','전극 표면 SEM 분석 의뢰','(주)케이엘시험분석',
+         1090909,109091,'계좌송금','나예찬','제출','출연금',['지출결의서','세금계산서','거래명세표','검수조서','발주서','견적서']),
+      ex(1,'2026-08-05','ACTIVITY','지식재산 창출 활동비','특허 출원 수수료','특허법인 청현',
+         750000,75000,'계좌송금','나예찬','확정','출연금',['지출결의서','세금계산서']),
+      ex(1,'2026-08-14','FACILITY','연구재료 제작비','21700 시작품 셀 제작 30개','(주)엠텍코리아',
+         1636364,163636,'계좌송금','권태호','검토대기','출연금',['지출결의서','견적서']),
+      ex(1,'2026-08-21','ACTIVITY','회의비','2차 기술협의회 회의비','(주)그린호텔',
+         290909,29091,'법인카드','곽아림','확정','현금',['지출결의서','카드전표','거래명세표','검수조서']),
+      ex(1,'2026-08-27','ACTIVITY','소프트웨어 활용비','전기화학 시뮬레이션 SW 1년','(주)소프트베이스',
+         1272727,127273,'계좌송금','나예찬','반려','출연금',['지출결의서','세금계산서']),
+
+      ex(3,'2024-03-11','FACILITY','연구재료 구입비','양극소재(NCM811) 3kg','(주)한빛소재',
+         854545,85455,'계좌송금','권태호','정산완료','출연금',['지출결의서','세금계산서','거래명세표','검수조서','발주서','견적서']),
+      ex(3,'2024-06-02','FACILITY','연구재료 구입비','분리막 시트 150매','(주)세림배터리소재',
+         690909,69091,'계좌송금','권태호','정산완료','출연금',['지출결의서','세금계산서','거래명세표','검수조서','발주서','견적서']),
+      ex(3,'2024-08-19','FACILITY','연구재료 구입비','구리집전체 8롤','정우신소재(주)',
+         763636,76364,'계좌송금','권태호','정산완료','출연금',['지출결의서','세금계산서','거래명세표','검수조서','발주서','견적서']),
+    ],
+    log: [
+      {t:'2026-09-01 09:12', pid:1, who:'김정수', msg:'과제 등록'},
+      {t:'2026-09-01 09:40', pid:1, who:'김정수', msg:'연구비 계상 확정 — 정산 과제비 원장 생성'},
+    ],
+  };
+}
+let _eid = 0;
+function ex(pid,date,cat,sub,item,vendor,supply,vat,pay,owner,status,src,docs){
+  return {id:++_eid, pid, date, cat, sub, item, vendor,
+    supply, vat, total:supply+vat, pay, owner, status, src,
+    docs: Object.fromEntries(docs.map(d=>[d,'have'])), memo:''};
+}
+
+/* ══════════════════════════════════════════════════════════════
+   2. 저장 · 유틸
+   ══════════════════════════════════════════════════════════════ */
+const KEY='proto-project-v1';
+function load(){
+  try{ const r=localStorage.getItem(KEY); if(r){ S=JSON.parse(r); return; } }catch(e){}
+  S=seed();
+}
+function save(){ try{ localStorage.setItem(KEY,JSON.stringify(S)); }catch(e){} }
+function resetAll(){
+  if(!confirm('입력한 내용을 지우고 초기 데이터로 되돌립니다. 계속할까요?')) return;
+  _eid=0; S=seed(); save(); render();
+}
+const won = n => (n||0).toLocaleString('ko-KR');
+const cat = c => (CATS.find(x=>x.c===c)||{}).n || c;
+const P   = () => S.projects.find(p=>p.id===view.pid);
+function stateBadge(s){
+  const m={'검토대기':'b-plan','확정':'b-run','제출':'b-warn','정산완료':'b-ok',
+           '반려':'b-bad','보완중':'b-warn'};
+  return `<span class="badge ${m[s]||'b-plan'}">${s}</span>`;
+}
+function log(pid,msg){
+  const d=new Date(), z=n=>String(n).padStart(2,'0');
+  S.log.unshift({t:`${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())} `+
+    `${z(d.getHours())}:${z(d.getMinutes())}`, pid, who:'나예찬(mgnt2)', msg});
+}
+
+/* ══════════════════════════════════════════════════════════════
+   3. 계상 계산 — 단위 천원
+   ══════════════════════════════════════════════════════════════ */
+function bud(pid){ return S.budgets.filter(b=>b.pid===pid); }
+function bget(pid,c,src){
+  let b=S.budgets.find(x=>x.pid===pid&&x.cat===c&&x.src===src);
+  if(!b){ b={pid,cat:c,src,y:[0,0,0,0,0]}; S.budgets.push(b); }
+  while(b.y.length<5) b.y.push(0);
+  return b;
+}
+const bsum = b => b.y.reduce((a,v)=>a+(+v||0),0);
+
+// 비목별 총 계상(천원)
+function catTotal(pid,c){
+  return bud(pid).filter(b=>b.cat===c).reduce((a,b)=>a+bsum(b),0);
+}
+// 재원별 총 계상(천원)
+function srcTotal(pid,src){
+  return bud(pid).filter(b=>b.src===src).reduce((a,b)=>a+bsum(b),0);
+}
+function planTotal(pid){ return bud(pid).reduce((a,b)=>a+bsum(b),0); }
+
+// 수정인건비 = 현금·현물 인건비 + 학생인건비  (연구근접지원인력 제외 — 여기선 미구현)
+function payBase(pid){ return catTotal(pid,'PERSONNEL') + catTotal(pid,'STUDENT'); }
+
+// 검증 — 공고에서 읽은 한도 규칙을 그대로 쓴다
+function verify(pid){
+  const p = S.projects.find(x=>x.id===pid);
+  const R = p.rules || DEFAULT_RULES;
+  const out=[], tot=planTotal(pid);
+  const gov=srcTotal(pid,'출연금'), cash=srcTotal(pid,'현금'), kind=srcTotal(pid,'현물');
+  const own=cash+kind;
+
+  // ① 협약 과제비와 계상 합계
+  if(p.contract>0){
+    const c=Math.round(p.contract/1000);
+    out.push(mk('계상 합계 = 협약 과제비', tot===c,
+      `계상 ${won(tot)}천원 / 협약 ${won(c)}천원`, tot-c));
+  }
+  // ② 정부출연금 비율
+  if(tot>0){
+    const r=gov/tot*100;
+    out.push(mk(`정부출연금 ${R.gov}% 이내`, r<=R.gov+1e-9,
+      `현재 ${r.toFixed(1)}%`, Math.round(gov-tot*R.gov/100)));
+  }
+  // ③ 기관부담 현금 최소 / 현물 최대
+  if(own>0){
+    const rc=cash/own*100, rk=kind/own*100;
+    out.push(mk(`기관부담 현금 ${R.cash}% 이상`, rc>=R.cash-1e-9,
+      `현재 ${rc.toFixed(1)}%`, Math.round(own*R.cash/100-cash)));
+    out.push(mk(`기관부담 현물 ${R.kind}% 이하`, rk<=R.kind+1e-9,
+      `현재 ${rk.toFixed(1)}%`, Math.round(kind-own*R.kind/100)));
+  }
+  // ④ 연구수당 한도 — 수정인건비 기준
+  const base=payBase(pid), lim=Math.floor(base*R.allow/100/100)*100; // 백원 절사
+  const al=catTotal(pid,'ALLOWANCE');
+  out.push(mk(`연구수당 수정인건비의 ${R.allow}% 이내`, al<=lim,
+    `계상 ${won(al)}천원 / 한도 ${won(lim)}천원 (수정인건비 ${won(base)}천원)`, al-lim));
+  // ⑤ 간접비 한도
+  const direct=CATS.filter(c=>c.direct).reduce((a,c)=>a+catTotal(pid,c.c),0);
+  const consign=0; // 위탁은 세부항목이라 여기선 0으로 둔다
+  const ibase=direct-kind-consign;
+  const ilim=Math.floor(ibase*R.ind/(100+R.ind)/1000)*1000; // 백만원 절사(천원 단위 표기)
+  const ind=catTotal(pid,'INDIRECT');
+  out.push(mk(`간접비 ${R.ind}% 이내 (역산)`, ind<=ilim,
+    `계상 ${won(ind)}천원 / 한도 ${won(ilim)}천원`, ind-ilim));
+  return out;
+}
+function mk(name, ok, detail, gap){ return {name, ok, detail, gap:Math.round(gap||0)}; }
+const DEFAULT_RULES = {gov:75, cash:10, kind:90, allow:20, ind:10, consign:40};
+
+/* ══════════════════════════════════════════════════════════════
+   4. 정산 — 단위 원
+   ══════════════════════════════════════════════════════════════ */
+function exps(pid){ return S.expenses.filter(e=>e.pid===pid); }
+// 배정액(원) = 계상(천원) × 1000  ← 단위 환산은 이 한 지점에서만 한다
+function alloc(pid,c,src){ return bsum(bget(pid,c,src))*1000; }
+function used(pid,c,src){
+  return exps(pid).filter(e=>e.cat===c&&e.src===src&&COUNTED.includes(e.status))
+    .reduce((a,e)=>a+e.total,0);
+}
+function ledger(pid){
+  const rows=[];
+  for(const C of CATS) for(const s of SRCS){
+    const a=alloc(pid,C.c,s); const u=used(pid,C.c,s);
+    if(a===0&&u===0) continue;
+    rows.push({cat:C.c, name:C.n, src:s, alloc:a, used:u, left:a-u,
+      rate: a>0 ? u/a*100 : (u>0?Infinity:0)});
+  }
+  return rows;
+}
+// 필요한 증빙 목록
+function needDocs(e){
+  return EV_RULES.filter(r=>(r.pay===null||r.pay===e.pay) && e.supply>=r.min);
+}
+function evStat(e){
+  const need=needDocs(e).filter(r=>r.req);
+  const missing=need.filter(r=>e.docs[r.d]!=='have'&&e.docs[r.d]!=='na').map(r=>r.d);
+  return {need:need.length, have:need.length-missing.length, missing, ok:missing.length===0};
+}
+function projKpi(pid){
+  const es=exps(pid);
+  const plan=planTotal(pid)*1000;
+  const spent=es.filter(e=>COUNTED.includes(e.status)).reduce((a,e)=>a+e.total,0);
+  const bad=es.filter(e=>!evStat(e).ok).length;
+  return {plan, spent, rate: plan>0? spent/plan*100 : 0,
+    cnt:es.length, bad, evRate: es.length? (es.length-bad)/es.length*100 : 100};
+}
+
+/* ══════════════════════════════════════════════════════════════
+   5. 화면 — 과제 목록
+   ══════════════════════════════════════════════════════════════ */
+function render(){
+  save();
+  document.getElementById('app').innerHTML =
+    view.page==='list' ? listView() : detailView();
+  window.scrollTo(0,0);
+}
+
+function listView(){
+  const groups = ['진행 예정','진행중','완료'];
+  const cnt = g => S.projects.filter(p=>p.status===g).length;
+  const list = S.projects.filter(p=>p.status===view.ptab);
+  return `
+  <div class="row" style="margin-bottom:14px">
+    <h2 style="font-size:19px">과제</h2>
+    <span class="sp" style="flex:1"></span>
+    <button class="btn pri" onclick="openNew()">＋ 과제 등록</button>
+  </div>
+  <div class="tabs">
+    ${groups.map(g=>`<button class="${view.ptab===g?'on':''}"
+      onclick="view.ptab='${g}';render()">${g} (${cnt(g)})</button>`).join('')}
+  </div>
+  ${list.length===0 ? `<div class="card muted" style="text-align:center;padding:40px">
+      이 상태의 과제가 없습니다.</div>` :
+  `<div class="plist">${list.map(p=>{
+    const k=projKpi(p.id);
+    const over=k.rate>100;
+    return `<div class="pitem" onclick="open_(${p.id})">
+      <div>
+        <div class="nm">${p.name}</div>
+        <div class="meta">${p.code} · ${p.dept} / ${p.agency} · ${p.biz}</div>
+        <div class="meta">${p.from} ~ ${p.to} · ${p.year}차년도
+          ${p.contract? ' · 협약 '+won(p.contract)+'원' : ' · <span class="muted">협약 미확정</span>'}</div>
+      </div>
+      <div class="rt stack">
+        <div>${badgeOf(p)}
+          ${k.bad>0?`<span class="badge b-bad">증빙 미비 ${k.bad}</span>`:''}</div>
+        <div class="small muted" style="margin-top:6px">집행 ${won(k.spent)}원</div>
+        <div class="row" style="justify-content:flex-end;gap:6px">
+          <div class="bar" style="width:110px"><i class="${over?'over':k.rate>85?'near':''}"
+            style="width:${Math.min(k.rate,100)}%"></i></div>
+          <span class="small num">${k.rate.toFixed(1)}%</span>
+        </div>
+      </div>
+    </div>`;}).join('')}</div>`}
+  <div class="note i" style="margin-top:16px">
+    이 시제품은 <b>과제 · 연구비 계상 · RCMS 정산</b> 세 가지만 담았습니다.
+    자료함 · 거래처 · 이력은 자리만 잡아 두었습니다.
+    데이터는 이 브라우저에만 저장되며 <b>전부 합성값</b>입니다.
+  </div>`;
+}
+function badgeOf(p){
+  const m={'진행 예정':'b-plan','진행중':'b-run','완료':'b-done'};
+  return `<span class="badge ${m[p.status]}">${p.status}${p.status==='완료'?' · 잠김':''}</span>`;
+}
+function open_(id){ view.page='detail'; view.pid=id; view.tab='개요'; view.year=1; render(); }
+
+/* ══════════════════════════════════════════════════════════════
+   6. 화면 — 과제 상세
+   ══════════════════════════════════════════════════════════════ */
+function detailView(){
+  const p=P(), k=projKpi(p.id);
+  const tabs=['개요','연구비 계상','RCMS 정산','자료함','거래처','이력'];
+  return `
+  <button class="btn sm" onclick="view.page='list';render()">← 과제 목록</button>
+  <div class="card" style="margin-top:12px">
+    <div class="row">
+      <div style="flex:1;min-width:260px">
+        <div class="row" style="gap:8px"><h2 style="font-size:17px">${p.name}</h2>${badgeOf(p)}</div>
+        <div class="small muted" style="margin-top:4px">
+          ${p.code} · ${p.dept} / ${p.agency} · ${p.biz}
+          ${p.pact?' · 협약 '+p.pact:''} · ${p.from} ~ ${p.to} · ${p.year}차년도</div>
+      </div>
+      <div class="row">${actionBtns(p)}</div>
+    </div>
+    ${p.status==='완료'?`<div class="note w" style="margin:12px 0 0">
+      <b>완료 = 잠금.</b> 사용 건과 증빙은 수정·삭제·첨부가 막혀 있습니다(관리자 포함).
+      자료함은 계속 쓸 수 있습니다. ${p.closedMemo?'완료 메모: <b>'+p.closedMemo+'</b>':''}</div>`:''}
+    <div class="kpi" style="margin-top:14px">
+      ${kpi('계상 총액',won(k.plan),'원')}
+      ${kpi('집행액',won(k.spent),'원')}
+      ${kpi('집행률',k.rate.toFixed(1),'%')}
+      ${kpi('증빙 완비율',k.evRate.toFixed(0),'%')}
+      ${kpi('증빙 미비',k.bad,'건')}
+      ${kpi('사용 건',k.cnt,'건')}
+    </div>
+  </div>
+  <div class="tabs">${tabs.map(t=>`<button class="${view.tab===t?'on':''}"
+    onclick="view.tab='${t}';render()">${t}</button>`).join('')}</div>
+  ${ view.tab==='개요' ? tabOverview(p)
+   : view.tab==='연구비 계상' ? tabBudget(p)
+   : view.tab==='RCMS 정산' ? tabSettle(p)
+   : view.tab==='이력' ? tabLog(p)
+   : placeholder(view.tab) }`;
+}
+const kpi=(k,v,u)=>`<div><div class="k">${k}</div><div class="v">${v} <span class="u">${u}</span></div></div>`;
+
+function actionBtns(p){
+  if(p.status==='진행 예정')
+    return `<button class="btn pri" onclick="start_()">착수</button>`;
+  if(p.status==='진행중')
+    return `<button class="btn" onclick="askClose()">완료 처리</button>`;
+  return `<button class="btn" onclick="reopen()">다시 열기</button>`;
+}
+function start_(){
+  const p=P();
+  if(!p.fixed && !confirm('연구비 계상이 아직 확정되지 않았습니다.\n그래도 착수할까요?')) return;
+  p.status='진행중'; log(p.id,'착수 — 진행중으로 전환'); render();
+}
+function reopen(){
+  const p=P();
+  const why=prompt('완료 과제를 다시 엽니다. 사유를 적어 주세요.\n(누가 언제 열었는지 기록에 남습니다)');
+  if(why===null) return;
+  if(!why.trim()){ alert('사유는 반드시 남겨야 합니다.'); return; }
+  p.status='진행중'; log(p.id,'다시 열기 — '+why.trim()); render();
+}
+
+function placeholder(t){
+  const msg={
+    '자료함':'공고문·신청서·계상·협약서·계획서·보고서·정산자료·점검감사·기타 9분류 보관. '+
+             '「보고서 › 최종」으로 올리면 완료 전환을 제안합니다.',
+    '거래처':'업체별 사업자등록증·통장사본 보관함. 사용 건에서 거래처를 고르면 자동 연결되고 '+
+             '지출결의서·발주서 양식에 사업자번호·주소·계좌가 채워집니다.',
+  }[t];
+  return `<div class="card"><h3>${t}</h3><div class="sub">${msg}</div>
+    <div class="note i">이번 시제품에는 넣지 않았습니다. 기능명세 §6에 설계만 되어 있습니다.
+    <br>다만 <b>최종보고서 → 완료 전환 확인창</b>은 위 「완료 처리」 버튼으로 그대로 확인하실 수 있습니다.</div>
+  </div>`;
+}
+function tabOverview(p){
+  const k=projKpi(p.id);
+  return `<div class="card"><h3>과제 정보</h3><div class="sub">인수인계 시 알아야 할 것</div>
+    <table><tbody>
+      ${['과제명',p.name,'과제번호',p.code,'부처 / 전문기관',p.dept+' / '+p.agency,
+         '사업명',p.biz,'협약번호',p.pact||'—','수행기간',p.from+' ~ '+p.to+' ('+p.years+'년)',
+         '연차',p.year+'차년도','기관유형',p.orgType,
+         '연결된 공고',p.annName||'<span class="muted">연결 안 됨</span>',
+         '협약 과제비',p.contract?won(p.contract)+'원':'<span class="muted">미확정</span>',
+         '계상 확정',p.fixed?'<span class="badge b-ok">확정됨</span>':'<span class="badge b-warn">미확정</span>',
+         '인수인계 메모',p.memo||'—']
+        .reduce((a,v,i)=>{ if(i%2===0) a.push([v]); else a[a.length-1].push(v); return a;},[])
+        .map(([a,b])=>`<tr><th style="width:150px">${a}</th><td>${b}</td></tr>`).join('')}
+    </tbody></table></div>
+    <div class="card"><h3>지금 상태</h3>
+    <div class="note ${k.bad>0?'w':'o'}">
+      ${k.bad>0? `증빙이 <b>${k.bad}건</b> 미비합니다. RCMS 정산 탭에서 무엇이 빠졌는지 볼 수 있습니다.`
+               : '증빙이 모두 갖춰졌습니다.'}
+    </div>
+    ${verifyBox(p)}
+    </div>`;
+}
+function verifyBox(p){
+  if(!p.fixed) return `<div class="note i">연구비 계상이 아직 확정되지 않았습니다.</div>`;
+  const v=verify(p.id), bad=v.filter(x=>!x.ok);
+  if(bad.length===0) return `<div class="note o">계상 검증 <b>전부 통과</b>입니다.</div>`;
+  return `<div class="note e">계상 검증 <b>위반 ${bad.length}건</b> —
+    ${bad.map(b=>`${b.name} (${b.gap>0?'+':''}${won(b.gap)}천원)`).join(' · ')}</div>`;
+}
+function tabLog(p){
+  const rows=S.log.filter(l=>l.pid===p.id);
+  return `<div class="card"><h3>이력</h3>
+    <div class="sub">누가 언제 무엇을 했는지. 자료 등록·상태 전이·판단 정정이 여기 쌓입니다.</div>
+    ${rows.length===0?'<div class="muted">기록이 없습니다.</div>':
+    `<table><thead><tr><th style="width:140px">시각</th><th style="width:130px">사람</th>
+      <th>내용</th></tr></thead><tbody>
+      ${rows.map(l=>`<tr><td class="small">${l.t}</td><td class="small">${l.who}</td>
+        <td>${l.msg}</td></tr>`).join('')}</tbody></table>`}</div>`;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   7. 탭 — 연구비 계상
+   ══════════════════════════════════════════════════════════════ */
+function tabBudget(p){
+  const R=p.rules||DEFAULT_RULES;
+  const tot=planTotal(p.id), v=verify(p.id);
+  const yrs=Array.from({length:p.years},(_,i)=>i+1);
+  const lock = p.status==='완료';
+
+  return `
+  <div class="card">
+    <h3>공고에서 읽은 기준</h3>
+    <div class="sub">${p.annName||'연결된 공고가 없습니다'}</div>
+    ${p.annName?`
+    <table><thead><tr><th>항목</th><th style="width:110px">한도</th><th>근거 원문</th></tr></thead>
+    <tbody>
+      ${ruleRow('정부지원 비율',R.gov+'% 이내','중소기업의 경우 정부지원연구개발비는 총 사업비의 75% 이내로 한다')}
+      ${ruleRow('연구수당',R.allow+'% 이내','연구수당은 수정인건비 합의 20% 이내에서 계상할 수 있으며, 협약 당시보다 증액할 수 없다')}
+      ${ruleRow('간접비(영리)',R.ind+'% 이내','간접비는 (직접비 − 현물 − 위탁 − 국제공동 − 부담비) × 간접비율로 산정한다')}
+      ${ruleRow('위탁연구개발비',R.consign+'% 이내','위탁연구개발비는 직접비의 40% 이내로 계상한다')}
+      ${ruleRow('기관부담',`현금 ${R.cash}%↑ / 현물 ${R.kind}%↓`,'기업부담금 중 현금은 10% 이상, 현물은 90% 이하로 한다')}
+    </tbody></table>
+    <div class="note i" style="margin-top:12px">
+      한도는 <b>코드에 박아넣은 값이 아니라 공고에서 읽은 값</b>입니다.
+      사업이 바뀌면 이 표가 바뀌고 아래 검증도 따라 바뀝니다.
+      <br>못 읽은 항목은 기관 유형(<b>${p.orgType}</b>) 기본 규칙으로 대체하고, 대체했다는 사실을 표시합니다.
+    </div>`:`<div class="note w">공고를 연결하면 한도 규칙이 자동으로 장착됩니다.</div>`}
+  </div>
+
+  <div class="card">
+    <h3>협약 과제비</h3>
+    <div class="sub">공고의 규모는 공고값입니다. 협약액이 확정되면 그것이 정본입니다.</div>
+    <div class="row">
+      <div class="f" style="width:220px"><label>협약 과제비 (원)</label>
+        <input type="number" class="num" id="contract" value="${p.contract||''}"
+          ${lock?'disabled':''} placeholder="예: 137000000"></div>
+      <button class="btn" ${lock?'disabled':''} onclick="setContract()">저장</button>
+      <button class="btn" ${lock?'disabled':''} onclick="autoSpread()">차년도 자동 배분</button>
+      <span class="small muted">총액을 연차 수(${p.years}년)로 나눠 미리 채웁니다. 합계는 보존됩니다.</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>비목별 편성 <span class="small muted" style="font-weight:400">단위: 천원</span></h3>
+    <div class="sub">칸을 고치면 검증이 즉시 다시 돕니다.</div>
+    <div class="tabs" style="margin-bottom:12px">
+      ${yrs.map(y=>`<button class="${view.year===y?'on':''}"
+        onclick="view.year=${y};render()">${y}차년도</button>`).join('')}
+      <button class="${view.year===0?'on':''}" onclick="view.year=0;render()">합계</button>
+    </div>
+    <div class="wide"><table>
+      <thead><tr><th>비목</th>
+        ${SRCS.map(s=>`<th style="width:140px" class="num">${s}</th>`).join('')}
+        <th style="width:130px" class="num">계</th></tr></thead>
+      <tbody>
+      ${CATS.map(C=>{
+        const cells=SRCS.map(s=>{
+          const b=bget(p.id,C.c,s);
+          const val = view.year===0 ? bsum(b) : (+b.y[view.year-1]||0);
+          if(view.year===0) return `<td class="num">${won(val)}</td>`;
+          return `<td><input type="number" class="num" value="${val||''}"
+            ${lock?'disabled':''}
+            onchange="setBud(${p.id},'${C.c}','${s}',${view.year},this.value)"></td>`;
+        }).join('');
+        const rowTot = view.year===0 ? catTotal(p.id,C.c)
+          : SRCS.reduce((a,s)=>a+(+bget(p.id,C.c,s).y[view.year-1]||0),0);
+        return `<tr><th>${C.n}${C.direct?'':' <span class="small muted">(간접)</span>'}</th>
+          ${cells}<td class="num"><b>${won(rowTot)}</b></td></tr>`;
+      }).join('')}
+      </tbody>
+      <tfoot><tr><td>합계</td>
+        ${SRCS.map(s=>{
+          const t = view.year===0 ? srcTotal(p.id,s)
+            : bud(p.id).filter(b=>b.src===s).reduce((a,b)=>a+(+b.y[view.year-1]||0),0);
+          return `<td class="num">${won(t)}</td>`;}).join('')}
+        <td class="num">${won(view.year===0?tot:
+          bud(p.id).reduce((a,b)=>a+(+b.y[view.year-1]||0),0))}</td></tr></tfoot>
+    </table></div>
+    <div class="note i" style="margin-top:12px">
+      <b>자동 계산</b> — 수정인건비 ${won(payBase(p.id))}천원 ×
+      ${R.allow}% = 연구수당 한도 <b>${won(Math.floor(payBase(p.id)*R.allow/100/100)*100)}천원</b>
+      (백원 절사) · 간접비는 총액에서 <b>역산</b>합니다.
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>검증</h3>
+    <div class="sub">위반 항목마다 얼마가 넘거나 모자란지 금액으로 보여 줍니다.</div>
+    <table><thead><tr><th style="width:60px">판정</th><th>규칙</th><th>현재</th>
+      <th style="width:130px" class="num">차이(천원)</th></tr></thead><tbody>
+      ${v.map(x=>`<tr>
+        <td>${x.ok?'<span class="badge b-ok">통과</span>':'<span class="badge b-bad">위반</span>'}</td>
+        <td>${x.name}</td><td class="small">${x.detail}</td>
+        <td class="num ${x.ok?'muted':''}" style="${x.ok?'':'color:var(--bad);font-weight:700'}">
+          ${x.ok?'—':(x.gap>0?'+':'')+won(x.gap)}</td></tr>`).join('')}
+    </tbody></table>
+    <div class="row" style="margin-top:14px">
+      <button class="btn pri" ${lock?'disabled':''} onclick="fixPlan()">
+        ${p.fixed?'계상 재확정 — 정산 원장 갱신':'계상 확정 — 정산 과제비 원장 생성'}</button>
+      ${p.fixed?`<span class="badge b-ok">확정됨</span>`:''}
+      <span class="small muted">확정하면 RCMS 정산 탭에 비목별 배정액이 만들어집니다 (천원 → 원).</span>
+    </div>
+  </div>`;
+}
+const ruleRow=(a,b,q)=>`<tr><th>${a}</th><td class="num">${b}</td>
+  <td><div class="quote">"${q}"</div></td></tr>`;
+
+function setBud(pid,c,src,y,val){
+  const b=bget(pid,c,src); b.y[y-1]=Math.max(0,Math.round(+val||0));
+  render();
+}
+function setContract(){
+  const p=P(), v=Math.max(0,Math.round(+document.getElementById('contract').value||0));
+  p.contract=v; log(p.id,'협약 과제비 입력 — '+won(v)+'원'); render();
+}
+function autoSpread(){
+  const p=P();
+  if(!p.contract){ alert('협약 과제비를 먼저 입력해 주세요.'); return; }
+  const tot=planTotal(p.id);
+  if(tot===0){ alert('먼저 비목별 금액을 넣어 주세요. 그 비율대로 나눕니다.'); return; }
+  const target=Math.round(p.contract/1000);
+  // 현재 비율을 유지한 채 합계를 협약액에 맞춘다 — 합계 보존
+  let acc=0; const rows=bud(p.id);
+  rows.forEach((b,i)=>{
+    const share = bsum(b)/tot;
+    let v = i===rows.length-1 ? target-acc : Math.round(target*share);
+    acc+=v;
+    const per=Math.floor(v/p.years), rest=v-per*(p.years-1);
+    for(let y=0;y<p.years;y++) b.y[y] = (y===p.years-1? rest : per);
+  });
+  log(p.id,'차년도 자동 배분 — 협약액 '+won(p.contract)+'원 기준');
+  render();
+}
+function fixPlan(){
+  const p=P(), v=verify(p.id), bad=v.filter(x=>!x.ok);
+  let msg = p.fixed
+    ? '계상을 다시 확정합니다. 정산 탭의 배정액이 갱신됩니다.\n'
+    : '계상을 확정하고 RCMS 정산 탭에 과제비 원장을 만듭니다.\n';
+  if(bad.length){
+    msg += '\n⚠ 검증 위반 '+bad.length+'건이 남아 있습니다.\n'
+        + bad.map(b=>'  · '+b.name+'  ('+(b.gap>0?'+':'')+won(b.gap)+'천원)').join('\n')
+        + '\n\n위반인 채로 확정할 수 있지만, 정산에서 걸릴 수 있습니다.\n';
+  }
+  // 이미 집행된 금액보다 작게 줄이면 경고
+  const shrink=[];
+  for(const C of CATS) for(const s of SRCS){
+    const u=used(p.id,C.c,s), a=alloc(p.id,C.c,s);
+    if(u>a) shrink.push(`  · ${C.n}/${s} — 집행 ${won(u)}원 > 배정 ${won(a)}원`);
+  }
+  if(shrink.length) msg += '\n⚠ 이미 집행된 금액이 배정액을 넘습니다.\n'+shrink.join('\n')+'\n';
+  msg += '\n계속할까요?';
+  if(!confirm(msg)) return;
+  p.fixed=true;
+  log(p.id, (p.fixed?'계상 확정':'계상 재확정')+' — 정산 과제비 원장 '+
+    (p.fixed?'생성':'갱신')+' (위반 '+bad.length+'건)');
+  view.tab='RCMS 정산'; render();
+}
+
+/* ══════════════════════════════════════════════════════════════
+   8. 탭 — RCMS 정산
+   ══════════════════════════════════════════════════════════════ */
+function tabSettle(p){
+  if(!p.fixed) return `<div class="card"><h3>RCMS 정산</h3>
+    <div class="note w"><b>연구비 계상이 확정되지 않았습니다.</b>
+    계상을 확정해야 비목별 과제비 원장이 만들어집니다.</div>
+    <button class="btn pri" onclick="view.tab='연구비 계상';render()">연구비 계상으로 가기</button></div>`;
+
+  const L=ledger(p.id), lock=p.status==='완료';
+  const tA=L.reduce((a,r)=>a+r.alloc,0), tU=L.reduce((a,r)=>a+r.used,0);
+  const es=exps(p.id).slice().sort((a,b)=>b.date.localeCompare(a.date));
+
+  return `
+  <div class="note i">
+    <b>RCMS는 외부 API가 없습니다.</b> 이것은 「연동」이 아니라
+    <b>사람이 RCMS 화면에 옮겨 적기 직전 상태를 완성해두는 시스템</b>입니다.
+    마지막 입력은 사람이 합니다.
+  </div>
+
+  <div class="card">
+    <h3>과제비 원장 <span class="small muted" style="font-weight:400">단위: 원</span></h3>
+    <div class="sub">계상(천원) × 1,000 = 배정액. 단위 환산은 이 한 지점에서만 합니다.
+      집행으로 인정하는 상태: 확정 · 제출 · 정산완료</div>
+    <div class="wide"><table>
+      <thead><tr><th>비목</th><th style="width:70px">재원</th>
+        <th class="num" style="width:130px">배정액</th>
+        <th class="num" style="width:130px">집행액</th>
+        <th class="num" style="width:130px">잔액</th>
+        <th style="width:170px">소진율</th></tr></thead>
+      <tbody>${L.map(r=>{
+        const over=r.left<0;
+        return `<tr>
+          <td>${r.name}</td><td class="small">${r.src}</td>
+          <td class="num">${won(r.alloc)}</td>
+          <td class="num">${won(r.used)}</td>
+          <td class="num" style="${over?'color:var(--bad);font-weight:700':''}">${won(r.left)}</td>
+          <td><div class="row" style="gap:7px">
+            <div class="bar" style="flex:1"><i class="${over?'over':r.rate>85?'near':''}"
+              style="width:${Math.min(r.rate,100)}%"></i></div>
+            <span class="small num" style="width:52px">${isFinite(r.rate)?r.rate.toFixed(1):'∞'}%</span>
+          </div></td></tr>`;}).join('')}
+      </tbody>
+      <tfoot><tr><td colspan="2">합계</td><td class="num">${won(tA)}</td>
+        <td class="num">${won(tU)}</td><td class="num">${won(tA-tU)}</td>
+        <td class="small">${tA?(tU/tA*100).toFixed(1):0}%</td></tr></tfoot>
+    </table></div>
+    ${limitWarn(p)}
+  </div>
+
+  <div class="card">
+    <h3>사용 건 <span class="small muted" style="font-weight:400">${es.length}건</span></h3>
+    <div class="sub">등록하면 해당 비목 배정액에서 자동으로 차감되고 증빙 완비가 자동 판정됩니다.</div>
+    ${lock?`<div class="note w"><b>완료된 과제라 잠겨 있습니다.</b>
+      등록·수정·삭제·첨부가 모두 막힙니다.</div>`:
+      `<button class="btn pri" onclick="openExp()">＋ 사용 건 등록</button>`}
+    <div class="wide" style="margin-top:12px"><table>
+      <thead><tr><th style="width:92px">사용일</th><th>품목 / 거래처</th>
+        <th style="width:190px">비목</th><th class="num" style="width:110px">합계</th>
+        <th style="width:78px">결제</th><th style="width:88px">상태</th>
+        <th style="width:150px">증빙</th><th style="width:140px"></th></tr></thead>
+      <tbody>${es.length===0?'<tr><td colspan="8" class="muted" style="text-align:center;padding:24px">사용 건이 없습니다.</td></tr>':
+        es.map(e=>{
+        const v=evStat(e);
+        return `<tr>
+          <td class="small">${e.date}</td>
+          <td><div>${e.item}</div><div class="small muted">${e.vendor}</div></td>
+          <td class="small">${cat(e.cat)}<div class="muted">${e.sub}</div></td>
+          <td class="num">${won(e.total)}</td>
+          <td class="small">${e.pay}</td>
+          <td>${stateBadge(e.status)}</td>
+          <td>${v.ok?'<span class="badge b-ok">완비</span>':
+            `<span class="badge b-bad">미비 ${v.missing.length}</span>
+             <div class="small muted">${v.missing.join(', ')}</div>`}</td>
+          <td><button class="btn sm" onclick="openExp(${e.id})">열기</button>
+            ${lock?'':nextBtn(e)}</td></tr>`;}).join('')}
+      </tbody></table></div>
+  </div>
+
+  <div class="card">
+    <h3>RCMS 입력 대조</h3>
+    <div class="sub">제출 순서대로 정렬했습니다. 보고 그대로 치면 됩니다.</div>
+    ${(()=>{const t=es.filter(e=>['확정','제출'].includes(e.status))
+        .sort((a,b)=>a.date.localeCompare(b.date));
+      return t.length===0?'<div class="muted">옮겨 적을 건이 없습니다.</div>':
+      `<div class="wide"><table><thead><tr><th style="width:36px">#</th>
+        <th style="width:92px">사용일</th><th style="width:190px">비목 / 세부항목</th>
+        <th>품목</th><th>거래처</th><th class="num" style="width:110px">공급가액</th>
+        <th class="num" style="width:100px">세액</th><th class="num" style="width:110px">합계</th>
+        </tr></thead><tbody>
+        ${t.map((e,i)=>`<tr><td class="small muted">${i+1}</td><td class="small">${e.date}</td>
+          <td class="small">${cat(e.cat)}<div class="muted">${e.sub}</div></td>
+          <td class="small">${e.item}</td><td class="small">${e.vendor}</td>
+          <td class="num">${won(e.supply)}</td><td class="num">${won(e.vat)}</td>
+          <td class="num"><b>${won(e.total)}</b></td></tr>`).join('')}
+      </tbody></table></div>`;})()}
+  </div>`;
+}
+function limitWarn(p){
+  const R=p.rules||DEFAULT_RULES, out=[];
+  const L=ledger(p.id);
+  L.filter(r=>r.left<0).forEach(r=>out.push(
+    `<b>${r.name} / ${r.src}</b> 배정액을 ${won(-r.left)}원 초과했습니다`));
+  const v=verify(p.id).filter(x=>!x.ok);
+  v.forEach(x=>out.push(`<b>${x.name}</b> — ${x.detail}`));
+  if(!out.length) return `<div class="note o" style="margin-top:12px">한도 위반이 없습니다.</div>`;
+  return `<div class="note e" style="margin-top:12px"><b>한도 경고 ${out.length}건</b>
+    <ul style="margin:6px 0 0;padding-left:18px">${out.map(o=>`<li>${o}</li>`).join('')}</ul>
+    <div style="margin-top:6px">근거 원문은 「연구비 계상」 탭 상단에 있습니다.</div></div>`;
+}
+function nextBtn(e){
+  const nx={'검토대기':'확정','확정':'제출','제출':'정산완료','반려':'보완중','보완중':'제출'}[e.status];
+  if(!nx) return '';
+  return `<button class="btn sm" onclick="advance(${e.id})">${nx}로</button>`;
+}
+function advance(id){
+  const e=S.expenses.find(x=>x.id===id), p=S.projects.find(x=>x.id===e.pid);
+  const nx={'검토대기':'확정','확정':'제출','제출':'정산완료','반려':'보완중','보완중':'제출'}[e.status];
+  const v=evStat(e);
+  if(nx==='확정'&&!v.ok){
+    if(!confirm(`증빙이 ${v.missing.length}건 빠졌습니다 — ${v.missing.join(', ')}\n`+
+      `이대로 확정하면 정산에서 반려될 수 있습니다. 계속할까요?`)) return;
+  }
+  if(nx==='정산완료'){
+    if(!confirm('「정산완료」는 기관이 통보한 결과를 사람이 확인하고 누르는 자리입니다.\n'+
+      '시스템이 자동으로 넘기지 않습니다. 실제로 정산이 끝났습니까?')) return;
+  }
+  // 배정액 초과 검사
+  if(nx==='확정'){
+    const a=alloc(e.pid,e.cat,e.src), u=used(e.pid,e.cat,e.src);
+    if(u+e.total>a){
+      const over=u+e.total-a;
+      const why=prompt(`${cat(e.cat)} / ${e.src} 배정액을 ${won(over)}원 초과합니다.\n`+
+        `사유를 적으면 등록됩니다. (비우면 취소)`);
+      if(!why||!why.trim()) return;
+      e.memo=(e.memo?e.memo+' / ':'')+'한도초과 사유: '+why.trim();
+      log(e.pid,`한도 초과 확정 — ${e.item} (${won(over)}원 초과) · ${why.trim()}`);
+    }
+  }
+  e.status=nx;
+  log(e.pid,`사용 건 상태 전이 — ${e.item} → ${nx}`);
+  render();
+}
+
+/* ══════════════════════════════════════════════════════════════
+   9. 모달 — 사용 건
+   ══════════════════════════════════════════════════════════════ */
+let M=null;
+function openExp(id){
+  const p=P();
+  M = id ? JSON.parse(JSON.stringify(S.expenses.find(e=>e.id===id)))
+         : {id:0,pid:p.id,date:new Date().toISOString().slice(0,10),cat:'FACILITY',
+            sub:SUBS.FACILITY[0],item:'',vendor:'',supply:0,vat:0,total:0,
+            pay:'계좌송금',owner:'나예찬',status:'검토대기',src:'출연금',docs:{},memo:''};
+  drawExp();
+}
+function drawExp(){
+  const p=P(), lock=p.status==='완료';
+  const need=needDocs(M), v=evStat(M);
+  const a=alloc(p.id,M.cat,M.src), u=used(p.id,M.cat,M.src);
+  const willOver = u+(+M.total||0) > a;
+  document.body.insertAdjacentHTML('beforeend',`
+  <div class="mask" id="mask"><div class="modal">
+    <div class="hd">${M.id?'사용 건':'사용 건 등록'}</div>
+    <div class="bd">
+      <div class="grid" style="grid-template-columns:1fr 1fr">
+        ${fld('사용일',`<input type="date" id="m_date" value="${M.date}" ${lock?'disabled':''}>`)}
+        ${fld('결제수단',sel('m_pay',PAYS,M.pay,lock))}
+        ${fld('비목',sel('m_cat',CATS.map(c=>c.c),M.cat,lock,CATS.map(c=>c.n)))}
+        ${fld('세부항목',sel('m_sub',SUBS[M.cat],M.sub,lock))}
+        ${fld('품목',`<input type="text" id="m_item" value="${esc(M.item)}" ${lock?'disabled':''}>`)}
+        ${fld('거래처',`<input type="text" id="m_vendor" value="${esc(M.vendor)}" ${lock?'disabled':''}>`)}
+        ${fld('공급가액 (원)',`<input type="number" class="num" id="m_supply" value="${M.supply||''}" ${lock?'disabled':''}>`)}
+        ${fld('세액 (원)',`<input type="number" class="num" id="m_vat" value="${M.vat||''}" ${lock?'disabled':''}>`)}
+        ${fld('재원구분',sel('m_src',SRCS,M.src,lock))}
+        ${fld('담당자',`<input type="text" id="m_owner" value="${esc(M.owner)}" ${lock?'disabled':''}>`)}
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn sm" ${lock?'disabled':''} onclick="calcVat()">세액 10% 자동</button>
+        <span class="small muted">합계 <b class="num">${won((+M.supply||0)+(+M.vat||0))}</b>원</span>
+      </div>
+      ${willOver&&!lock?`<div class="note e" style="margin-top:12px">
+        <b>한도 경고</b> — ${cat(M.cat)} / ${M.src} 배정 ${won(a)}원 중 ${won(u)}원 집행됨.
+        이 건을 확정하면 <b>${won(u+(+M.total||0)-a)}원</b> 초과합니다.
+        <div style="margin-top:4px">등록은 되지만 「확정」으로 넘길 때 사유를 받습니다.</div></div>`:''}
+
+      <h4 style="margin:18px 0 6px;font-size:13px">증빙 체크리스트</h4>
+      <div class="small muted" style="margin-bottom:6px">
+        결제수단(${M.pay})과 금액(${won(M.supply)}원) 기준으로 필요한 서류를 계산했습니다.
+        ${v.ok?'<b style="color:var(--ok)">완비</b>':`<b style="color:var(--bad)">미비 ${v.missing.length}건</b>`}
+      </div>
+      ${need.map(r=>{
+        const st=M.docs[r.d];
+        return `<div class="chk">
+          <div class="nm">${r.d}
+            ${r.req?'<span class="badge b-bad" style="font-size:10.5px">필수</span>':
+                    '<span class="badge b-plan" style="font-size:10.5px">선택</span>'}
+            <div class="small muted">${r.why}</div></div>
+          <div class="tg">
+            <button class="${st==='have'?'on':''}" ${lock?'disabled':''}
+              onclick="tog('${r.d}','have')">확보</button>
+            <button class="na ${st==='na'?'on':''}" ${lock?'disabled':''}
+              onclick="tog('${r.d}','na')">해당없음</button>
+          </div></div>`;}).join('')}
+      <div class="small muted" style="margin-top:8px">
+        확보와 해당없음은 <b>서로 배타</b>입니다 — 한쪽을 켜면 다른 쪽이 꺼집니다(양방향).
+      </div>
+      ${M.memo?`<div class="note w" style="margin-top:12px">${esc(M.memo)}</div>`:''}
+    </div>
+    <div class="ft">
+      ${M.id&&!lock?`<button class="btn" onclick="delExp()"
+        style="color:var(--bad);margin-right:auto">삭제</button>`:''}
+      <button class="btn" onclick="closeM()">닫기</button>
+      ${lock?'':`<button class="btn pri" onclick="saveExp()">저장</button>`}
+    </div>
+  </div></div>`);
+}
+const fld=(l,i)=>`<div class="f"><label>${l}</label>${i}</div>`;
+const esc=s=>String(s||'').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+function sel(id,vals,cur,lock,labels){
+  return `<select id="${id}" ${lock?'disabled':''} onchange="onField()">
+    ${vals.map((v,i)=>`<option value="${v}" ${v===cur?'selected':''}>${labels?labels[i]:v}</option>`).join('')}
+  </select>`;
+}
+function grab(){
+  const g=id=>document.getElementById(id);
+  if(!g('m_date')) return;
+  M.date=g('m_date').value; M.pay=g('m_pay').value;
+  const oldCat=M.cat; M.cat=g('m_cat').value;
+  M.sub = oldCat===M.cat ? g('m_sub').value : SUBS[M.cat][0];
+  M.item=g('m_item').value; M.vendor=g('m_vendor').value;
+  M.supply=Math.max(0,Math.round(+g('m_supply').value||0));
+  M.vat=Math.max(0,Math.round(+g('m_vat').value||0));
+  M.total=M.supply+M.vat; M.src=g('m_src').value; M.owner=g('m_owner').value;
+}
+function onField(){ grab(); redrawM(); }
+function calcVat(){ grab(); M.vat=Math.round(M.supply*0.1); M.total=M.supply+M.vat; redrawM(); }
+function tog(d,st){ grab(); M.docs[d] = (M.docs[d]===st) ? '' : st; redrawM(); }
+function redrawM(){ closeM(true); drawExp(); }
+function closeM(keep){ const m=document.getElementById('mask'); if(m) m.remove(); if(!keep) M=null; }
+function saveExp(){
+  grab();
+  if(!M.item.trim()){ alert('품목을 넣어 주세요.'); return; }
+  if(!M.vendor.trim()){ alert('거래처를 넣어 주세요.'); return; }
+  if(M.supply+M.vat<=0){ alert('금액을 넣어 주세요.'); return; }
+  const p=P();
+  if(M.date<p.from||M.date>p.to){
+    if(!confirm(`사용일 ${M.date}이 과제 기간(${p.from} ~ ${p.to}) 밖입니다.\n`+
+      '기간 이탈은 정산에서 불인정될 수 있습니다. 그래도 저장할까요?')) return;
+  }
+  if(M.id){
+    const i=S.expenses.findIndex(e=>e.id===M.id); S.expenses[i]=M;
+    log(p.id,'사용 건 수정 — '+M.item);
+  }else{
+    M.id=++S.seq; S.expenses.push(M);
+    log(p.id,`사용 건 등록 — ${M.item} ${won(M.total)}원 (${cat(M.cat)})`);
+  }
+  closeM(); render();
+}
+function delExp(){
+  if(!confirm('이 사용 건과 증빙 기록을 지웁니다. 계속할까요?')) return;
+  const p=P();
+  S.expenses=S.expenses.filter(e=>e.id!==M.id);
+  log(p.id,'사용 건 삭제 — '+M.item);
+  closeM(); render();
+}
+
+/* ══════════════════════════════════════════════════════════════
+   10. 모달 — 과제 등록 · 완료 전환
+   ══════════════════════════════════════════════════════════════ */
+function openNew(){
+  document.body.insertAdjacentHTML('beforeend',`
+  <div class="mask" id="mask"><div class="modal">
+    <div class="hd">과제 등록</div>
+    <div class="bd"><div class="grid" style="grid-template-columns:1fr 1fr">
+      ${fld('과제명','<input type="text" id="n_name" placeholder="예: 고에너지밀도 이차전지 개발">')}
+      ${fld('과제번호','<input type="text" id="n_code" placeholder="RS-2026-00000000">')}
+      ${fld('부처','<input type="text" id="n_dept" value="중소벤처기업부">')}
+      ${fld('전문기관','<input type="text" id="n_agency" value="중소기업기술정보진흥원">')}
+      ${fld('사업명','<input type="text" id="n_biz">')}
+      ${fld('협약번호','<input type="text" id="n_pact">')}
+      ${fld('시작일','<input type="date" id="n_from">')}
+      ${fld('종료일','<input type="date" id="n_to">')}
+      ${fld('연차 수','<input type="number" class="num" id="n_years" value="2" min="1" max="5">')}
+      ${fld('기관유형',sel('n_org',['중소기업','중견기업','대기업','비영리','대학','출연연'],'중소기업'))}
+      ${fld('연결할 공고','<input type="text" id="n_ann" placeholder="공고명 (선택)">')}
+      ${fld('협약 과제비 (원)','<input type="number" class="num" id="n_contract" placeholder="미확정이면 비움">')}
+    </div>
+    ${fld('인수인계 메모','<textarea id="n_memo" rows="2" placeholder="다음 사람이 알아야 할 것"></textarea>')}
+    <div class="note i" style="margin-top:12px">
+      등록하면 <b>진행 예정</b>으로 들어갑니다. 공고를 연결해두면 그 공고에서 읽은
+      한도 규칙이 계상 검증에 그대로 쓰입니다.</div>
+    </div>
+    <div class="ft"><button class="btn" onclick="closeM()">닫기</button>
+      <button class="btn pri" onclick="saveNew()">등록</button></div>
+  </div></div>`);
+}
+function saveNew(){
+  const g=id=>document.getElementById(id).value;
+  if(!g('n_name').trim()){ alert('과제명을 넣어 주세요.'); return; }
+  const id=++S.seq;
+  S.projects.push({id, code:g('n_code')||'RS-미정', name:g('n_name'),
+    dept:g('n_dept'), agency:g('n_agency'), biz:g('n_biz'), pact:g('n_pact'),
+    from:g('n_from')||'2026-01-01', to:g('n_to')||'2026-12-31',
+    years:Math.max(1,+g('n_years')||1), year:1, orgType:g('n_org'),
+    status:'진행 예정', annName:g('n_ann'),
+    contract:Math.max(0,Math.round(+g('n_contract')||0)),
+    memo:g('n_memo'), fixed:false, closedMemo:''});
+  log(id,'과제 등록');
+  closeM(); view.ptab='진행 예정'; render();
+}
+
+// ★ 완료 전환 — 최종보고서를 넣었을 때 뜨는 확인창과 같은 것
+function askClose(){
+  const p=P(), k=projKpi(p.id);
+  const L=ledger(p.id), left=L.reduce((a,r)=>a+r.left,0);
+  const pend=exps(p.id).filter(e=>!['정산완료'].includes(e.status)).length;
+  document.body.insertAdjacentHTML('beforeend',`
+  <div class="mask" id="mask"><div class="modal" style="max-width:560px">
+    <div class="hd">이 과제를 「완료」로 바꾸시겠습니까?</div>
+    <div class="bd">
+      <div class="note i">
+        자료함에 <b>「보고서 › 최종」</b>으로 파일을 올리면 이 창이 자동으로 뜹니다.
+        <div style="margin-top:4px">지금은 「완료 처리」 버튼으로 같은 창을 열었습니다.</div>
+      </div>
+      <div style="margin:14px 0 8px;font-weight:700">완료로 바꾸면</div>
+      <ul style="margin:0;padding-left:20px;line-height:2">
+        <li>사용 건 <b>${k.cnt}건</b>이 잠깁니다 (수정·삭제·첨부 불가)</li>
+        <li${k.bad?' style="color:var(--bad)"':''}>증빙 미비 <b>${k.bad}건</b>이 미비인 채로 잠깁니다</li>
+        <li>정산완료가 아닌 건이 <b>${pend}건</b> 남아 있습니다</li>
+        <li${left<0?' style="color:var(--bad)"':''}>미집행 잔액 <b>${won(left)}원</b>이 남아 있습니다</li>
+        <li class="muted">자료함은 계속 쓸 수 있습니다</li>
+      </ul>
+      <div class="f" style="margin-top:16px"><label>완료 메모</label>
+        <input type="text" id="c_memo" placeholder="예: 3차년도 최종정산 제출 완료"></div>
+      <div class="note w" style="margin-top:12px">
+        되돌리려면 관리자가 「다시 열기」를 해야 하고, <b>누가 언제 열었는지 기록에 남습니다.</b></div>
+    </div>
+    <div class="ft">
+      <button class="btn" onclick="closeM()">아니오, 파일만 저장</button>
+      <button class="btn pri" onclick="doClose()">완료로 전환</button></div>
+  </div></div>`);
+}
+function doClose(){
+  const p=P(), memo=document.getElementById('c_memo').value.trim();
+  p.status='완료'; p.closedMemo=memo;
+  log(p.id,'완료 전환'+(memo?' — '+memo:''));
+  closeM(); render();
+}
+
+/* ── 시작 ── */
+load(); render();
+</script>
+</body>
+</html>

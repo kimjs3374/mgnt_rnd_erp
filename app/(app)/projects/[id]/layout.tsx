@@ -56,7 +56,7 @@ export default async function ProjectLayout({
           ← {과제사업 ? "과제 관리" : "지원사업 관리"}
         </Link>
         <div className="mt-1 flex flex-wrap items-center gap-2">
-          <h1 className="text-[20px] font-semibold tracking-tight">{p.과제명}</h1>
+          <h1 className="text-[22px] font-semibold tracking-tight">{p.과제명}</h1>
           <StatusBadge value={p.상태} />
         </div>
         <p className="mt-0.5 text-sm text-muted-foreground">

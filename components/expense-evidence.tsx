@@ -158,7 +158,7 @@ export function ExpenseEvidence({
 
   if (!비목_대분류) {
     return (
-      <section className="rounded-lg border bg-card p-3 text-[13px] text-muted-foreground">
+      <section className="rounded-lg border bg-card p-3 text-[14.3px] text-muted-foreground">
         비목이 아직 정해지지 않아 증빙 요건을 알 수 없습니다. 비목을 확정하면 필요한 서류가 여기 뜹니다.
       </section>
     )
@@ -186,14 +186,14 @@ export function ExpenseEvidence({
         {파일.length > 0 && (
           <a
             href={`/api/evidence/zip?expense=${집행_id}`}
-            className="ml-auto rounded-md border px-2 py-0.5 text-[11.5px] text-muted-foreground hover:bg-secondary/60"
+            className="ml-auto rounded-md border px-2 py-0.5 text-[12.7px] text-muted-foreground hover:bg-secondary/60"
           >
             전체 {파일.length}건 ZIP 다운로드
           </a>
         )}
       </div>
 
-      <ul className="space-y-1.5 text-[12.5px]">
+      <ul className="space-y-1.5 text-[13.8px]">
         {rs.map((r) => {
           const 붙은것 = 파일.filter((f) => f.요건_id === r.id)
           const 줄키 = `건:${집행_id}:요건:${r.id}`
@@ -221,13 +221,13 @@ export function ExpenseEvidence({
                 <span
                   className={
                     r.필수여부
-                      ? "rounded bg-secondary px-1 py-0.5 text-[10.5px]"
-                      : "rounded px-1 py-0.5 text-[10.5px] text-muted-foreground"
+                      ? "rounded bg-secondary px-1 py-0.5 text-[11.6px]"
+                      : "rounded px-1 py-0.5 text-[11.6px] text-muted-foreground"
                   }
                 >
                   {r.필수여부 ? "필수" : "해당시"}
                 </span>
-                <label className="ml-auto cursor-pointer rounded-md border px-2 py-0.5 text-[11.5px] text-muted-foreground hover:bg-secondary/60">
+                <label className="ml-auto cursor-pointer rounded-md border px-2 py-0.5 text-[12.7px] text-muted-foreground hover:bg-secondary/60">
                   {붙은것.length ? "추가" : "첨부"}
                   <input
                     type="file"
@@ -244,7 +244,7 @@ export function ExpenseEvidence({
               {붙은것.map((f) => (
                 <div
                   key={f.id}
-                  className="ml-6 mt-0.5 flex flex-wrap items-center gap-x-2 text-[11.5px] text-muted-foreground"
+                  className="ml-6 mt-0.5 flex flex-wrap items-center gap-x-2 text-[12.7px] text-muted-foreground"
                 >
                   <span className="text-foreground">{f.파일명}</span>
                   <span className="tabular-nums">{KB(f.크기)}</span>
@@ -274,8 +274,8 @@ export function ExpenseEvidence({
       </ul>
 
       <div className="mt-2 flex flex-wrap items-center gap-2 border-t pt-2">
-        <span className="text-[11px] text-muted-foreground">기타 첨부</span>
-        <label className="cursor-pointer rounded-md border px-2 py-0.5 text-[11.5px] text-muted-foreground hover:bg-secondary/60">
+        <span className="text-[12.1px] text-muted-foreground">기타 첨부</span>
+        <label className="cursor-pointer rounded-md border px-2 py-0.5 text-[12.7px] text-muted-foreground hover:bg-secondary/60">
           파일 첨부
           <input
             type="file"
@@ -289,12 +289,12 @@ export function ExpenseEvidence({
           />
         </label>
         {/* 놓는 자리가 곧 분류라는 것을 말로 한 번 적어 둔다. 안 적으면 아무도 끌어다 놓지 않는다. */}
-        <span className="text-[11px] text-muted-foreground">
+        <span className="text-[12.1px] text-muted-foreground">
           파일을 서류 줄 위에 끌어다 놓으면 그 서류로, 여백에 놓으면 기타로 붙습니다. 여러 개 한꺼번에 됩니다.
         </span>
-        {pending && <span className="text-[11.5px] text-muted-foreground">처리 중…</span>}
+        {pending && <span className="text-[12.7px] text-muted-foreground">처리 중…</span>}
         {msg && (
-          <span className={msg.ok ? "text-[11.5px] text-muted-foreground" : "text-[11.5px] text-destructive"}>
+          <span className={msg.ok ? "text-[12.7px] text-muted-foreground" : "text-[12.7px] text-destructive"}>
             {msg.text}
           </span>
         )}
@@ -303,7 +303,7 @@ export function ExpenseEvidence({
       {기타.map((f) => (
         <div
           key={f.id}
-          className="mt-1 flex flex-wrap items-center gap-x-2 text-[11.5px] text-muted-foreground"
+          className="mt-1 flex flex-wrap items-center gap-x-2 text-[12.7px] text-muted-foreground"
         >
           <span className="text-foreground">{f.파일명}</span>
           <span className="tabular-nums">{KB(f.크기)}</span>

@@ -146,12 +146,12 @@ export function JudgmentNote({
     })
 
   return (
-    <div className="rounded-lg bg-background/60 p-3.5 text-[13px]">
+    <div className="rounded-lg bg-background/60 p-3.5 text-[14.3px]">
       <div className="flex items-center gap-1.5 font-semibold">
         <History className="size-4" />
         이 공고에 남긴 이력
         {이력 && 이력.length > 0 && (
-          <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-normal text-muted-foreground">
+          <span className="rounded-full bg-muted px-1.5 py-0.5 text-[12.1px] font-normal text-muted-foreground">
             {이력.length}건
           </span>
         )}
@@ -178,14 +178,14 @@ export function JudgmentNote({
                 <li key={h.id} className="rounded-md border bg-card p-2.5">
                   <div className="flex items-center justify-between gap-2">
                     <span className={`font-semibold ${판정색(h.판정)}`}>{h.판정}</span>
-                    <span className="text-[11px] text-muted-foreground">
+                    <span className="text-[12.1px] text-muted-foreground">
                       {h.답변자} · {날짜표시(h.created_at)}
                     </span>
                   </div>
                   <p className="mt-0.5 text-muted-foreground">"{h.텍스트}"</p>
-                  {h.사유 && <p className="mt-0.5 text-[12px]">{h.사유}</p>}
+                  {h.사유 && <p className="mt-0.5 text-[13.2px]">{h.사유}</p>}
                   {h.특징키 && (
-                    <p className="mt-0.5 text-[11px] text-muted-foreground">{h.특징키}</p>
+                    <p className="mt-0.5 text-[12.1px] text-muted-foreground">{h.특징키}</p>
                   )}
                 </li>
               ))}
@@ -246,13 +246,13 @@ export function JudgmentNote({
                 <li key={m.id} className="rounded-md border bg-card p-2.5">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-semibold">{m.판정}</span>
-                    <span className={`font-mono text-[11px] ${유사도색(m.유사도)}`}>
+                    <span className={`font-mono text-[12.1px] ${유사도색(m.유사도)}`}>
                       유사도 {m.유사도.toFixed(2)}
                     </span>
                   </div>
                   <p className="mt-0.5 text-muted-foreground">"{m.텍스트}"</p>
-                  {m.사유 && <p className="mt-0.5 text-[12px]">{m.사유}</p>}
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  {m.사유 && <p className="mt-0.5 text-[13.2px]">{m.사유}</p>}
+                  <p className="mt-0.5 text-[12.1px] text-muted-foreground">
                     {m.답변자} · {날짜표시(m.created_at)}
                     {m.특징키 && ` · ${m.특징키}`}
                   </p>
@@ -281,7 +281,7 @@ export function JudgmentNote({
               value={텍스트}
               onChange={(e) => set텍스트(e.target.value)}
             />
-            <p className="mt-1 text-[11px] text-muted-foreground">
+            <p className="mt-1 text-[12.1px] text-muted-foreground">
               판정 결과("불가") 대신, 왜 그런지 말하는 문장이어야 다음에 비슷한 문장이 나왔을 때 걸린다.
             </p>
           </div>

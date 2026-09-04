@@ -120,7 +120,7 @@ export default async function BudgetPage() {
             </TableHeader>
             <TableBody>
               {rows.map((r) => (
-                <TableRow key={r.p.id} className="h-[42px] text-[13px]">
+                <TableRow key={r.p.id} className="h-[42px] text-[14.3px]">
                   <TableCell className="font-medium">
                     <Link
                       href={`/projects/${r.p.id}/budget`}
@@ -160,7 +160,7 @@ export default async function BudgetPage() {
                       </span>
                     </div>
                   </TableCell>
-                  <TableCell className="text-[13px]">
+                  <TableCell className="text-[14.3px]">
                     {r.위반 > 0 || r.초과 > 0 ? (
                       <span className="text-destructive">
                         {r.위반 > 0 && `한도 ${r.위반}건`}

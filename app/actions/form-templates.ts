@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
 import { getCurrentUser } from "@/lib/current-user"
 import { 문서_확장자, 문서파일_점검 } from "@/lib/upload-limits"
+import { 공개주소 } from "@/lib/storage-url"
 
 /**
  * 회사 표준 양식(서식) — 올리기 · 받기 · 지우기.
@@ -109,7 +110,7 @@ export async function getFormTemplateUrl(id: number): Promise<FormResult> {
     if (sErr || !signed?.signedUrl) {
       return { ok: false, error: sErr?.message ?? "내려받을 주소를 만들지 못했습니다." }
     }
-    return { ok: true, url: signed.signedUrl }
+    return { ok: true, url: 공개주소(signed.signedUrl) }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   }

@@ -59,7 +59,7 @@ export function PhraseMark({ announcementId }: { announcementId: number }) {
     })
 
   return (
-    <div className="rounded-lg bg-background/60 p-3.5 text-[13px]">
+    <div className="rounded-lg bg-background/60 p-3.5 text-[14.3px]">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 font-semibold">
           <Highlighter className="size-4" />
@@ -109,7 +109,7 @@ export function PhraseMark({ announcementId }: { announcementId: number }) {
               value={문구}
               onChange={(e) => set문구(e.target.value)}
             />
-            <p className="mt-1 text-[11px] text-muted-foreground">
+            <p className="mt-1 text-[12.1px] text-muted-foreground">
               공백은 무시하고 글자 그대로 찾는다. <b>같은 문구가 든 모든 공고에 걸리므로</b>
               , 이 공고에만 있는 표현(「우리시」처럼 지자체마다 뜻이 달라지는 말)보다
               업종·대상을 못박는 표현을 고르는 편이 안전하다.
@@ -132,7 +132,7 @@ export function PhraseMark({ announcementId }: { announcementId: number }) {
                   />
                   <span>
                     {k.label}
-                    <span className="block text-[11px] text-muted-foreground">{k.help}</span>
+                    <span className="block text-[12.1px] text-muted-foreground">{k.help}</span>
                   </span>
                 </label>
               ))}

@@ -89,7 +89,7 @@ export function SettlementDeadlineCard({ 정산 }: { 정산: 정산표시 }) {
     (정산.확인필요 ? " · 확인 필요" : "") +
     (정산.기본값사용 ? " · 기본값" : "")
 
-  const cell = "h-7 text-[12.5px]"
+  const cell = "h-7 text-[13.8px]"
 
   return (
     <div className="relative">
@@ -108,16 +108,16 @@ export function SettlementDeadlineCard({ 정산 }: { 정산: 정산표시 }) {
           set열림((v) => !v)
           setMsg(null)
         }}
-        className="absolute top-2 right-2 rounded px-1.5 py-0.5 text-[11px] text-muted-foreground underline-offset-2 hover:bg-secondary/60 hover:underline"
+        className="absolute top-2 right-2 rounded px-1.5 py-0.5 text-[12.1px] text-muted-foreground underline-offset-2 hover:bg-secondary/60 hover:underline"
       >
         {열림 ? "닫기" : "편집"}
       </button>
 
       {열림 && (
         <div className="absolute top-full right-0 z-20 mt-1 w-[330px] rounded-lg border bg-card p-3 shadow-lg">
-          <div className="mb-2 text-[12.5px] font-medium">정산 마감 규칙</div>
+          <div className="mb-2 text-[13.8px] font-medium">정산 마감 규칙</div>
           <div className="flex flex-wrap items-end gap-2">
-            <label className="text-[11.5px] text-muted-foreground">
+            <label className="text-[12.7px] text-muted-foreground">
               매월
               <Input
                 type="number"
@@ -129,11 +129,11 @@ export function SettlementDeadlineCard({ 정산 }: { 정산: 정산표시 }) {
                 aria-label="정산 기준일"
               />
             </label>
-            <span className="pb-1.5 text-[11.5px] text-muted-foreground">일</span>
-            <label className="text-[11.5px] text-muted-foreground">
+            <span className="pb-1.5 text-[12.7px] text-muted-foreground">일</span>
+            <label className="text-[12.7px] text-muted-foreground">
               주말·공휴일이면
               <select
-                className="h-7 w-full rounded-md border bg-transparent px-2 text-[12.5px] text-foreground"
+                className="h-7 w-full rounded-md border bg-transparent px-2 text-[13.8px] text-foreground"
                 value={이동}
                 onChange={(e) => set이동(e.target.value)}
                 aria-label="쉬는 날 처리"
@@ -145,7 +145,7 @@ export function SettlementDeadlineCard({ 정산 }: { 정산: 정산표시 }) {
             </label>
             <Button
               type="button"
-              className="ml-auto h-7 text-[12.5px]"
+              className="ml-auto h-7 text-[13.8px]"
               disabled={pending}
               onClick={규칙저장}
             >
@@ -154,8 +154,8 @@ export function SettlementDeadlineCard({ 정산 }: { 정산: 정산표시 }) {
           </div>
 
           <div className="mt-3 border-t pt-2">
-            <div className="mb-1 text-[12.5px] font-medium">{연월} 만 따로</div>
-            <p className="mb-1.5 text-[11px] text-muted-foreground">
+            <div className="mb-1 text-[13.8px] font-medium">{연월} 만 따로</div>
+            <p className="mb-1.5 text-[12.1px] text-muted-foreground">
               규칙으로 안 맞는 달은 날짜를 직접 잡습니다. <b>규칙보다 이게 이깁니다.</b>
             </p>
             <div className="flex flex-wrap items-end gap-2">
@@ -176,7 +176,7 @@ export function SettlementDeadlineCard({ 정산 }: { 정산: 정산표시 }) {
               <Button
                 type="button"
                 variant="outline"
-                className="ml-auto h-7 text-[12.5px]"
+                className="ml-auto h-7 text-[13.8px]"
                 disabled={pending}
                 onClick={이번달저장}
               >
@@ -186,13 +186,13 @@ export function SettlementDeadlineCard({ 정산 }: { 정산: 정산표시 }) {
           </div>
 
           {정산.확인필요 && (
-            <p className="mt-2 rounded bg-[var(--warning)] px-2 py-1 text-[11px] text-[var(--warning-fg)]">
+            <p className="mt-2 rounded bg-[var(--warning)] px-2 py-1 text-[12.1px] text-[var(--warning-fg)]">
               음력 공휴일(설·부처님오신날·추석)이 판단에 끼었습니다. 달력을 보고
               <b> app.holidays </b>를 확인하세요 — 틀리면 D-day 가 며칠씩 어긋납니다.
             </p>
           )}
           {msg && (
-            <p className={`mt-2 text-[11.5px] ${msg.ok ? "text-muted-foreground" : "text-destructive"}`}>
+            <p className={`mt-2 text-[12.7px] ${msg.ok ? "text-muted-foreground" : "text-destructive"}`}>
               {msg.text}
             </p>
           )}

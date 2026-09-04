@@ -174,15 +174,26 @@ def extract_requirements(text: str) -> dict[str, Any]:
     return {"요건": rows, "기타": 기타, "잘림": truncated}
 
 
-def announcement_text(announcement_id: int) -> tuple[str, str]:
-    """(사업명, 본문). 없으면 예외."""
+def announcement_text(announcement_id: int) -> tuple[str, str, str]:
+    """(사업명, 판독할 텍스트, 그 텍스트가 어디서 왔는지). 없으면 예외.
+
+    ⚠ 첨부 공고문(`본문`)이 없는 행이 훨씬 많다 — 실측 2026-09-03: 836건 중 본문이 있는 건
+      71건뿐이다(K-Startup·기업마당 오픈API 는 첨부 경로를 안 주거나 목록만 저장된다).
+      그 경우 오픈API 가 준 `요약`으로라도 판독한다. **본문이 없다고 빈손으로 돌아가면
+      「요건 미확인」이 500건씩 남는다.** 다만 무엇을 읽고 뽑았는지는 호출부에 그대로 알린다 —
+      요약에서 뽑은 요건은 공고문에서 뽑은 것보다 성기다.
+    """
     r = extract._q(
-        "select 사업명, coalesce(본문,'') as 본문 from app.announcements where id = %s",
+        "select 사업명, coalesce(nullif(본문,''),'') as 본문, coalesce(nullif(요약,''),'') as 요약"
+        "  from app.announcements where id = %s",
         (announcement_id,),
     )
     if not r:
         raise LookupError(f"공고 {announcement_id} 가 없다")
-    return r[0]["사업명"], r[0]["본문"]
+    row = r[0]
+    if row["본문"]:
+        return row["사업명"], row["본문"], "공고문"
+    return row["사업명"], row["요약"], "요약" if row["요약"] else "없음"
 
 
 def save_requirements(announcement_id: int, rows: list[dict], *, replace: bool = True) -> int:
@@ -197,9 +208,10 @@ def save_requirements(announcement_id: int, rows: list[dict], *, replace: bool =
 
 
 def extract_and_save(announcement_id: int, *, save: bool = True) -> dict[str, Any]:
-    사업명, 본문 = announcement_text(announcement_id)
-    res = extract_requirements(본문)
+    사업명, 텍스트, 출처 = announcement_text(announcement_id)
+    res = extract_requirements(텍스트)
     res["announcement_id"] = announcement_id
     res["사업명"] = 사업명
+    res["판독원본"] = 출처  # 공고문 | 요약 | 없음 — 요약에서 뽑은 요건은 성기다. 감춘 채 쓰지 않는다.
     res["저장"] = save_requirements(announcement_id, res["요건"]) if save else 0
     return res

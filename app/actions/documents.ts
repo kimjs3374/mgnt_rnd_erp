@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
 import { getCurrentUser } from "@/lib/current-user"
 import { 서류판독, 자동확정가능 } from "@/lib/doc-ai.mjs"
+import { 공개주소 } from "@/lib/storage-url"
 
 /**
  * 서류함 — 회사 서류 업로드 · 다운로드 · 삭제 · 발급일 확정.
@@ -212,7 +213,7 @@ export async function getDocumentDownloadUrl(id: number): Promise<ActionResult> 
     if (sErr || !signed?.signedUrl) {
       return { ok: false, error: sErr?.message ?? "내려받을 주소를 만들지 못했습니다." }
     }
-    return { ok: true, url: signed.signedUrl }
+    return { ok: true, url: 공개주소(signed.signedUrl) }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   }

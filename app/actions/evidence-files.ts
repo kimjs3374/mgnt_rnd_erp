@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
 import { getCurrentUser } from "@/lib/current-user"
 import { 문서_확장자, 문서파일_점검 } from "@/lib/upload-limits"
+import { 공개주소 } from "@/lib/storage-url"
 
 /**
  * 비목별 RCMS 증빙 파일 — 업로드 · 다운로드 · 삭제.
@@ -127,7 +128,7 @@ export async function getEvidenceDownloadUrl(id: number): Promise<ActionResult> 
     if (sErr || !signed?.signedUrl) {
       return { ok: false, error: sErr?.message ?? "내려받을 주소를 만들지 못했습니다." }
     }
-    return { ok: true, url: signed.signedUrl }
+    return { ok: true, url: 공개주소(signed.signedUrl) }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   }

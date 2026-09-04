@@ -389,7 +389,11 @@ export function CompanyForm({ values }: { values: CompanyValues }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <ParseUploader onParsed={set판독} />
+      {/* 「서류로 채우기」는 지금 화면에서 뺀다(2026-09-04). 컴포넌트와 서버 액션은
+          그대로 두었으므로 아래 한 줄을 되돌리면 다시 보인다. */}
+      {process.env.NEXT_PUBLIC_COMPANY_DOC_FILL === "1" && (
+        <ParseUploader onParsed={set판독} />
+      )}
 
       <form action={action} className="flex flex-col gap-4">
         <input type="hidden" name="출처_문서" defaultValue={values.출처_문서 ?? ""} />

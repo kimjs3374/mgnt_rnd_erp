@@ -101,7 +101,7 @@ export function AnnouncementsView({
                 key="숨김토글"
                 type="button"
                 variant={숨김 ? "default" : "outline"}
-                className="h-7 text-[12.8px]"
+                className="h-7 text-[14.1px]"
                 title={
                   숨김
                     ? `${내역}을 숨기고 있다. 누르면 다시 보인다.`

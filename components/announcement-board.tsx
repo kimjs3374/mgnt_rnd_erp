@@ -148,7 +148,7 @@ export function AnnouncementBoard({
       </div>
 
       {error ? (
-        <p className="px-4 py-10 text-center text-[13px] text-muted-foreground">
+        <p className="px-4 py-10 text-center text-[14.3px] text-muted-foreground">
           공고를 불러오지 못했습니다.
           <span className="mt-1 block text-xs opacity-70">{error}</span>
         </p>
@@ -164,7 +164,7 @@ export function AnnouncementBoard({
                   aria-selected={t === active}
                   onClick={() => 탭전환(t)}
                   className={cn(
-                    "-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2 text-[13px] transition-colors",
+                    "-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2 text-[14.3px] transition-colors",
                     t === active
                       ? "border-primary font-medium text-foreground"
                       : "border-transparent text-muted-foreground hover:text-foreground",
@@ -189,14 +189,14 @@ export function AnnouncementBoard({
           </div>
 
           {탭전체행.length === 0 ? (
-            <p className="px-4 py-10 text-center text-[13px] text-muted-foreground">
+            <p className="px-4 py-10 text-center text-[14.3px] text-muted-foreground">
               오늘 새로 올라온 가능 판정 {active} 공고가 없습니다
               <span className="mt-1 block text-xs opacity-70">
                 판정 무관 전체는 위 「전체 공고 확인」에서 본다
               </span>
             </p>
           ) : (
-            <Table>
+            <Table className="table-fixed">
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="w-8" title="관심 표시하면 마감일이 달력에 뜬다">
@@ -205,16 +205,18 @@ export function AnnouncementBoard({
                   {/* ⚠ 헤더와 값의 정렬 기준을 맞춘다 — 하나는 가운데, 하나는 왼쪽이면
                       서로 다른 기준점이라 어긋나 보인다(2026-09-04 지적, 실제로 어긋났었다).
                       사업명은 길고 왼쪽 정렬이라 헤더도 왼쪽(shadcn 기본값 그대로 둔다).
-                      나머지 셋은 값도 짧아서 헤더·값 다 가운데로 통일한다. */}
-                  <TableHead>사업명</TableHead>
-                  <TableHead className="w-[178px] text-center">기관</TableHead>
-                  <TableHead className="w-[212px] text-center">접수기간</TableHead>
-                  <TableHead className="w-[92px] text-center">출처</TableHead>
+                      나머지 셋은 값도 짧아서 헤더·값 다 가운데로 통일한다.
+                      ⚠ 네 칸을 고르게 맞춘다(사용자 지적 2026-09-04, "사업명 칸만 엄청 넓다") —
+                      table-fixed 로 고정하고 넷 다 w-1/4 로 똑같이 나눈다. */}
+                  <TableHead className="w-1/4">사업명</TableHead>
+                  <TableHead className="w-1/4 text-center">기관</TableHead>
+                  <TableHead className="w-1/4 text-center">접수기간</TableHead>
+                  <TableHead className="w-1/4 text-center">출처</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {보이는행.map((r) => (
-                  <TableRow key={r.id} className="h-[38px] text-[13px]">
+                  <TableRow key={r.id} className="h-[38px] text-[14.3px]">
                     <TableCell className="pr-0">
                       <WatchStar id={r.id} on={r.관심} />
                     </TableCell>
@@ -254,7 +256,7 @@ export function AnnouncementBoard({
           {/* 관심 공고인데 마감이 날짜가 아닌 것. 달력에 못 올라가므로 여기서 받는다. */}
           {undated.length > 0 && (
             <div className="border-t px-4 py-2">
-              <h3 className="mb-1 text-[11px] font-semibold tracking-wide text-muted-foreground">
+              <h3 className="mb-1 text-[12.1px] font-semibold tracking-wide text-muted-foreground">
                 날짜 미정 {undated.length}건
               </h3>
               <ul className="space-y-0.5">
@@ -262,7 +264,7 @@ export function AnnouncementBoard({
                   <li key={u.참조키}>
                     <Link
                       href={u.링크}
-                      className="flex items-center gap-2 rounded py-0.5 text-[13px] hover:underline"
+                      className="flex items-center gap-2 rounded py-0.5 text-[14.3px] hover:underline"
                     >
                       <span className="min-w-0 flex-1 truncate">{u.제목}</span>
                       <span className="shrink-0 text-xs text-muted-foreground">{u.사유}</span>
@@ -367,18 +369,20 @@ function Period({ row }: { row: BoardRow }) {
   }
   const d = row.d_day
   return (
-    <span>
-      {row.접수시작 ? `${row.접수시작} ~ ` : "~ "}
-      {row.접수종료}
+    <span className="flex flex-wrap items-center justify-center gap-1.5">
+      <span className="text-xs">
+        {row.접수시작 ? `${row.접수시작} ~ ` : "~ "}
+        {row.접수종료}
+      </span>
       {d != null && (
         <span
           className={cn(
-            "ml-1.5 text-xs",
+            "inline-flex h-5 w-fit shrink-0 items-center rounded-4xl px-2 text-xs font-medium tabular-nums",
             d <= 7
-              ? "text-destructive"
+              ? "bg-destructive/10 text-destructive"
               : d <= 30
-                ? "text-[var(--warning-fg)]"
-                : "text-muted-foreground",
+                ? "bg-[var(--warning)] text-[var(--warning-fg)]"
+                : "bg-secondary text-secondary-foreground",
           )}
         >
           D-{d}

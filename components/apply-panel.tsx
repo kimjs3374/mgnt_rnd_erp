@@ -2,9 +2,12 @@
 
 import * as React from "react"
 import Link from "next/link"
+import { Handshake, ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { MoneyInput } from "@/components/money-input"
+import { StatusBadge } from "@/components/status-badge"
+import { cn } from "@/lib/utils"
 import { applyToAnnouncement, setSelectionResult } from "@/app/actions/apply"
 
 /**
@@ -18,16 +21,7 @@ import { applyToAnnouncement, setSelectionResult } from "@/app/actions/apply"
  * 선정 뒤 「연구비 계상」 탭의 재원 구성 카드가 공고·규정으로 채운다).
  */
 
-const 배지 = (v: string | null) => {
-  const s = v ?? "미등록"
-  const tone =
-    s === "선정"
-      ? "bg-secondary text-foreground"
-      : s === "미선정"
-        ? "text-destructive"
-        : "text-[var(--warning-fg)]"
-  return <span className={`rounded px-1.5 py-0.5 text-[11px] ${tone}`}>{s}</span>
-}
+const 배지 = (v: string | null) => <StatusBadge value={v ?? "미등록"} />
 
 export type 지원행 = {
   id: number
@@ -114,12 +108,15 @@ export function ApplyPanel({
     })
   }
 
-  const cell = "h-7 text-[12.5px]"
+  const cell = "h-7 text-[13.8px]"
 
   return (
     <div className="rounded-lg border bg-card p-4">
       <div className="mb-3 flex flex-wrap items-baseline gap-2">
-        <span className="text-[13px] font-medium">지원 · 선정 · 대장</span>
+        <span className="flex size-6 shrink-0 items-center justify-center self-center rounded-md bg-primary/10 text-primary">
+          <Handshake className="size-3.5" />
+        </span>
+        <span className="text-[14.3px] font-medium">지원 · 선정 · 대장</span>
         <span className="text-xs text-muted-foreground">
           지원을 등록하면 지원사업 대장의 한 줄이 되고, 선정되면 그 줄이 과제가 됩니다
         </span>
@@ -127,7 +124,7 @@ export function ApplyPanel({
           <Button
             type="button"
             variant="ghost"
-            className="ml-auto h-6 px-2 text-[12px] text-muted-foreground"
+            className="ml-auto h-6 px-2 text-[13.2px] text-muted-foreground"
             onClick={() => set폼열림((v) => !v)}
           >
             {폼열림 ? "닫기" : "+ 한 건 더 등록"}
@@ -138,7 +135,17 @@ export function ApplyPanel({
       {지원행목록.length > 0 && (
         <ul className="mb-3 space-y-2">
           {지원행목록.map((p) => (
-            <li key={p.id} className="rounded-md border p-2.5 text-[12.5px]">
+            <li
+              key={p.id}
+              className={cn(
+                "rounded-md border border-l-4 p-2.5 text-[13.8px]",
+                p.선정결과 === "선정"
+                  ? "border-l-[var(--success-fg)]"
+                  : p.선정결과 === "미선정"
+                    ? "border-l-destructive"
+                    : "border-l-[var(--warning-fg)]",
+              )}
+            >
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <Link
                   href={`/projects/${p.id}`}
@@ -160,7 +167,7 @@ export function ApplyPanel({
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-6 px-2 text-[11.5px]"
+                  className="h-6 px-2 text-[12.7px]"
                   disabled={pending || p.선정결과 === "발표심사"}
                   onClick={() => 결과(p.id, "발표심사")}
                 >
@@ -168,7 +175,7 @@ export function ApplyPanel({
                 </Button>
                 <Button
                   type="button"
-                  className="h-6 px-2 text-[11.5px]"
+                  className="h-6 px-2 text-[12.7px]"
                   disabled={pending || p.선정결과 === "선정"}
                   onClick={() => 결과(p.id, "선정")}
                 >
@@ -177,29 +184,30 @@ export function ApplyPanel({
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-6 px-2 text-[11.5px]"
+                  className="h-6 px-2 text-[12.7px]"
                   disabled={pending || p.선정결과 === "미선정"}
                   onClick={() => 결과(p.id, "미선정")}
                 >
                   미선정
                 </Button>
-                <span className="ml-auto flex gap-2 text-[11.5px]">
+                <span className="ml-auto flex gap-2 text-[12.7px]">
                   <Link href="/programs" className="text-muted-foreground underline-offset-2 hover:underline">
                     지원사업 대장
                   </Link>
                   {p.선정결과 === "선정" && (
                     <Link
                       href={`/projects/${p.id}/budget`}
-                      className="text-muted-foreground underline-offset-2 hover:underline"
+                      className="flex items-center gap-0.5 font-medium text-primary underline-offset-2 hover:underline"
                     >
                       연구비 계상 시작
+                      <ArrowRight className="size-3" />
                     </Link>
                   )}
                 </span>
               </div>
 
               {p.선정결과 === "선정" && (
-                <p className="mt-1 text-[11.5px] text-muted-foreground">
+                <p className="mt-1.5 rounded-md bg-[var(--success)]/40 p-2 text-[12.7px] text-[var(--success-fg)]">
                   다음: 「연구비 계상」 탭의 재원 구성이 이 공고 규칙으로 정부출연금·민간부담금을
                   채워 줍니다. 총사업비는 협약서 금액을 넣으세요(지금 0 입니다).
                 </p>
@@ -212,7 +220,7 @@ export function ApplyPanel({
       {폼열림 && (
         <div className="rounded-md border p-3">
           <div className="grid gap-2 sm:grid-cols-2">
-            <label className="text-[12px] text-muted-foreground">
+            <label className="text-[13.2px] text-muted-foreground">
               과제명 (대장에 표시됩니다)
               <Input
                 className={cell}
@@ -221,16 +229,16 @@ export function ApplyPanel({
                 placeholder={사업명 ?? "사업명"}
               />
             </label>
-            <label className="text-[12px] text-muted-foreground">
+            <label className="text-[13.2px] text-muted-foreground">
               신청 지원금액 (모르면 비워 둡니다)
               <MoneyInput
                 value={지원금액}
                 onValueChange={set지원금액}
-                className="h-7 text-right text-[12.5px] tabular-nums"
+                className="h-7 text-right text-[13.8px] tabular-nums"
                 aria-label="신청 지원금액"
               />
             </label>
-            <label className="text-[12px] text-muted-foreground">
+            <label className="text-[13.2px] text-muted-foreground">
               사업기간 시작 (예정)
               <Input
                 type="date"
@@ -239,7 +247,7 @@ export function ApplyPanel({
                 onChange={(e) => set시작일(e.target.value)}
               />
             </label>
-            <label className="text-[12px] text-muted-foreground">
+            <label className="text-[13.2px] text-muted-foreground">
               사업기간 종료 (예정)
               <Input
                 type="date"
@@ -251,13 +259,13 @@ export function ApplyPanel({
           </div>
 
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span className="text-[11.5px] text-muted-foreground">
+            <span className="text-[12.7px] text-muted-foreground">
               협약 전이라 총사업비는 0 으로 둡니다 — 선정 뒤 재원 구성에서 채웁니다
             </span>
             <span className="ml-auto" />
             <Button
               type="button"
-              className="h-7 text-[12.8px]"
+              className="h-7 text-[14.1px]"
               disabled={pending}
               onClick={등록}
             >
@@ -268,7 +276,14 @@ export function ApplyPanel({
       )}
 
       {msg && (
-        <p className={msg.ok ? "mt-2 text-[12.5px] text-muted-foreground" : "mt-2 text-[12.5px] text-destructive"}>
+        <p
+          className={cn(
+            "mt-2 rounded-md p-2 text-[13.8px]",
+            msg.ok
+              ? "bg-[var(--success)]/40 text-[var(--success-fg)]"
+              : "bg-destructive/10 text-destructive",
+          )}
+        >
           {msg.text}
         </p>
       )}

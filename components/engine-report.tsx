@@ -70,7 +70,7 @@ export function EngineReportView({ report }: { report: EngineReport }) {
           <div key={s.라벨} className="rounded-lg border bg-card p-4">
             <div className="text-xs text-muted-foreground">{s.라벨}</div>
             <div className="mt-1 text-2xl font-bold tracking-tight tabular-nums">{s.값}</div>
-            <div className="mt-0.5 text-[11px] text-muted-foreground">{s.곁}</div>
+            <div className="mt-0.5 text-[12.1px] text-muted-foreground">{s.곁}</div>
           </div>
         ))}
       </div>
@@ -85,16 +85,16 @@ export function EngineReportView({ report }: { report: EngineReport }) {
           {report.퍼널.map((f) => (
             <div key={f.이름} className="grid gap-1">
               <div className="flex items-baseline justify-between gap-3">
-                <span className="text-[13px] font-medium">{f.이름}</span>
-                <span className="shrink-0 text-[13px] tabular-nums">
+                <span className="text-[14.3px] font-medium">{f.이름}</span>
+                <span className="shrink-0 text-[14.3px] tabular-nums">
                   <b>{f.건수.toLocaleString()}</b>
-                  <span className="ml-1.5 text-[11px] text-muted-foreground">
+                  <span className="ml-1.5 text-[12.1px] text-muted-foreground">
                     {퍼센트(f.건수, 전체)}
                   </span>
                 </span>
               </div>
               <Bar 값={f.건수} 최대={전체} 색={f.색} />
-              <p className="text-[11px] text-muted-foreground">{f.설명}</p>
+              <p className="text-[12.1px] text-muted-foreground">{f.설명}</p>
             </div>
           ))}
         </div>
@@ -111,7 +111,7 @@ export function EngineReportView({ report }: { report: EngineReport }) {
           <EmptyState title="걸린 게이트가 없다" />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-[13px]">
+            <table className="w-full text-[14.3px]">
               <thead>
                 <tr className="border-b text-left text-xs text-muted-foreground">
                   <th className="py-1.5 pr-3 font-medium">규칙</th>
@@ -128,7 +128,7 @@ export function EngineReportView({ report }: { report: EngineReport }) {
                     <td className="py-2 pr-3 text-right tabular-nums font-semibold">
                       {g.건수.toLocaleString()}
                     </td>
-                    <td className="py-2 text-[12px] text-muted-foreground">
+                    <td className="py-2 text-[13.2px] text-muted-foreground">
                       {g.예시.map((e) => (
                         <div key={e.id} className="truncate">
                           <a href={`/announcements/${e.id}`} className="underline hover:text-foreground">
@@ -157,10 +157,10 @@ export function EngineReportView({ report }: { report: EngineReport }) {
             {report.판정분포.map((r) => (
               <div key={r.판정} className="grid gap-1">
                 <div className="flex items-baseline justify-between gap-3">
-                  <span className="text-[13px] font-medium">{r.판정}</span>
-                  <span className="shrink-0 text-[13px] tabular-nums">
+                  <span className="text-[14.3px] font-medium">{r.판정}</span>
+                  <span className="shrink-0 text-[14.3px] tabular-nums">
                     <b>{r.건수.toLocaleString()}</b>
-                    <span className="ml-1.5 text-[11px] text-muted-foreground">
+                    <span className="ml-1.5 text-[12.1px] text-muted-foreground">
                       {퍼센트(r.건수, 판정합)}
                     </span>
                   </span>
@@ -175,7 +175,7 @@ export function EngineReportView({ report }: { report: EngineReport }) {
                           : "var(--muted-foreground)"
                   }
                 />
-                <p className="text-[11px] text-muted-foreground">{r.설명}</p>
+                <p className="text-[12.1px] text-muted-foreground">{r.설명}</p>
               </div>
             ))}
           </div>
@@ -191,8 +191,8 @@ export function EngineReportView({ report }: { report: EngineReport }) {
             {report.판정경로.map((p) => (
               <div key={p.경로} className="grid gap-1">
                 <div className="flex items-baseline justify-between gap-3">
-                  <span className="text-[13px] font-medium">{p.경로}</span>
-                  <span className="text-[13px] font-semibold tabular-nums">
+                  <span className="text-[14.3px] font-medium">{p.경로}</span>
+                  <span className="text-[14.3px] font-semibold tabular-nums">
                     {p.건수.toLocaleString()}
                   </span>
                 </div>
@@ -209,8 +209,8 @@ export function EngineReportView({ report }: { report: EngineReport }) {
             ].map((s) => (
               <div key={s.라벨}>
                 <div className="text-lg font-bold tabular-nums">{s.값.toLocaleString()}</div>
-                <div className="text-[11px] font-medium">{s.라벨}</div>
-                <div className="text-[10px] text-muted-foreground">{s.곁}</div>
+                <div className="text-[12.1px] font-medium">{s.라벨}</div>
+                <div className="text-[11px] text-muted-foreground">{s.곁}</div>
               </div>
             ))}
           </div>
@@ -228,8 +228,8 @@ export function EngineReportView({ report }: { report: EngineReport }) {
             {report.수집.출처별.map((s) => (
               <div key={s.출처} className="grid gap-1">
                 <div className="flex items-baseline justify-between gap-3">
-                  <span className="text-[13px] font-medium">{s.출처}</span>
-                  <span className="text-[13px] font-semibold tabular-nums">
+                  <span className="text-[14.3px] font-medium">{s.출처}</span>
+                  <span className="text-[14.3px] font-semibold tabular-nums">
                     {s.건수.toLocaleString()}
                   </span>
                 </div>
@@ -249,8 +249,8 @@ export function EngineReportView({ report }: { report: EngineReport }) {
             {report.본문확보.map((s) => (
               <div key={s.상태} className="grid gap-1">
                 <div className="flex items-baseline justify-between gap-3">
-                  <span className="text-[13px] font-medium">{s.상태}</span>
-                  <span className="text-[13px] font-semibold tabular-nums">
+                  <span className="text-[14.3px] font-medium">{s.상태}</span>
+                  <span className="text-[14.3px] font-semibold tabular-nums">
                     {s.건수.toLocaleString()}
                   </span>
                 </div>

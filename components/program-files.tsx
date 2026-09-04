@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { 기간프리셋, 범위정하기, 기간_전체 } from "@/lib/date-filter"
-import { 묶기, 시각표기, 크기표기, 출처목록 } from "@/lib/program-file-types"
+import { 묶기, 지출별로가르기, 시각표기, 크기표기, 출처목록 } from "@/lib/program-file-types"
 import type { 사업파일, 서류함스코프, 보류증빙 } from "@/lib/program-file-types"
 
 /**
@@ -31,6 +31,34 @@ import type { 사업파일, 서류함스코프, 보류증빙 } from "@/lib/progr
 
 const 모든출처 = "출처 전체"
 
+/** 서류 한 줄. 사업 묶음 안에 낱개로도, 지출 묶음을 펼친 안쪽에도 쓴다. */
+function 파일줄({ f, 지출내부 = false }: { f: 사업파일; 지출내부?: boolean }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 text-[14.1px]">
+      {/* 지출 묶음 안에서는 부모 줄이 이미 "집행"이라고 말했다 — 다시 안 찍는다. */}
+      {!지출내부 && (
+        <span className="w-[68px] shrink-0 rounded bg-muted px-1.5 py-0.5 text-center text-[12.1px] text-muted-foreground">
+          {f.출처.replace(" 증빙", "").replace(" 서류", "")}
+        </span>
+      )}
+      <a
+        href={`/api/program-files/one?key=${encodeURIComponent(f.키)}`}
+        className="min-w-0 flex-1 truncate hover:underline"
+        title={f.파일명}
+      >
+        {f.파일명}
+      </a>
+      <span className="shrink-0 text-muted-foreground">{f.분류}</span>
+      <span className="w-16 shrink-0 text-right tabular-nums text-muted-foreground">
+        {크기표기(f.크기)}
+      </span>
+      <span className="w-[104px] shrink-0 text-right tabular-nums text-muted-foreground">
+        {시각표기(f.일시)}
+      </span>
+    </div>
+  )
+}
+
 export function ProgramFiles({
   파일,
   보류,
@@ -47,6 +75,10 @@ export function ProgramFiles({
   const [시작, set시작] = React.useState("")
   const [끝, set끝] = React.useState("")
   const [펼침, set펼침] = React.useState<Record<number, boolean>>({})
+  // 지출(집행 건) 단위 펼침 — **기본은 접힘**이다(2026-09-04 사용자 지시: "지출 하나만
+  // 보이고 마우스로 누르면 펼쳐서 볼 수 있게"). 사업 묶음은 기본이 펼침인 것과 반대다 —
+  // 사업은 몇 개 안 되지만 지출은 과제 하나에 수십 건씩 쌓일 수 있어 다 펼치면 도로 복잡해진다.
+  const [지출펼침, set지출펼침] = React.useState<Record<number, boolean>>({})
 
   // 프리셋과 직접 입력은 **같은 규칙**으로 합친다(과제·지원사업 대장과 같은 모듈).
   const 범위 = React.useMemo(() => 범위정하기(프리셋, 시작, 끝), [프리셋, 시작, 끝])
@@ -105,12 +137,12 @@ export function ProgramFiles({
           value={검색}
           onChange={(e) => set검색(e.target.value)}
           placeholder="파일명 · 사업명 · 분류"
-          className="h-7 w-56 text-[12.8px]"
+          className="h-7 w-56 text-[14.1px]"
           aria-label="서류 검색"
         />
 
         <Select value={출처} onValueChange={(v) => set출처(v ?? 모든출처)}>
-          <SelectTrigger size="sm" className="h-7 w-32 text-[12.8px]" aria-label="출처로 걸러내기">
+          <SelectTrigger size="sm" className="h-7 w-32 text-[14.1px]" aria-label="출처로 걸러내기">
             <SelectValue placeholder={모든출처} />
           </SelectTrigger>
           <SelectContent>
@@ -131,7 +163,7 @@ export function ProgramFiles({
             set끝("")
           }}
         >
-          <SelectTrigger size="sm" className="h-7 w-32 text-[12.8px]" aria-label="기간 프리셋">
+          <SelectTrigger size="sm" className="h-7 w-32 text-[14.1px]" aria-label="기간 프리셋">
             <SelectValue placeholder="기간 전체" />
           </SelectTrigger>
           <SelectContent>
@@ -146,7 +178,7 @@ export function ProgramFiles({
           type="date"
           value={시작}
           onChange={(e) => set시작(e.target.value)}
-          className="h-7 w-[132px] text-[12.8px]"
+          className="h-7 w-[132px] text-[14.1px]"
           aria-label="기간 시작"
         />
         <span className="text-xs text-muted-foreground">~</span>
@@ -154,7 +186,7 @@ export function ProgramFiles({
           type="date"
           value={끝}
           onChange={(e) => set끝(e.target.value)}
-          className="h-7 w-[132px] text-[12.8px]"
+          className="h-7 w-[132px] text-[14.1px]"
           aria-label="기간 끝"
         />
 
@@ -163,7 +195,7 @@ export function ProgramFiles({
         </span>
 
         {필터걸림 && (
-          <Button variant="ghost" size="sm" className="h-7 text-[12.8px]" onClick={초기화}>
+          <Button variant="ghost" size="sm" className="h-7 text-[14.1px]" onClick={초기화}>
             초기화
           </Button>
         )}
@@ -171,7 +203,7 @@ export function ProgramFiles({
         <div className="ml-auto">
           <Button
             size="sm"
-            className="h-7 text-[12.8px]"
+            className="h-7 text-[14.1px]"
             disabled={걸린것.length === 0}
             // 라우트 핸들러가 zip 을 흘려보낸다. fetch 로 받아 Blob 을 만들지 않는다 —
             // 서류가 많으면 통째로 메모리에 올라간다.
@@ -188,7 +220,7 @@ export function ProgramFiles({
           되고, 사람은 시스템이 파일을 잃었다고 생각한다(실제로 그 질문이 나왔다).
           거르기와 무관하게 늘 보인다 — 기간을 좁혔다고 없던 일이 되지 않는다. */}
       {보류.length > 0 && (
-        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-[12.8px] dark:border-amber-900/60 dark:bg-amber-950/30">
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-[14.1px] dark:border-amber-900/60 dark:bg-amber-950/30">
           <p>
             <b>아직 안 담긴 증빙 {보류.length}건</b> — 「검토대기」라 파일이 저장소에 올라가기
             전이다. 집행 탭에서 확정하면 여기 들어온다.
@@ -231,7 +263,7 @@ export function ProgramFiles({
                 <div className="flex flex-wrap items-center gap-2 border-b bg-muted/40 px-3 py-2">
                   <button
                     type="button"
-                    className="text-[13px] font-medium hover:underline"
+                    className="text-[14.3px] font-medium hover:underline"
                     aria-expanded={열림}
                     onClick={() => set펼침((p) => ({ ...p, [g.과제_id]: !열림 }))}
                   >
@@ -250,7 +282,7 @@ export function ProgramFiles({
                     <Button
                       variant="outline"
                       size="sm"
-                      className="h-7 text-[12.8px]"
+                      className="h-7 text-[14.1px]"
                       onClick={() => {
                         window.location.href = zip주소(g.과제_id)
                       }}
@@ -260,34 +292,64 @@ export function ProgramFiles({
                   </div>
                 </div>
 
-                {열림 && (
-                  <ul className="divide-y">
-                    {g.파일.map((f) => (
-                      <li
-                        key={f.키}
-                        className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 text-[12.8px]"
-                      >
-                        <span className="w-[68px] shrink-0 rounded bg-muted px-1.5 py-0.5 text-center text-[11px] text-muted-foreground">
-                          {f.출처.replace(" 증빙", "").replace(" 서류", "")}
-                        </span>
-                        <a
-                          href={`/api/program-files/one?key=${encodeURIComponent(f.키)}`}
-                          className="min-w-0 flex-1 truncate hover:underline"
-                          title={f.파일명}
-                        >
-                          {f.파일명}
-                        </a>
-                        <span className="shrink-0 text-muted-foreground">{f.분류}</span>
-                        <span className="w-16 shrink-0 text-right tabular-nums text-muted-foreground">
-                          {크기표기(f.크기)}
-                        </span>
-                        <span className="w-[104px] shrink-0 text-right tabular-nums text-muted-foreground">
-                          {시각표기(f.일시)}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                {열림 && (() => {
+                  const { 낱개, 지출들 } = 지출별로가르기(g.파일)
+                  return (
+                    <ul className="divide-y">
+                      {/* 계상 증빙·정산 서류 — 지출 개념이 없어 예전처럼 낱개로 보여준다. */}
+                      {낱개.map((f) => (
+                        <li key={f.키}>
+                          <파일줄 f={f} />
+                        </li>
+                      ))}
+                      {/* 집행 증빙 — 지출(집행 건) 하나로 접는다. 파일이 하나뿐이어도 접어 두면
+                          「이 지출에 뭐가 붙었는지」를 늘 같은 자리에서 누르게 된다(사용자 지시). */}
+                      {지출들.map((e) => {
+                        const 지출열림 = 지출펼침[e.지출_id] ?? false
+                        return (
+                          <li key={`지출:${e.지출_id}`}>
+                            <button
+                              type="button"
+                              aria-expanded={지출열림}
+                              onClick={() => set지출펼침((p) => ({ ...p, [e.지출_id]: !지출열림 }))}
+                              className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 text-left text-[14.1px] hover:bg-muted/40"
+                            >
+                              <span className="w-[68px] shrink-0 rounded bg-muted px-1.5 py-0.5 text-center text-[12.1px] text-muted-foreground">
+                                집행
+                              </span>
+                              <span className="w-3 shrink-0 text-muted-foreground">
+                                {지출열림 ? "▾" : "▸"}
+                              </span>
+                              <span className="min-w-0 flex-1 truncate">
+                                {e.거래처 ?? "거래처 미상"}
+                                <span className="ml-1.5 text-muted-foreground">
+                                  파일 {e.파일.length}건
+                                </span>
+                              </span>
+                              {e.합계 != null && (
+                                <span className="shrink-0 tabular-nums text-muted-foreground">
+                                  {e.합계.toLocaleString("ko-KR")}원
+                                </span>
+                              )}
+                              <span className="w-[104px] shrink-0 text-right tabular-nums text-muted-foreground">
+                                {e.일자 ?? "—"}
+                              </span>
+                            </button>
+                            {지출열림 && (
+                              <ul className="divide-y bg-muted/20 pl-[76px]">
+                                {e.파일.map((f) => (
+                                  <li key={f.키}>
+                                    <파일줄 f={f} 지출내부 />
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  )
+                })()}
               </div>
             )
           })}

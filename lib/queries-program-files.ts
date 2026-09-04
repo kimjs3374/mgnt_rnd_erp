@@ -49,7 +49,13 @@ type 집행증빙Raw = {
   bytes: number | null
   created_at: string
 }
-type 집행Raw = { id: number; 과제_id: number | null }
+type 집행Raw = {
+  id: number
+  과제_id: number | null
+  거래처: string | null
+  일자: string | null
+  합계: number | null
+}
 type 비목Raw = { 코드: string; 이름: string }
 
 export type 서류함결과 = { 파일: 사업파일[]; 보류: 보류증빙[]; error: string | null }
@@ -87,6 +93,9 @@ export async function getProgramFiles(스코프: 서류함스코프): Promise<�
   const 이름 = new Map(허용된과제.map((p) => [Number(p.id), p.과제명]))
   const 비목이름 = new Map(비목.rows.map((c) => [c.코드, c.이름]))
   const 집행의과제 = new Map(집행.rows.map((e) => [Number(e.id), e.과제_id]))
+  // 지출 하나로 묶어 접으려면(2026-09-04 사용자 지시) 거래처·일자·합계가 있어야 목록에서
+  // "무슨 지출인지" 표가 난다 — id 만으로는 화면이 「집행 #123」만 보여줘 뜻이 없다.
+  const 집행상세 = new Map(집행.rows.map((e) => [Number(e.id), e]))
 
   const 전체: 사업파일[] = []
   /** 담지 못한 것. 빼는 것과 **빼놓고 말 안 하는 것**은 다르다. */
@@ -142,6 +151,7 @@ export async function getProgramFiles(스코프: 서류함스코프): Promise<�
       })
       continue
     }
+    const 집행행 = 집행상세.get(Number(r.expense_id))
     전체.push({
       키: `집행:${r.id}`,
       출처: "집행 증빙",
@@ -153,6 +163,12 @@ export async function getProgramFiles(스코프: 서류함스코프): Promise<�
       크기: r.bytes == null ? null : Number(r.bytes),
       일시: r.created_at,
       업로더: null,
+      지출: {
+        id: Number(r.expense_id),
+        거래처: 집행행?.거래처 ?? null,
+        일자: 집행행?.일자 ?? null,
+        합계: 집행행?.합계 == null ? null : Number(집행행.합계),
+      },
     })
   }
 
